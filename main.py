@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
+import subprocess
+import sys
 
 PROJECT_NAME = "SPACE BAR AI TRADING"
 
@@ -16,21 +18,61 @@ AI_TEAM = {
 }
 
 
+def run_agent(name, script):
+    print(f"\n[COMMANDER] Starting {name}", flush=True)
+
+    result = subprocess.run(
+        [sys.executable, script],
+        check=False
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"{name} failed with code {result.returncode}"
+        )
+
+    print(f"[COMMANDER] {name} completed", flush=True)
+
+
 def start_system():
-    print("=" * 45)
+
+    print("=" * 50)
     print(PROJECT_NAME)
-    print("=" * 45)
+    print("=" * 50)
 
-    print("시스템 시작 시간:", datetime.now())
+    print(
+        "Start time:",
+        datetime.now(timezone.utc).isoformat()
+    )
 
-    print("\nAI TEAM INITIALIZED\n")
+    print("\nAI TEAM INITIALIZED")
 
     for name, role in AI_TEAM.items():
-        print(f"{name} : {role}")
+        print(f"{name}: {role}")
 
-    print("\nSYSTEM STATUS: READY")
-    print("TRADING MODE: PAPER ONLY")
+    print("\nTRADING MODE: PAPER ONLY")
+    print("LIVE TRADING: DISABLED")
+
+    # STEP 1: Historical data collection
+    run_agent(
+        "HISTORY",
+        "agents/history.py"
+    )
+
+    # STEP 2: Backtesting
+    run_agent(
+        "TESTER",
+        "agents/tester.py"
+    )
+
+    print("\n" + "=" * 50)
+    print("SYSTEM EXECUTION COMPLETED")
+    print("=" * 50)
 
 
 if __name__ == "__main__":
-    start_system()
+    try:
+        start_system()
+    except Exception as error:
+        print(f"\nSYSTEM FAILED: {error}", flush=True)
+        sys.exit(1)
