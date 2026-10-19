@@ -9,6 +9,7 @@ permissions:
 jobs:
   backtest:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Download project
@@ -19,5 +20,33 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Collect market history
+        run: python agents/history.py
+
+      - name: Check downloaded data
+        run: |
+          python - <<'PY'
+          import glob
+          import sys
+
+          files = glob.glob("data/history/*.csv")
+          print("Downloaded CSV files:", len(files))
+
+          for file in sorted(files):
+              print(file)
+
+          if len(files) != 9:
+              sys.exit("ERROR: Expected 9 CSV files.")
+          PY
+
       - name: Run backtest
         run: python agents/tester.py
+
+      - name: Save backtest data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-backtest-data
+          path: data/history/*.csv
+          if-no-files-found: warn
+          retention-days: 7
