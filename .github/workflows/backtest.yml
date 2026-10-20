@@ -1,15 +1,20 @@
-name: SPACE BAR AI Backtest V5
+name: SPACE BAR AI Backtest V6
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: space-bar-backtest-v6
+  cancel-in-progress: false
 
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Download project
@@ -20,17 +25,45 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Collect market history
+      - name: Restore previous market data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/history
+
+          echo "Searching previous V6 market data..."
+
+          RUN_ID=$(gh run list \
+            --workflow backtest.yml \
+            --status success \
+            --limit 30 \
+            --json databaseId,artifacts \
+            --jq '[.[] | select(any(.artifacts[]?; .name == "space-bar-v6-market-data"))][0].databaseId // empty' \
+            2>/dev/null || true)
+
+          if [ -n "$RUN_ID" ]; then
+            echo "Restoring data from run $RUN_ID"
+
+            gh run download "$RUN_ID" \
+              --name space-bar-v6-market-data \
+              --dir data/history \
+              || echo "No previous data restored."
+          else
+            echo "No previous V6 data found."
+          fi
+
+      - name: Collect market history V6
         run: python agents/history.py
 
       - name: Check downloaded data
         run: |
           python - <<'PY'
+          import csv
           import os
           import sys
 
           symbols = ["BTC", "ETH", "SOL"]
-          timeframes = ["1", "5", "15"]
+          timeframes = [1, 5, 15]
 
           missing = []
 
@@ -40,24 +73,31 @@ jobs:
 
                   if not os.path.exists(path):
                       missing.append(path)
-                  else:
-                      print("FOUND:", path)
+                      continue
+
+                  with open(path, newline="") as f:
+                      count = sum(1 for _ in csv.reader(f)) - 1
+
+                  print(f"{path}: {count} candles")
+
+                  if count <= 0:
+                      missing.append(path)
 
           if missing:
-              print("Missing files:", missing)
+              print("Missing or empty files:", missing)
               sys.exit(1)
 
-          print("All 9 market data files found.")
+          print("All 9 market data files verified.")
           PY
 
-      - name: Run V5 robustness backtest
+      - name: Run robustness backtest
         run: python agents/tester_v5.py
 
       - name: Save backtest reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v5-reports
+          name: space-bar-v6-reports
           path: reports/
           if-no-files-found: warn
           retention-days: 14
@@ -66,7 +106,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-market-data
+          name: space-bar-v6-market-data
           path: data/history/*.csv
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 30
