@@ -1,273 +1,226 @@
-import csv
-import os
-import json
-import time
-
-from datetime import datetime, timezone
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
-
-
-# =====================================
 # SPACE BAR AI TRADING
-# HISTORY V1.1
-# =====================================
+# HISTORY V2.0 - PUBLIC TRADE DATA
 
-BASE_URL = "https://api.bybit.com"
+import csv
+import gzip
+import io
+import os
+import time
+from datetime import datetime, timedelta, timezone
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
-SYMBOLS = {
-    "BTC": "BTCUSDT",
-    "ETH": "ETHUSDT",
-    "SOL": "SOLUSDT"
-}
-
-TIMEFRAMES = ["1", "5", "15"]
-
+SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+TIMEFRAMES = [1, 5, 15]
 TARGET_CANDLES = 10000
-PAGE_LIMIT = 1000
-REQUEST_DELAY = 0.25
 
 DATA_DIR = "data/history"
+BASE_URL = "https://public.bybit.com/trading"
+
+# Download recent daily trade archives.
+# 12 days is enough for 10,000 1-minute candles.
+MAX_DAYS = 12
+
+os.makedirs(DATA_DIR, exist_ok=True)
 
 
-# =====================================
-# API REQUEST
-# =====================================
-
-def api_request(params):
-
-    url = (
-        BASE_URL
-        + "/v5/market/kline?"
-        + urlencode(params)
-    )
+def download_day(symbol, day):
+    date_str = day.strftime("%Y-%m-%d")
+    filename = f"{symbol}{date_str}.csv.gz"
+    url = f"{BASE_URL}/{symbol}/{filename}"
 
     request = Request(
         url,
-        headers={
-            "User-Agent": "SpaceBarAI/1.1"
-        }
+        headers={"User-Agent": "Mozilla/5.0"}
     )
 
     for attempt in range(3):
-
         try:
-            with urlopen(
-                request,
-                timeout=20
-            ) as response:
+            with urlopen(request, timeout=60) as response:
+                return response.read()
 
-                data = json.load(response)
-
-            if data.get("retCode") != 0:
-                raise RuntimeError(
-                    data.get("retMsg", "API error")
-                )
-
-            return data["result"]["list"]
-
-        except Exception as error:
-
+        except (HTTPError, URLError, TimeoutError) as error:
             print(
-                f"API attempt {attempt + 1} "
-                f"failed: {error}"
+                f"Download attempt {attempt + 1} failed: "
+                f"{symbol} {date_str}: {error}",
+                flush=True
             )
+            if attempt < 2:
+                time.sleep(2)
 
-            if attempt == 2:
-                raise
-
-            time.sleep(2 ** attempt)
+    return None
 
 
-# =====================================
-# DOWNLOAD HISTORY
-# =====================================
-
-def download_history(symbol, interval):
-
+def parse_trades(compressed_data):
     candles = {}
 
-    interval_ms = int(interval) * 60000
+    with gzip.GzipFile(
+        fileobj=io.BytesIO(compressed_data)
+    ) as gz:
+        text = io.TextIOWrapper(gz, encoding="utf-8")
+        reader = csv.DictReader(text)
 
-    end_time = int(
-        datetime.now(timezone.utc).timestamp()
-        * 1000
-    )
+        for row in reader:
+            try:
+                timestamp = float(row["timestamp"])
+                price = float(row["price"])
+                volume = float(row["size"])
 
-    print(
-        f"\nDownloading {symbol} "
-        f"{interval}M..."
-    )
+                minute = int(timestamp // 60) * 60
 
-    while len(candles) < TARGET_CANDLES:
+                if minute not in candles:
+                    candles[minute] = [
+                        minute,
+                        price,
+                        price,
+                        price,
+                        price,
+                        volume
+                    ]
+                else:
+                    candle = candles[minute]
+                    candle[2] = max(candle[2], price)
+                    candle[3] = min(candle[3], price)
+                    candle[4] = price
+                    candle[5] += volume
 
-        remaining = TARGET_CANDLES - len(candles)
-
-        raw = api_request({
-            "category": "linear",
-            "symbol": symbol,
-            "interval": interval,
-            "limit": min(
-                PAGE_LIMIT,
-                remaining
-            ),
-            "end": end_time
-        })
-
-        if not raw:
-            break
-
-        oldest = None
-
-        now_ms = int(time.time() * 1000)
-
-        for item in raw:
-
-            timestamp = int(item[0])
-
-            if timestamp + interval_ms > now_ms:
+            except (KeyError, ValueError, TypeError):
                 continue
 
-            candles[timestamp] = {
-                "timestamp": timestamp,
-                "open": float(item[1]),
-                "high": float(item[2]),
-                "low": float(item[3]),
-                "close": float(item[4]),
-                "volume": float(item[5])
-            }
+    return candles
 
-            if oldest is None or timestamp < oldest:
-                oldest = timestamp
 
-        if oldest is None:
-            raise RuntimeError(
-                "No completed candles received"
-            )
+def aggregate_candles(one_minute, timeframe):
+    result = {}
 
-        end_time = oldest - 1
-
-        print(
-            f"{symbol} {interval}M: "
-            f"{len(candles)} candles"
+    for candle in one_minute:
+        timestamp, op, hi, lo, cl, vol = candle
+        bucket = (timestamp // (timeframe * 60)) * (
+            timeframe * 60
         )
 
-        if len(raw) < min(
-            PAGE_LIMIT,
-            remaining
-        ):
-            break
+        if bucket not in result:
+            result[bucket] = [
+                bucket, op, hi, lo, cl, vol
+            ]
+        else:
+            item = result[bucket]
+            item[2] = max(item[2], hi)
+            item[3] = min(item[3], lo)
+            item[4] = cl
+            item[5] += vol
 
-        time.sleep(REQUEST_DELAY)
-
-    result = [
-        candles[key]
-        for key in sorted(candles)
-    ]
-
-    if len(result) < TARGET_CANDLES:
-        raise RuntimeError(
-            f"Insufficient candles: "
-            f"{len(result)}/{TARGET_CANDLES}"
-        )
-
-    return result[-TARGET_CANDLES:]
+    return [result[key] for key in sorted(result)]
 
 
-# =====================================
-# SAVE CSV
-# =====================================
-
-def save_csv(coin, interval, candles):
-
-    os.makedirs(
-        DATA_DIR,
-        exist_ok=True
-    )
-
-    filename = (
+def save_csv(symbol, timeframe, candles):
+    short_symbol = symbol.replace("USDT", "")
+    path = (
         f"{DATA_DIR}/"
-        f"{coin}_{interval}m.csv"
+        f"{short_symbol}_{timeframe}m.csv"
     )
 
-    columns = [
-        "timestamp",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume"
-    ]
+    candles = candles[-TARGET_CANDLES:]
 
-    with open(
-        filename,
-        "w",
-        newline="",
-        encoding="utf-8"
-    ) as file:
-
-        writer = csv.DictWriter(
-            file,
-            fieldnames=columns
-        )
-
-        writer.writeheader()
+    with open(path, "w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow([
+            "timestamp",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+        ])
         writer.writerows(candles)
 
     print(
-        f"SAVED: {filename} "
-        f"({len(candles)} candles)"
+        f"Saved {path}: {len(candles)} candles",
+        flush=True
     )
 
 
-# =====================================
-# MAIN
-# =====================================
+def collect_symbol(symbol):
+    print(f"\nCollecting {symbol}", flush=True)
 
-def collect_all_history():
+    all_candles = {}
+    today = datetime.now(timezone.utc).date()
 
-    print("=" * 45)
-    print("SPACE BAR AI - HISTORY V1.1")
-    print("=" * 45)
+    # Exclude the current, incomplete UTC day.
+    for days_back in range(1, MAX_DAYS + 1):
+        day = today - timedelta(days=days_back)
+
+        print(
+            f"Downloading {symbol} {day}",
+            flush=True
+        )
+
+        compressed = download_day(symbol, day)
+
+        if compressed is None:
+            continue
+
+        daily_candles = parse_trades(compressed)
+        all_candles.update(daily_candles)
+
+        print(
+            f"Collected {len(all_candles)} minutes",
+            flush=True
+        )
+
+        if len(all_candles) >= TARGET_CANDLES:
+            break
+
+    one_minute = [
+        all_candles[key]
+        for key in sorted(all_candles)
+    ]
+
+    if len(one_minute) < TARGET_CANDLES:
+        raise RuntimeError(
+            f"{symbol}: insufficient 1m data "
+            f"({len(one_minute)}/{TARGET_CANDLES})"
+        )
+
+    for timeframe in TIMEFRAMES:
+        if timeframe == 1:
+            candles = one_minute
+        else:
+            candles = aggregate_candles(
+                one_minute, timeframe
+            )
+
+        if not candles:
+            raise RuntimeError(
+                f"No candles for {symbol} {timeframe}m"
+            )
+
+        save_csv(symbol, timeframe, candles)
+
+
+def main():
+    print("SPACE BAR AI HISTORY V2.0", flush=True)
 
     failures = []
 
-    for coin, symbol in SYMBOLS.items():
-
-        for interval in TIMEFRAMES:
-
-            try:
-
-                candles = download_history(
-                    symbol,
-                    interval
-                )
-
-                save_csv(
-                    coin,
-                    interval,
-                    candles
-                )
-
-            except Exception as error:
-
-                message = (
-                    f"{coin} {interval}M: {error}"
-                )
-
-                print("ERROR:", message)
-
-                failures.append(message)
+    for symbol in SYMBOLS:
+        try:
+            collect_symbol(symbol)
+        except Exception as error:
+            print(
+                f"ERROR {symbol}: {error}",
+                flush=True
+            )
+            failures.append(symbol)
 
     if failures:
-
         raise RuntimeError(
-            "History collection failed:\n"
-            + "\n".join(failures)
+            "History collection failed: "
+            + ", ".join(failures)
         )
 
-    print("\nALL HISTORY DATA COLLECTED")
+    print("\nHistory collection completed!", flush=True)
 
 
 if __name__ == "__main__":
-    collect_all_history()
+    main()
