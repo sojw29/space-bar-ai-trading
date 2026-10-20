@@ -1,4 +1,4 @@
-name: SPACE BAR AI Backtest
+name: SPACE BAR AI Backtest V5
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Download project
@@ -30,44 +30,43 @@ jobs:
           import sys
 
           symbols = ["BTC", "ETH", "SOL"]
-          intervals = ["1", "5", "15"]
+          timeframes = ["1", "5", "15"]
 
           missing = []
 
           for symbol in symbols:
-              for interval in intervals:
-                  path = f"data/history/{symbol}_{interval}m.csv"
+              for timeframe in timeframes:
+                  path = f"data/history/{symbol}_{timeframe}m.csv"
 
-                  if not os.path.isfile(path):
+                  if not os.path.exists(path):
                       missing.append(path)
                   else:
-                      print(f"OK: {path}")
+                      print("FOUND:", path)
 
           if missing:
-              sys.exit(f"Missing data: {missing}")
+              print("Missing files:", missing)
+              sys.exit(1)
 
-          print("All 9 CSV files found.")
+          print("All 9 market data files found.")
           PY
 
-      - name: Run backtest
-        run: python agents/tester.py
+      - name: Run V5 robustness backtest
+        run: python agents/tester_v5.py
 
       - name: Save backtest reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-backtest-reports
-          path: |
-            reports/*.json
-            reports/*.csv
+          name: space-bar-v5-reports
+          path: reports/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 14
 
-      - name: Save market history
+      - name: Save market data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-market-history
+          name: space-bar-market-data
           path: data/history/*.csv
           if-no-files-found: warn
           retention-days: 7
