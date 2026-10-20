@@ -26,27 +26,48 @@ jobs:
       - name: Check downloaded data
         run: |
           python - <<'PY'
-          import glob
+          import os
           import sys
 
-          files = glob.glob("data/history/*.csv")
-          print("Downloaded CSV files:", len(files))
+          symbols = ["BTC", "ETH", "SOL"]
+          intervals = ["1", "5", "15"]
 
-          for file in sorted(files):
-              print(file)
+          missing = []
 
-          if len(files) != 9:
-              sys.exit("ERROR: Expected 9 CSV files.")
+          for symbol in symbols:
+              for interval in intervals:
+                  path = f"data/history/{symbol}_{interval}m.csv"
+
+                  if not os.path.isfile(path):
+                      missing.append(path)
+                  else:
+                      print(f"OK: {path}")
+
+          if missing:
+              sys.exit(f"Missing data: {missing}")
+
+          print("All 9 CSV files found.")
           PY
 
       - name: Run backtest
         run: python agents/tester.py
 
-      - name: Save backtest data
+      - name: Save backtest reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-backtest-data
+          name: space-bar-backtest-reports
+          path: |
+            reports/*.json
+            reports/*.csv
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Save market history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-market-history
           path: data/history/*.csv
           if-no-files-found: warn
           retention-days: 7
