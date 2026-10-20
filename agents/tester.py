@@ -1,29 +1,19 @@
+# SPACE BAR AI TRADING
+# TESTER V2.0 - BACKTEST ENGINE
+
 import csv
 import json
 import os
 from datetime import datetime, timezone
 
-# ==========================================
-# SPACE BAR AI TRADING
-# TESTER V1.0 - BACKTEST ENGINE
-# ==========================================
-
 INITIAL_CAPITAL = 10000.0
-
-# Fee per side: 0.055%
 FEE_RATE = 0.00055
-
-# Slippage per side: 0.02%
 SLIPPAGE = 0.0002
-
-# Fraction of equity used per trade
 POSITION_SIZE = 0.10
 
-# Price-based stop loss and take profit
 STOP_LOSS = 0.006
 TAKE_PROFIT = 0.012
 
-# EMA crossover strategy (baseline only)
 FAST_EMA = 20
 SLOW_EMA = 50
 
@@ -34,110 +24,76 @@ SYMBOLS = ["BTC", "ETH", "SOL"]
 TIMEFRAMES = ["1", "5", "15"]
 
 
-# ==========================================
-# 1. LOAD DATA
-# ==========================================
-
 def load_data(coin, interval):
+    path = f"{DATA_DIR}/{coin}_{interval}m.csv"
 
-    filename = (
-        f"{DATA_DIR}/{coin}_{interval}m.csv"
-    )
-
-    if not os.path.exists(filename):
-        print(f"Missing data: {filename}")
-        return []
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
 
     candles = []
 
-    with open(
-        filename,
-        "r",
-        encoding="utf-8"
-    ) as file:
+    with open(path, encoding="utf-8", newline="") as file:
+        for row in csv.DictReader(file):
+            candle = {
+                "timestamp": int(row["timestamp"]),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row["volume"])
+            }
+            candles.append(candle)
 
-        reader = csv.DictReader(file)
+    candles.sort(key=lambda x: x["timestamp"])
 
-        for row in reader:
+    if len(candles) < SLOW_EMA + 3:
+        raise ValueError(f"Insufficient data: {path}")
 
-            try:
-                candle = {
-                    "timestamp": int(row["timestamp"]),
-                    "open": float(row["open"]),
-                    "high": float(row["high"]),
-                    "low": float(row["low"]),
-                    "close": float(row["close"]),
-                    "volume": float(row["volume"])
-                }
-
-                candles.append(candle)
-
-            except (ValueError, KeyError):
-                continue
-
-    candles.sort(
-        key=lambda x: x["timestamp"]
-    )
+    if len({
+        c["timestamp"] for c in candles
+    }) != len(candles):
+        raise ValueError(f"Duplicate timestamps: {path}")
 
     return candles
 
 
-# ==========================================
-# 2. EMA CALCULATION
-# ==========================================
-
 def calculate_ema(prices, period):
-
-    if len(prices) < period:
-        return [None] * len(prices)
-
     result = [None] * len(prices)
 
+    if len(prices) < period:
+        return result
+
     multiplier = 2 / (period + 1)
+    previous = sum(prices[:period]) / period
 
-    initial = sum(
-        prices[:period]
-    ) / period
-
-    result[period - 1] = initial
-
-    previous = initial
+    result[period - 1] = previous
 
     for i in range(period, len(prices)):
-
         previous = (
             prices[i] * multiplier
             + previous * (1 - multiplier)
         )
-
         result[i] = previous
 
     return result
 
 
-# ==========================================
-# 3. BACKTEST
-# ==========================================
+def fill_price(price, side, is_entry):
+    # Adverse slippage on both entry and exit.
+    buy = (
+        (side == "LONG" and is_entry)
+        or (side == "SHORT" and not is_entry)
+    )
+
+    return price * (
+        1 + SLIPPAGE if buy else 1 - SLIPPAGE
+    )
+
 
 def run_backtest(candles):
-
-    if len(candles) < SLOW_EMA + 2:
-        return None
-
-    closes = [
-        candle["close"]
-        for candle in candles
-    ]
-
-    fast = calculate_ema(
-        closes,
-        FAST_EMA
-    )
-
-    slow = calculate_ema(
-        closes,
-        SLOW_EMA
-    )
+    closes = [c["close"] for c in candles]
+    fast = calculate_ema(closes, FAST_EMA)
+    slow = calculate_ema(closes, SLOW_EMA)
 
     equity = INITIAL_CAPITAL
     peak_equity = equity
@@ -145,231 +101,296 @@ def run_backtest(candles):
 
     position = None
     trades = []
+    equity_curve = []
+
+    def mark_equity(price):
+        if position is None:
+            return equity
+
+        side = position["side"]
+        qty = position["qty"]
+        entry = position["entry"]
+
+        direction = 1 if side == "LONG" else -1
+
+        unrealized = direction * qty * (price - entry)
+        estimated_exit_fee = qty * price * FEE_RATE
+
+        return equity + unrealized - estimated_exit_fee
+
+    def update_drawdown(timestamp, marked_equity):
+        nonlocal peak_equity, max_drawdown
+
+        peak_equity = max(peak_equity, marked_equity)
+
+        if peak_equity > 0:
+            drawdown = (
+                peak_equity - marked_equity
+            ) / peak_equity
+
+            max_drawdown = max(max_drawdown, drawdown)
+
+        equity_curve.append({
+            "timestamp": timestamp,
+            "equity": round(marked_equity, 4)
+        })
+
+    def close_position(timestamp, price, reason):
+        nonlocal equity, position
+
+        side = position["side"]
+        entry = position["entry"]
+        qty = position["qty"]
+
+        exit_price = fill_price(
+            price, side, False
+        )
+
+        direction = 1 if side == "LONG" else -1
+
+        gross_pnl = direction * qty * (
+            exit_price - entry
+        )
+
+        exit_fee = qty * exit_price * FEE_RATE
+
+        # Entry fee was already deducted at entry.
+        equity += gross_pnl - exit_fee
+
+        net_pnl = (
+            gross_pnl
+            - position["entry_fee"]
+            - exit_fee
+        )
+
+        trades.append({
+            "side": side,
+            "entry_time": position["time"],
+            "exit_time": timestamp,
+            "entry": round(entry, 6),
+            "exit": round(exit_price, 6),
+            "reason": reason,
+            "quantity": round(qty, 8),
+            "entry_fee": round(
+                position["entry_fee"], 6
+            ),
+            "exit_fee": round(exit_fee, 6),
+            "gross_pnl": round(gross_pnl, 6),
+            "pnl": round(net_pnl, 6),
+            "return_on_margin_pct": round(
+                net_pnl / position["margin"] * 100,
+                4
+            )
+        })
+
+        position = None
 
     for i in range(SLOW_EMA + 1, len(candles)):
-
         candle = candles[i]
 
-        # Existing position:
-        # check stop and target first.
-        if position is not None:
-
-            side = position["side"]
-            entry = position["entry"]
-            amount = position["amount"]
-
-            if side == "LONG":
-
-                stop = entry * (1 - STOP_LOSS)
-                target = entry * (1 + TAKE_PROFIT)
-
-                hit_stop = candle["low"] <= stop
-                hit_target = candle["high"] >= target
-
-                # Conservative assumption:
-                # if both hit, stop executes first.
-                if hit_stop:
-                    exit_price = stop * (1 - SLIPPAGE)
-                    reason = "SL"
-
-                elif hit_target:
-                    exit_price = target * (1 - SLIPPAGE)
-                    reason = "TP"
-
-                else:
-                    continue
-
-                gross_return = (
-                    exit_price / entry - 1
-                )
-
-            else:
-
-                stop = entry * (1 + STOP_LOSS)
-                target = entry * (1 - TAKE_PROFIT)
-
-                hit_stop = candle["high"] >= stop
-                hit_target = candle["low"] <= target
-
-                if hit_stop:
-                    exit_price = stop * (1 + SLIPPAGE)
-                    reason = "SL"
-
-                elif hit_target:
-                    exit_price = target * (1 + SLIPPAGE)
-                    reason = "TP"
-
-                else:
-                    continue
-
-                gross_return = (
-                    entry / exit_price - 1
-                )
-
-            fees = amount * FEE_RATE * 2
-            pnl = amount * gross_return - fees
-
-            equity += pnl
-
-            trades.append({
-                "side": side,
-                "entry_time": position["time"],
-                "exit_time": candle["timestamp"],
-                "entry": round(entry, 6),
-                "exit": round(exit_price, 6),
-                "reason": reason,
-                "pnl": round(pnl, 4)
-            })
-
-            position = None
-
-            peak_equity = max(
-                peak_equity,
-                equity
-            )
-
-            drawdown = (
-                (peak_equity - equity)
-                / peak_equity
-            )
-
-            max_drawdown = max(
-                max_drawdown,
-                drawdown
-            )
-
-            continue
-
-        # EMA crossover confirmed on
-        # previous completed candle.
+        # Signal confirmed on previous candle.
         previous = i - 1
         before = i - 2
 
-        if (
-            fast[before] is None
-            or slow[before] is None
-        ):
-            continue
-
         bullish_cross = (
-            fast[before] <= slow[before]
+            fast[before] is not None
+            and slow[before] is not None
+            and fast[before] <= slow[before]
             and fast[previous] > slow[previous]
         )
 
         bearish_cross = (
-            fast[before] >= slow[before]
+            fast[before] is not None
+            and slow[before] is not None
+            and fast[before] >= slow[before]
             and fast[previous] < slow[previous]
         )
 
-        if not bullish_cross and not bearish_cross:
-            continue
+        # Entry at current candle open.
+        if position is None and equity > 0:
+            if bullish_cross or bearish_cross:
+                side = (
+                    "LONG" if bullish_cross
+                    else "SHORT"
+                )
 
-        if equity <= 0:
-            break
+                entry = fill_price(
+                    candle["open"], side, True
+                )
 
-        side = (
-            "LONG"
-            if bullish_cross
-            else "SHORT"
+                margin = equity * POSITION_SIZE
+                qty = margin / entry
+                entry_fee = qty * entry * FEE_RATE
+
+                equity -= entry_fee
+
+                position = {
+                    "side": side,
+                    "entry": entry,
+                    "qty": qty,
+                    "margin": margin,
+                    "entry_fee": entry_fee,
+                    "time": candle["timestamp"]
+                }
+
+        if position is not None:
+            side = position["side"]
+            entry = position["entry"]
+
+            if side == "LONG":
+                stop = entry * (1 - STOP_LOSS)
+                target = entry * (1 + TAKE_PROFIT)
+
+                # A gap through the stop fills at open.
+                if candle["open"] <= stop:
+                    close_position(
+                        candle["timestamp"],
+                        candle["open"],
+                        "SL_GAP"
+                    )
+                elif candle["low"] <= stop:
+                    close_position(
+                        candle["timestamp"],
+                        stop,
+                        "SL"
+                    )
+                elif candle["high"] >= target:
+                    close_position(
+                        candle["timestamp"],
+                        max(target, candle["open"]),
+                        "TP"
+                    )
+
+            else:
+                stop = entry * (1 + STOP_LOSS)
+                target = entry * (1 - TAKE_PROFIT)
+
+                if candle["open"] >= stop:
+                    close_position(
+                        candle["timestamp"],
+                        candle["open"],
+                        "SL_GAP"
+                    )
+                elif candle["high"] >= stop:
+                    close_position(
+                        candle["timestamp"],
+                        stop,
+                        "SL"
+                    )
+                elif candle["low"] <= target:
+                    close_position(
+                        candle["timestamp"],
+                        min(target, candle["open"]),
+                        "TP"
+                    )
+
+        # Conservative intrabar drawdown estimate.
+        if position is not None:
+            if position["side"] == "LONG":
+                adverse_price = candle["low"]
+            else:
+                adverse_price = candle["high"]
+
+            update_drawdown(
+                candle["timestamp"],
+                mark_equity(adverse_price)
+            )
+
+        update_drawdown(
+            candle["timestamp"],
+            mark_equity(candle["close"])
         )
 
-        entry_price = candle["open"]
+    # Close remaining position at final close.
+    if position is not None:
+        last = candles[-1]
 
-        if side == "LONG":
-            entry_price *= (1 + SLIPPAGE)
-        else:
-            entry_price *= (1 - SLIPPAGE)
+        close_position(
+            last["timestamp"],
+            last["close"],
+            "END_OF_DATA"
+        )
 
-        position = {
-            "side": side,
-            "entry": entry_price,
-            "amount": equity * POSITION_SIZE,
-            "time": candle["timestamp"]
-        }
+        update_drawdown(
+            last["timestamp"],
+            equity
+        )
 
-    # ======================================
-    # 4. PERFORMANCE METRICS
-    # ======================================
-
-    wins = [
-        trade for trade in trades
-        if trade["pnl"] > 0
-    ]
-
-    losses = [
-        trade for trade in trades
-        if trade["pnl"] < 0
-    ]
+    wins = [t for t in trades if t["pnl"] > 0]
+    losses = [t for t in trades if t["pnl"] < 0]
 
     total_trades = len(trades)
 
-    win_rate = (
-        len(wins) / total_trades * 100
-        if total_trades
-        else 0
+    gross_profit = sum(t["pnl"] for t in wins)
+    gross_loss = abs(sum(t["pnl"] for t in losses))
+
+    avg_win = (
+        gross_profit / len(wins)
+        if wins else 0
     )
 
-    gross_profit = sum(
-        trade["pnl"] for trade in wins
+    avg_loss = (
+        gross_loss / len(losses)
+        if losses else 0
     )
-
-    gross_loss = abs(sum(
-        trade["pnl"] for trade in losses
-    ))
 
     profit_factor = (
         gross_profit / gross_loss
-        if gross_loss > 0
-        else None
+        if gross_loss > 0 else None
+    )
+
+    avg_rr = (
+        avg_win / avg_loss
+        if avg_loss > 0 else None
+    )
+
+    win_rate = (
+        len(wins) / total_trades * 100
+        if total_trades else 0
     )
 
     total_return = (
-        (equity / INITIAL_CAPITAL - 1)
-        * 100
-    )
+        equity / INITIAL_CAPITAL - 1
+    ) * 100
 
     return {
         "initial_capital": INITIAL_CAPITAL,
         "final_equity": round(equity, 2),
         "total_return_pct": round(
-            total_return, 2
+            total_return, 4
         ),
         "total_trades": total_trades,
         "wins": len(wins),
         "losses": len(losses),
         "win_rate_pct": round(win_rate, 2),
+        "average_win": round(avg_win, 4),
+        "average_loss": round(avg_loss, 4),
+        "average_rr": (
+            round(avg_rr, 4)
+            if avg_rr is not None else None
+        ),
         "profit_factor": (
-            round(profit_factor, 3)
-            if profit_factor is not None
-            else None
+            round(profit_factor, 4)
+            if profit_factor is not None else None
         ),
         "max_drawdown_pct": round(
-            max_drawdown * 100, 2
+            max_drawdown * 100, 4
         ),
-        "trades": trades
+        "trades": trades,
+        "equity_curve": equity_curve
     }
 
 
-# ==========================================
-# 5. SAVE REPORT
-# ==========================================
-
 def save_report(coin, interval, result):
+    os.makedirs(REPORT_DIR, exist_ok=True)
 
-    os.makedirs(
-        REPORT_DIR,
-        exist_ok=True
-    )
-
-    filename = (
-        f"{REPORT_DIR}/"
-        f"{coin}_{interval}m_backtest.json"
-    )
+    base = f"{REPORT_DIR}/{coin}_{interval}m"
 
     report = {
         "symbol": coin,
         "timeframe": f"{interval}m",
         "strategy": "EMA_CROSSOVER_20_50",
+        "version": "TESTER_V2.0",
         "created_at": datetime.now(
             timezone.utc
         ).isoformat(),
@@ -377,11 +398,10 @@ def save_report(coin, interval, result):
     }
 
     with open(
-        filename,
+        f"{base}_backtest.json",
         "w",
         encoding="utf-8"
     ) as file:
-
         json.dump(
             report,
             file,
@@ -389,56 +409,90 @@ def save_report(coin, interval, result):
             ensure_ascii=False
         )
 
-    print(
-        f"Saved report: {filename}"
-    )
+    with open(
+        f"{base}_trades.csv",
+        "w",
+        newline="",
+        encoding="utf-8"
+    ) as file:
+        if result["trades"]:
+            writer = csv.DictWriter(
+                file,
+                fieldnames=result["trades"][0].keys()
+            )
+            writer.writeheader()
+            writer.writerows(result["trades"])
 
+    print(f"Saved report: {base}")
 
-# ==========================================
-# 6. MAIN
-# ==========================================
 
 def test_all():
+    print("=" * 50)
+    print("SPACE BAR AI - TESTER V2.0")
+    print("=" * 50)
 
-    print("=" * 45)
-    print("SPACE BAR AI - TESTER V1.0")
-    print("=" * 45)
+    os.makedirs(REPORT_DIR, exist_ok=True)
+
+    summary = []
+    failures = []
 
     for coin in SYMBOLS:
-
         for interval in TIMEFRAMES:
+            try:
+                candles = load_data(coin, interval)
+                result = run_backtest(candles)
 
-            candles = load_data(
-                coin,
-                interval
-            )
+                save_report(coin, interval, result)
 
-            if not candles:
-                continue
+                summary.append({
+                    "symbol": coin,
+                    "timeframe": f"{interval}m",
+                    "trades": result["total_trades"],
+                    "win_rate_pct": result["win_rate_pct"],
+                    "return_pct": result["total_return_pct"],
+                    "profit_factor": result["profit_factor"],
+                    "max_drawdown_pct": result[
+                        "max_drawdown_pct"
+                    ]
+                })
 
-            result = run_backtest(candles)
-
-            if result is None:
                 print(
-                    f"Insufficient data: "
-                    f"{coin} {interval}m"
+                    f"{coin} {interval}m | "
+                    f"Trades: {result['total_trades']} | "
+                    f"Win: {result['win_rate_pct']}% | "
+                    f"Return: {result['total_return_pct']}% | "
+                    f"MDD: {result['max_drawdown_pct']}%"
                 )
-                continue
 
-            save_report(
-                coin,
-                interval,
-                result
+            except Exception as error:
+                print(
+                    f"ERROR {coin} {interval}m: {error}"
+                )
+                failures.append(f"{coin}_{interval}m")
+
+    summary_path = f"{REPORT_DIR}/summary.csv"
+
+    if summary:
+        with open(
+            summary_path,
+            "w",
+            newline="",
+            encoding="utf-8"
+        ) as file:
+            writer = csv.DictWriter(
+                file,
+                fieldnames=summary[0].keys()
             )
+            writer.writeheader()
+            writer.writerows(summary)
 
-            print(
-                f"{coin} {interval}m | "
-                f"Trades: {result['total_trades']} | "
-                f"Win: {result['win_rate_pct']}% | "
-                f"Return: {result['total_return_pct']}%"
-            )
+    if failures:
+        raise RuntimeError(
+            "Backtest failed: "
+            + ", ".join(failures)
+        )
 
-    print("\nBacktest finished.")
+    print("\nBacktest finished successfully.")
 
 
 if __name__ == "__main__":
