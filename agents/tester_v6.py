@@ -540,7 +540,7 @@ def build_diagnostics(trades):
 
     rows = []
 
-    for key, group in sorted(groups.items):
+    for key, group in sorted(groups.items()):
         metrics = summarize(group)
 
         rows.append({
