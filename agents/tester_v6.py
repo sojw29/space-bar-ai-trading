@@ -1,13 +1,12 @@
 # ============================================================
 # SPACE BAR AI TRADING
-# TESTER V6.0 - DIAGNOSTIC RESEARCH ENGINE
+# TESTER V9.0 - ROBUSTNESS & DIAGNOSTIC ENGINE
 # BINANCE USDT FUTURES | PAPER RESEARCH ONLY
 # ============================================================
 
 import csv
 import os
 from collections import defaultdict
-from datetime import datetime, timezone
 
 from tester import (
     load_data,
@@ -24,9 +23,6 @@ from tester import (
 REPORT_DIR = "reports/v6"
 
 POSITION_SIZE = 0.10
-
-BASE_FEE = 0.00055
-BASE_SLIPPAGE = 0.00020
 
 STOP_LOSS = 0.006
 TAKE_PROFIT = 0.012
@@ -64,8 +60,8 @@ RANKING_FIELDS = [
     "expectancy_usd", "max_drawdown_pct",
     "positive_folds", "total_folds",
     "ambiguous_exits", "total_fees_usd",
-    "total_slippage_usd",
-    "eligible", "rejection_reasons",
+    "total_slippage_usd", "eligible",
+    "rejection_reasons",
 ]
 
 DIAGNOSTIC_FIELDS = [
@@ -83,108 +79,210 @@ def save_csv(path, rows, fields):
 
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
-            f, fieldnames=fields, extrasaction="ignore"
+            f,
+            fieldnames=fields,
+            extrasaction="ignore"
         )
         writer.writeheader()
         writer.writerows(rows)
 
 
+def validate_data(candles, timeframe, symbol):
+    if len(candles) < 600:
+        raise RuntimeError(
+            f"Insufficient candles: {symbol} {timeframe}m"
+        )
+
+    expected_gap = int(timeframe) * 60
+    gaps = 0
+
+    for i in range(1, len(candles)):
+        difference = (
+            candles[i]["timestamp"]
+            - candles[i - 1]["timestamp"]
+        )
+
+        if difference != expected_gap:
+            gaps += 1
+
+    if gaps:
+        raise RuntimeError(
+            f"Data gaps detected: "
+            f"{symbol} {timeframe}m ({gaps} gaps)"
+        )
+
+    print(
+        f"Verified {symbol} {timeframe}m: "
+        f"{len(candles)} candles",
+        flush=True
+    )
+
+
 def summarize(trades, fold_results=None):
     fold_results = fold_results or []
 
-    wins = [t for t in trades if t["net_pnl_usd"] > 0]
-    losses = [t for t in trades if t["net_pnl_usd"] < 0]
+    wins = [
+        t for t in trades
+        if t["net_pnl_usd"] > 0
+    ]
 
-    profit = sum(t["net_pnl_usd"] for t in wins)
-    loss = abs(sum(t["net_pnl_usd"] for t in losses))
-    total_pnl = sum(t["net_pnl_usd"] for t in trades)
+    losses = [
+        t for t in trades
+        if t["net_pnl_usd"] < 0
+    ]
+
+    profit = sum(
+        t["net_pnl_usd"] for t in wins
+    )
+
+    loss = abs(sum(
+        t["net_pnl_usd"] for t in losses
+    ))
+
+    total_pnl = sum(
+        t["net_pnl_usd"] for t in trades
+    )
 
     count = len(trades)
 
-    avg_win = profit / len(wins) if wins else 0.0
-    avg_loss = loss / len(losses) if losses else 0.0
+    avg_win = (
+        profit / len(wins) if wins else 0.0
+    )
+
+    avg_loss = (
+        loss / len(losses) if losses else 0.0
+    )
 
     return {
         "trades": count,
         "wins": len(wins),
         "losses": len(losses),
-        "win_rate_pct": len(wins) / count * 100 if count else 0,
-        "return_pct": total_pnl / INITIAL_CAPITAL * 100,
-        "profit_factor": profit / loss if loss > 0 else None,
+        "win_rate_pct": (
+            len(wins) / count * 100
+            if count else 0
+        ),
+        "return_pct": (
+            total_pnl / INITIAL_CAPITAL * 100
+        ),
+        "profit_factor": (
+            profit / loss if loss > 0 else None
+        ),
         "average_win_usd": avg_win,
         "average_loss_usd": avg_loss,
-        "payoff_ratio": avg_win / avg_loss if avg_loss > 0 else None,
-        "expectancy_usd": total_pnl / count if count else 0,
-        "ambiguous_exits": sum(
-            bool(t["ambiguous_exit"]) for t in trades
+        "payoff_ratio": (
+            avg_win / avg_loss
+            if avg_loss > 0 else None
         ),
-        "total_fees_usd": sum(t["fees_usd"] for t in trades),
+        "expectancy_usd": (
+            total_pnl / count if count else 0
+        ),
+        "ambiguous_exits": sum(
+            bool(t["ambiguous_exit"])
+            for t in trades
+        ),
+        "total_fees_usd": sum(
+            t["fees_usd"] for t in trades
+        ),
         "total_slippage_usd": sum(
-            t["slippage_cost_usd"] for t in trades
+            t["slippage_cost_usd"]
+            for t in trades
         ),
         "positive_folds": sum(
-            x["return_pct"] > 0 for x in fold_results
+            r["return_pct"] > 0
+            for r in fold_results
         ),
         "total_folds": len(fold_results),
         "max_drawdown_pct": max(
-            (x["max_drawdown_pct"] for x in fold_results),
-            default=0,
+            (
+                r["max_drawdown_pct"]
+                for r in fold_results
+            ),
+            default=0
         ),
     }
 
 
 def simulate(
-    candles, indicators, strategy, start, end,
-    fee, slippage, symbol, timeframe, fold, scenario
+    candles,
+    indicators,
+    strategy,
+    start,
+    end,
+    fee,
+    slippage,
+    symbol,
+    timeframe,
+    fold,
+    scenario
 ):
     equity = INITIAL_CAPITAL
     peak = equity
-    max_drawdown = 0.0
+    max_dd = 0.0
 
     position = None
     trades = []
 
     def mark(value):
-        nonlocal peak, max_drawdown
+        nonlocal peak, max_dd
 
         peak = max(peak, value)
 
         if peak > 0:
-            max_drawdown = max(
-                max_drawdown,
+            max_dd = max(
+                max_dd,
                 (peak - value) / peak
             )
 
-    def close_trade(raw_price, reason, timestamp, ambiguous=False):
+    def close_trade(
+        raw_exit,
+        reason,
+        timestamp,
+        ambiguous=False
+    ):
         nonlocal equity, position
 
         side = position["side"]
-        entry = position["entry_price"]
+        raw_entry = position["raw_entry"]
+        entry_fill = position["entry_fill"]
         quantity = position["quantity"]
 
         if side == "LONG":
-            exit_price = raw_price * (1 - slippage)
-            gross_pnl = quantity * (raw_price - entry)
-            slip_cost = quantity * (
-                position["entry_slip"] + raw_price * slippage
+            exit_fill = raw_exit * (1 - slippage)
+            gross = quantity * (
+                raw_exit - raw_entry
             )
         else:
-            exit_price = raw_price * (1 + slippage)
-            gross_pnl = quantity * (entry - raw_price)
-            slip_cost = quantity * (
-                position["entry_slip"] + raw_price * slippage
+            exit_fill = raw_exit * (1 + slippage)
+            gross = quantity * (
+                raw_entry - raw_exit
             )
 
-        entry_fee = quantity * position["entry_fill"] * fee
-        exit_fee = quantity * exit_price * fee
+        entry_slip_cost = quantity * abs(
+            entry_fill - raw_entry
+        )
+
+        exit_slip_cost = quantity * abs(
+            exit_fill - raw_exit
+        )
+
+        slippage_cost = (
+            entry_slip_cost + exit_slip_cost
+        )
+
+        entry_fee = quantity * entry_fill * fee
+        exit_fee = quantity * exit_fill * fee
+
         fees = entry_fee + exit_fee
 
-        net_pnl = gross_pnl - slip_cost - fees
+        net_pnl = (
+            gross - slippage_cost - fees
+        )
+
         equity += net_pnl
 
         trades.append({
             "symbol": symbol,
-            "timeframe": timeframe + "m",
+            "timeframe": str(timeframe) + "m",
             "strategy": strategy,
             "fold": fold,
             "scenario": scenario,
@@ -192,16 +290,24 @@ def simulate(
             "regime": position["regime"],
             "entry_time": position["entry_time"],
             "exit_time": timestamp,
-            "entry_price": round(position["entry_fill"], 8),
-            "exit_price": round(exit_price, 8),
+            "entry_price": round(entry_fill, 8),
+            "exit_price": round(exit_fill, 8),
             "quantity": round(quantity, 10),
-            "notional_usd": round(position["notional"], 4),
-            "gross_pnl_usd": round(gross_pnl, 6),
+            "notional_usd": round(
+                position["notional"], 4
+            ),
+            "gross_pnl_usd": round(gross, 6),
             "fees_usd": round(fees, 6),
-            "slippage_cost_usd": round(slip_cost, 6),
-            "net_pnl_usd": round(net_pnl, 6),
+            "slippage_cost_usd": round(
+                slippage_cost, 6
+            ),
+            "net_pnl_usd": round(
+                net_pnl, 6
+            ),
             "trade_return_pct": round(
-                net_pnl / position["notional"] * 100, 6
+                net_pnl
+                / position["notional"] * 100,
+                6
             ),
             "reason": reason,
             "ambiguous_exit": ambiguous,
@@ -213,7 +319,9 @@ def simulate(
     for i in range(start, end):
         candle = candles[i]
 
-        # An existing position can exit on this candle.
+        # No same-candle re-entry after exit.
+        exited_this_bar = False
+
         if position is not None:
             side = position["side"]
             entry = position["entry_fill"]
@@ -229,22 +337,27 @@ def simulate(
 
                 if candle["open"] <= stop:
                     close_trade(
-                        candle["open"], "SL_GAP",
+                        candle["open"],
+                        "SL_GAP",
                         candle["timestamp"]
                     )
                 elif candle["open"] >= target:
                     close_trade(
-                        target, "TP",
+                        target,
+                        "TP",
                         candle["timestamp"]
                     )
                 elif candle["low"] <= stop:
                     close_trade(
-                        stop, "SL",
-                        candle["timestamp"], both
+                        stop,
+                        "SL",
+                        candle["timestamp"],
+                        both
                     )
                 elif candle["high"] >= target:
                     close_trade(
-                        target, "TP",
+                        target,
+                        "TP",
                         candle["timestamp"]
                     )
 
@@ -259,26 +372,34 @@ def simulate(
 
                 if candle["open"] >= stop:
                     close_trade(
-                        candle["open"], "SL_GAP",
+                        candle["open"],
+                        "SL_GAP",
                         candle["timestamp"]
                     )
                 elif candle["open"] <= target:
                     close_trade(
-                        target, "TP",
+                        target,
+                        "TP",
                         candle["timestamp"]
                     )
                 elif candle["high"] >= stop:
                     close_trade(
-                        stop, "SL",
-                        candle["timestamp"], both
+                        stop,
+                        "SL",
+                        candle["timestamp"],
+                        both
                     )
                 elif candle["low"] <= target:
                     close_trade(
-                        target, "TP",
+                        target,
+                        "TP",
                         candle["timestamp"]
                     )
 
-            if position is not None:
+            if position is None:
+                exited_this_bar = True
+
+            else:
                 quantity = position["quantity"]
                 entry = position["entry_fill"]
 
@@ -293,10 +414,16 @@ def simulate(
 
                 mark(equity + unrealized)
 
-        # Entry signal is based on the previous closed candle.
-        if position is None and equity > 0:
+        if (
+            position is None
+            and not exited_this_bar
+            and equity > 0
+        ):
             signal = get_signal(
-                strategy, candles, indicators, i - 1
+                strategy,
+                candles,
+                indicators,
+                i - 1
             )
 
             if signal in ("LONG", "SHORT"):
@@ -304,29 +431,33 @@ def simulate(
                 notional = equity * POSITION_SIZE
 
                 if signal == "LONG":
-                    entry_fill = raw_entry * (1 + slippage)
+                    entry_fill = (
+                        raw_entry * (1 + slippage)
+                    )
                 else:
-                    entry_fill = raw_entry * (1 - slippage)
+                    entry_fill = (
+                        raw_entry * (1 - slippage)
+                    )
 
                 quantity = notional / entry_fill
 
                 position = {
                     "side": signal,
-                    "entry_price": raw_entry,
+                    "raw_entry": raw_entry,
                     "entry_fill": entry_fill,
-                    "entry_slip": abs(entry_fill - raw_entry),
                     "quantity": quantity,
                     "notional": notional,
                     "entry_time": candle["timestamp"],
-                    "regime": market_regime(indicators, i - 1),
+                    "regime": market_regime(
+                        indicators,
+                        i - 1
+                    ),
                 }
 
-                # Entry occurs at candle open, so SL/TP may
-                # also be reached within the entry candle.
-                side = position["side"]
+                # Same-bar SL/TP check after entry at open.
                 entry = position["entry_fill"]
 
-                if side == "LONG":
+                if signal == "LONG":
                     stop = entry * (1 - STOP_LOSS)
                     target = entry * (1 + TAKE_PROFIT)
 
@@ -337,11 +468,16 @@ def simulate(
 
                     if candle["low"] <= stop:
                         close_trade(
-                            stop, "SL", candle["timestamp"], both
+                            stop,
+                            "SL",
+                            candle["timestamp"],
+                            both
                         )
                     elif candle["high"] >= target:
                         close_trade(
-                            target, "TP", candle["timestamp"]
+                            target,
+                            "TP",
+                            candle["timestamp"]
                         )
 
                 else:
@@ -355,11 +491,16 @@ def simulate(
 
                     if candle["high"] >= stop:
                         close_trade(
-                            stop, "SL", candle["timestamp"], both
+                            stop,
+                            "SL",
+                            candle["timestamp"],
+                            both
                         )
                     elif candle["low"] <= target:
                         close_trade(
-                            target, "TP", candle["timestamp"]
+                            target,
+                            "TP",
+                            candle["timestamp"]
                         )
 
         mark(equity)
@@ -372,7 +513,11 @@ def simulate(
         )
 
     metrics = summarize(trades)
-    metrics["max_drawdown_pct"] = max_drawdown * 100
+
+    metrics["max_drawdown_pct"] = (
+        max_dd * 100
+    )
+
     metrics["trade_log"] = trades
 
     return metrics
@@ -390,11 +535,12 @@ def build_diagnostics(trades):
             trade["regime"],
             trade["side"],
         )
+
         groups[key].append(trade)
 
     rows = []
 
-    for key, group in sorted(groups.items()):
+    for key, group in sorted(groups.items):
         metrics = summarize(group)
 
         rows.append({
@@ -406,20 +552,40 @@ def build_diagnostics(trades):
             "side": key[5],
             "trades": metrics["trades"],
             "wins": metrics["wins"],
-            "win_rate_pct": round(metrics["win_rate_pct"], 4),
+            "win_rate_pct": round(
+                metrics["win_rate_pct"], 4
+            ),
             "net_pnl_usd": round(
-                sum(t["net_pnl_usd"] for t in group), 4
+                sum(
+                    t["net_pnl_usd"]
+                    for t in group
+                ),
+                4
             ),
             "gross_pnl_usd": round(
-                sum(t["gross_pnl_usd"] for t in group), 4
+                sum(
+                    t["gross_pnl_usd"]
+                    for t in group
+                ),
+                4
             ),
             "fees_usd": round(
-                sum(t["fees_usd"] for t in group), 4
+                sum(
+                    t["fees_usd"]
+                    for t in group
+                ),
+                4
             ),
             "slippage_cost_usd": round(
-                sum(t["slippage_cost_usd"] for t in group), 4
+                sum(
+                    t["slippage_cost_usd"]
+                    for t in group
+                ),
+                4
             ),
-            "profit_factor": metrics["profit_factor"],
+            "profit_factor": (
+                metrics["profit_factor"]
+            ),
         })
 
     return rows
@@ -427,31 +593,39 @@ def build_diagnostics(trades):
 
 def test_all():
     print("=" * 55)
-    print("SPACE BAR AI - TESTER V6.0")
-    print("DIAGNOSTIC RESEARCH | PAPER ONLY")
+    print("SPACE BAR AI - TESTER V9.0")
+    print("ROBUSTNESS & DIAGNOSTIC RESEARCH")
     print("=" * 55)
 
     os.makedirs(REPORT_DIR, exist_ok=True)
 
     ranking = []
-    all_base_trades = []
-    all_diagnostic_trades = []
+    base_trades = []
+    diagnostic_trades = []
 
     for symbol in SYMBOLS:
         for timeframe in TIMEFRAMES:
-            candles = load_data(symbol, timeframe)
+            candles = load_data(
+                symbol, timeframe
+            )
 
-            if len(candles) < 600:
-                print("Insufficient data:", symbol, timeframe)
-                continue
+            validate_data(
+                candles, timeframe, symbol
+            )
 
             indicators = prepare(candles)
-            windows = walk_forward_windows(len(candles))
+            windows = walk_forward_windows(
+                len(candles)
+            )
 
             for strategy in STRATEGIES:
                 scenario_results = {}
 
-                for scenario, (fee, slippage) in SCENARIOS.items():
+                for scenario, (
+                    fee,
+                    slippage
+                ) in SCENARIOS.items():
+
                     fold_results = []
                     scenario_trades = []
 
@@ -467,21 +641,31 @@ def test_all():
                             symbol,
                             timeframe,
                             window["fold"],
-                            scenario,
+                            scenario
                         )
 
                         fold_results.append(result)
-                        scenario_trades.extend(result["trade_log"])
+                        scenario_trades.extend(
+                            result["trade_log"]
+                        )
 
                     metrics = summarize(
-                        scenario_trades, fold_results
+                        scenario_trades,
+                        fold_results
                     )
 
-                    scenario_results[scenario] = metrics
-                    all_diagnostic_trades.extend(scenario_trades)
+                    scenario_results[
+                        scenario
+                    ] = metrics
+
+                    diagnostic_trades.extend(
+                        scenario_trades
+                    )
 
                     if scenario == "BASE":
-                        all_base_trades.extend(scenario_trades)
+                        base_trades.extend(
+                            scenario_trades
+                        )
 
                 base = scenario_results["BASE"]
                 stress = scenario_results["STRESS"]
@@ -489,30 +673,48 @@ def test_all():
                 rejection = []
 
                 if base["trades"] < MIN_TRADES:
-                    rejection.append("INSUFFICIENT_TRADES")
+                    rejection.append(
+                        "INSUFFICIENT_TRADES"
+                    )
 
-                if base["positive_folds"] < MIN_POSITIVE_FOLDS:
-                    rejection.append("INSUFFICIENT_POSITIVE_FOLDS")
+                if (
+                    base["positive_folds"]
+                    < MIN_POSITIVE_FOLDS
+                ):
+                    rejection.append(
+                        "INSUFFICIENT_POSITIVE_FOLDS"
+                    )
 
                 if base["return_pct"] <= 0:
-                    rejection.append("NEGATIVE_RETURN")
+                    rejection.append(
+                        "NEGATIVE_RETURN"
+                    )
 
                 if (
                     base["profit_factor"] is None
-                    or base["profit_factor"] < MIN_PROFIT_FACTOR
+                    or base["profit_factor"]
+                    < MIN_PROFIT_FACTOR
                 ):
-                    rejection.append("LOW_PROFIT_FACTOR")
+                    rejection.append(
+                        "LOW_PROFIT_FACTOR"
+                    )
 
                 if stress["return_pct"] <= 0:
-                    rejection.append("STRESS_TEST_FAILED")
+                    rejection.append(
+                        "STRESS_TEST_FAILED"
+                    )
 
-                eligible = len(rejection) == 0
+                eligible = (
+                    len(rejection) == 0
+                )
 
                 ranking.append({
                     "symbol": symbol,
                     "timeframe": timeframe + "m",
                     "strategy": strategy,
-                    "validation_trades": base["trades"],
+                    "validation_trades": (
+                        base["trades"]
+                    ),
                     "wins": base["wins"],
                     "losses": base["losses"],
                     "win_rate_pct": round(
@@ -522,16 +724,22 @@ def test_all():
                         base["return_pct"], 4
                     ),
                     "base_pf": (
-                        round(base["profit_factor"], 4)
-                        if base["profit_factor"] is not None
+                        round(
+                            base["profit_factor"], 4
+                        )
+                        if base["profit_factor"]
+                        is not None
                         else None
                     ),
                     "stress_return_pct": round(
                         stress["return_pct"], 4
                     ),
                     "stress_pf": (
-                        round(stress["profit_factor"], 4)
-                        if stress["profit_factor"] is not None
+                        round(
+                            stress["profit_factor"], 4
+                        )
+                        if stress["profit_factor"]
+                        is not None
                         else None
                     ),
                     "average_win_usd": round(
@@ -541,8 +749,11 @@ def test_all():
                         base["average_loss_usd"], 4
                     ),
                     "payoff_ratio": (
-                        round(base["payoff_ratio"], 4)
-                        if base["payoff_ratio"] is not None
+                        round(
+                            base["payoff_ratio"], 4
+                        )
+                        if base["payoff_ratio"]
+                        is not None
                         else None
                     ),
                     "expectancy_usd": round(
@@ -551,9 +762,15 @@ def test_all():
                     "max_drawdown_pct": round(
                         base["max_drawdown_pct"], 4
                     ),
-                    "positive_folds": base["positive_folds"],
-                    "total_folds": base["total_folds"],
-                    "ambiguous_exits": base["ambiguous_exits"],
+                    "positive_folds": (
+                        base["positive_folds"]
+                    ),
+                    "total_folds": (
+                        base["total_folds"]
+                    ),
+                    "ambiguous_exits": (
+                        base["ambiguous_exits"]
+                    ),
                     "total_fees_usd": round(
                         base["total_fees_usd"], 4
                     ),
@@ -562,7 +779,9 @@ def test_all():
                     ),
                     "eligible": eligible,
                     "rejection_reasons": (
-                        "|".join(rejection) if rejection else "PASS"
+                        "|".join(rejection)
+                        if rejection
+                        else "PASS"
                     ),
                 })
 
@@ -572,58 +791,68 @@ def test_all():
                     timeframe + "m",
                     strategy,
                     "| Return:",
-                    round(base["return_pct"], 4),
+                    round(
+                        base["return_pct"], 4
+                    ),
                     "| PF:",
                     base["profit_factor"],
                     "| Eligible:",
                     eligible,
-                    flush=True,
+                    flush=True
                 )
 
     if not ranking:
-        raise RuntimeError("No V6 results generated.")
+        raise RuntimeError(
+            "No V9 results generated."
+        )
 
     ranking.sort(
         key=lambda row: (
             row["eligible"],
             row["base_return_pct"],
-            row["base_pf"] or 0,
+            row["base_pf"] or 0
         ),
-        reverse=True,
+        reverse=True
     )
 
     save_csv(
         f"{REPORT_DIR}/ranking.csv",
         ranking,
-        RANKING_FIELDS,
+        RANKING_FIELDS
     )
 
     save_csv(
         f"{REPORT_DIR}/trades.csv",
-        all_base_trades,
-        TRADE_FIELDS,
+        base_trades,
+        TRADE_FIELDS
     )
 
     save_csv(
         f"{REPORT_DIR}/diagnostics.csv",
-        build_diagnostics(all_diagnostic_trades),
-        DIAGNOSTIC_FIELDS,
+        build_diagnostics(
+            diagnostic_trades
+        ),
+        DIAGNOSTIC_FIELDS
     )
 
-    print("\nTOP V6 CANDIDATES")
+    print("\nTOP V9 CANDIDATES")
 
     for row in ranking[:10]:
         print(
             row["symbol"],
             row["timeframe"],
             row["strategy"],
-            "| Return:", row["base_return_pct"],
-            "| PF:", row["base_pf"],
-            "| Eligible:", row["eligible"],
-            "| Reasons:", row["rejection_reasons"],
+            "| Return:",
+            row["base_return_pct"],
+            "| PF:",
+            row["base_pf"],
+            "| Eligible:",
+            row["eligible"],
+            "| Reasons:",
+            row["rejection_reasons"]
         )
 
-    print("\nTESTER V6.0 COMPLETED")
+    print("\nTESTER V9.0 COMPLETED")
     print("reports/v6/ranking.csv")
     print("reports/v6/trades.csv")
     print("reports/v6/diagnostics.csv")
