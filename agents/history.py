@@ -1,15 +1,16 @@
 # ============================================================
 # SPACE BAR AI TRADING
-# HISTORY V6.1 - BINANCE PUBLIC MARKET DATA
+# HISTORY V7.0 - BINANCE USDT FUTURES
+# LONG-TERM MARKET DATA
 # PAPER RESEARCH ONLY
 # ============================================================
 
 import csv
-import json
+import io
 import os
 import time
-
-from datetime import datetime, timezone
+import zipfile
+from datetime import datetime, timedelta, timezone
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -18,350 +19,283 @@ TIMEFRAMES = [1, 5, 15]
 
 DATA_DIR = "data/history"
 
-API_URLS = [
-    "https://data-api.binance.vision/api/v3/klines",
-    "https://api.binance.com/api/v3/klines",
-]
+BASE_URL = (
+    "https://data.binance.vision/data/futures/um/monthly/klines"
+)
 
-TARGET_1M_CANDLES = 10000
-LIMIT = 1000
+DAYS_TO_COLLECT = 365
+MAX_MONTHS_PER_RUN = 3
 MAX_RETRIES = 3
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
-def request_klines(symbol, end_ms):
+def month_start(dt):
+    return datetime(dt.year, dt.month, 1, tzinfo=timezone.utc)
 
-    params = (
-        f"?symbol={symbol}"
-        f"&interval=1m"
-        f"&limit={LIMIT}"
-        f"&endTime={end_ms}"
-    )
 
-    last_error = None
+def previous_month(dt):
+    return month_start(dt) - timedelta(days=1)
 
-    for base_url in API_URLS:
 
-        url = base_url + params
+def download_month(symbol, year, month):
+    filename = f"{symbol}-1m-{year}-{month:02d}.zip"
+    url = f"{BASE_URL}/{symbol}/1m/{filename}"
 
-        for attempt in range(MAX_RETRIES):
+    for attempt in range(MAX_RETRIES):
+        try:
+            request = Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
 
-            try:
+            with urlopen(request, timeout=90) as response:
+                content = response.read()
 
-                request = Request(
-                    url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0",
-                        "Accept": "application/json",
-                    },
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                csv_name = next(
+                    name for name in archive.namelist()
+                    if name.endswith(".csv")
                 )
 
-                with urlopen(request, timeout=30) as response:
-                    data = json.loads(
-                        response.read().decode("utf-8")
+                with archive.open(csv_name) as file:
+                    reader = csv.reader(
+                        io.TextIOWrapper(file, encoding="utf-8")
                     )
+                    rows = list(reader)
 
-                if not isinstance(data, list):
-                    raise RuntimeError(
-                        f"Unexpected response: {data}"
-                    )
+            print(
+                f"Downloaded {symbol} {year}-{month:02d}: "
+                f"{len(rows)} rows",
+                flush=True
+            )
 
-                return data
+            return rows
 
-            except (
-                HTTPError,
-                URLError,
-                TimeoutError,
-                ValueError,
-                RuntimeError,
-            ) as error:
+        except (
+            HTTPError,
+            URLError,
+            TimeoutError,
+            zipfile.BadZipFile,
+            StopIteration,
+            OSError
+        ) as error:
+            print(
+                f"Retry {attempt + 1}/{MAX_RETRIES}: {error}",
+                flush=True
+            )
 
-                last_error = error
-
-                print(
-                    f"API retry {attempt + 1}/{MAX_RETRIES}: "
-                    f"{error}",
-                    flush=True,
-                )
-
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(2)
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(3)
 
     raise RuntimeError(
-        f"Failed to download {symbol}: {last_error}"
+        f"Failed to download {symbol} {year}-{month:02d}"
     )
 
 
-def validate_candle(candle):
+def load_existing(symbol):
+    short_symbol = symbol.replace("USDT", "")
+    path = f"{DATA_DIR}/{short_symbol}_1m.csv"
 
-    timestamp, op, hi, lo, cl, vol = candle
+    candles = {}
 
-    if min(op, hi, lo, cl) <= 0:
-        return False
+    if not os.path.exists(path):
+        return candles
 
-    if vol < 0:
-        return False
+    with open(path, "r", newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
 
-    if hi < max(op, cl):
-        return False
+        for row in reader:
+            try:
+                timestamp = int(float(row["timestamp"]))
 
-    if lo > min(op, cl):
-        return False
+                candles[timestamp] = [
+                    timestamp,
+                    float(row["open"]),
+                    float(row["high"]),
+                    float(row["low"]),
+                    float(row["close"]),
+                    float(row["volume"])
+                ]
+            except (ValueError, KeyError, TypeError):
+                continue
 
-    if timestamp % 60 != 0:
-        return False
+    print(
+        f"Loaded {symbol}: {len(candles)} existing candles",
+        flush=True
+    )
 
-    return True
+    return candles
 
 
 def save_csv(symbol, timeframe, candles):
-
     short_symbol = symbol.replace("USDT", "")
+    path = f"{DATA_DIR}/{short_symbol}_{timeframe}m.csv"
 
-    path = (
-        f"{DATA_DIR}/"
-        f"{short_symbol}_{timeframe}m.csv"
-    )
-
-    with open(
-        path,
-        "w",
-        newline="",
-        encoding="utf-8",
-    ) as file:
-
+    with open(path, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-
         writer.writerow([
             "timestamp",
             "open",
             "high",
             "low",
             "close",
-            "volume",
+            "volume"
         ])
-
         writer.writerows(candles)
 
     print(
         f"Saved {path}: {len(candles)} candles",
-        flush=True,
+        flush=True
     )
 
 
 def aggregate_candles(one_minute, timeframe):
-
-    result = {}
-
+    buckets = {}
     seconds = timeframe * 60
 
     for candle in one_minute:
-
         timestamp, op, hi, lo, cl, vol = candle
-
         bucket = (timestamp // seconds) * seconds
 
-        if bucket not in result:
-
-            result[bucket] = [
-                bucket,
-                op,
-                hi,
-                lo,
-                cl,
-                vol,
-                1,
+        if bucket not in buckets:
+            buckets[bucket] = [
+                bucket, op, hi, lo, cl, vol, 1
             ]
-
         else:
-
-            item = result[bucket]
-
+            item = buckets[bucket]
             item[2] = max(item[2], hi)
             item[3] = min(item[3], lo)
             item[4] = cl
             item[5] += vol
             item[6] += 1
 
-    # Incomplete 5m/15m candles are excluded.
-    candles = []
-
-    for bucket in sorted(result):
-
-        item = result[bucket]
-
-        if item[6] == timeframe:
-            candles.append(item[:6])
-
-    return candles
+    return [
+        buckets[key][:6]
+        for key in sorted(buckets)
+        if buckets[key][6] == timeframe
+    ]
 
 
 def collect_symbol(symbol):
+    print(f"\nCollecting {symbol}", flush=True)
 
-    print(
-        f"\nCollecting {symbol}",
-        flush=True,
-    )
-
-    candles = {}
+    candles = load_existing(symbol)
 
     now = datetime.now(timezone.utc)
+    target_start = int(
+        (now - timedelta(days=DAYS_TO_COLLECT)).timestamp()
+    )
+    current_minute = int(now.timestamp() // 60) * 60
 
-    current_minute = (
-        int(now.timestamp()) // 60
-    ) * 60
+    month = previous_month(now)
+    months_downloaded = 0
 
-    end_ms = current_minute * 1000 - 1
+    while months_downloaded < MAX_MONTHS_PER_RUN:
+        year = month.year
+        month_number = month.month
 
-    max_requests = 20
-
-    for request_number in range(max_requests):
-
-        batch = request_klines(
-            symbol,
-            end_ms,
+        month_timestamp = int(
+            month_start(month).timestamp()
         )
 
-        if not batch:
+        if month_timestamp < target_start - 31 * 86400:
             break
 
-        oldest_ms = None
+        rows = download_month(
+            symbol,
+            year,
+            month_number
+        )
 
-        for item in batch:
+        for row in rows:
+            try:
+                timestamp_ms = int(row[0])
 
-            timestamp_ms = int(item[0])
-            timestamp = timestamp_ms // 1000
+                # Normalize milliseconds or microseconds.
+                if timestamp_ms > 10**14:
+                    timestamp = timestamp_ms // 1000000
+                else:
+                    timestamp = timestamp_ms // 1000
 
-            if (
-                oldest_ms is None
-                or timestamp_ms < oldest_ms
-            ):
-                oldest_ms = timestamp_ms
+                if not (
+                    target_start <= timestamp < current_minute
+                ):
+                    continue
 
-            if timestamp >= current_minute:
-                continue
+                candle = [
+                    timestamp,
+                    float(row[1]),
+                    float(row[2]),
+                    float(row[3]),
+                    float(row[4]),
+                    float(row[5])
+                ]
 
-            candle = [
-                timestamp,
-                float(item[1]),
-                float(item[2]),
-                float(item[3]),
-                float(item[4]),
-                float(item[5]),
-            ]
+                if (
+                    candle[1] <= 0
+                    or candle[2] < max(candle[1], candle[4])
+                    or candle[3] > min(candle[1], candle[4])
+                    or candle[5] < 0
+                ):
+                    continue
 
-            if validate_candle(candle):
                 candles[timestamp] = candle
 
-        print(
-            f"{symbol}: request {request_number + 1}, "
-            f"total={len(candles)}",
-            flush=True,
-        )
+            except (ValueError, IndexError):
+                continue
 
-        if len(candles) >= TARGET_1M_CANDLES:
-            break
-
-        if oldest_ms is None:
-            break
-
-        end_ms = oldest_ms - 1
-
-        time.sleep(0.3)
+        months_downloaded += 1
+        month = previous_month(month)
 
     one_minute = [
         candles[key]
         for key in sorted(candles)
+        if target_start <= key < current_minute
     ]
 
-    one_minute = one_minute[-TARGET_1M_CANDLES:]
-
-    if len(one_minute) < TARGET_1M_CANDLES:
-
+    if not one_minute:
         raise RuntimeError(
-            f"{symbol}: insufficient data "
-            f"({len(one_minute)}/"
-            f"{TARGET_1M_CANDLES})"
+            f"No market data collected for {symbol}"
         )
 
-    # Require consecutive 1-minute candles.
-    for index in range(1, len(one_minute)):
-
-        previous = one_minute[index - 1][0]
-        current = one_minute[index][0]
-
-        if current - previous != 60:
-
-            raise RuntimeError(
-                f"{symbol}: missing 1m candles "
-                f"between {previous} and {current}"
-            )
-
-    save_csv(
-        symbol,
-        1,
-        one_minute,
-    )
+    save_csv(symbol, 1, one_minute)
 
     for timeframe in [5, 15]:
-
         aggregated = aggregate_candles(
             one_minute,
-            timeframe,
+            timeframe
         )
-
-        if not aggregated:
-            raise RuntimeError(
-                f"{symbol}: no {timeframe}m data"
-            )
-
-        save_csv(
-            symbol,
-            timeframe,
-            aggregated,
-        )
+        save_csv(symbol, timeframe, aggregated)
 
     print(
-        f"{symbol} completed!",
-        flush=True,
+        f"{symbol} completed: {len(one_minute)} candles",
+        flush=True
     )
 
 
 def main():
-
-    print(
-        "SPACE BAR AI HISTORY V6.1",
-        flush=True,
-    )
+    print("SPACE BAR AI HISTORY V7.0", flush=True)
 
     failures = []
 
     for symbol in SYMBOLS:
-
         try:
             collect_symbol(symbol)
-
         except Exception as error:
-
             print(
                 f"ERROR {symbol}: {error}",
-                flush=True,
+                flush=True
             )
-
             failures.append(symbol)
 
     if failures:
-
         raise RuntimeError(
             "History collection failed: "
             + ", ".join(failures)
         )
 
-    print(
-        "\nAll market history collected!",
-        flush=True,
-    )
+    print("\nHISTORY V7 COMPLETED", flush=True)
 
 
 if __name__ == "__main__":
