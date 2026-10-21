@@ -1,6 +1,6 @@
 # ============================================================
 # SPACE BAR AI TRADING
-# HISTORY V7.1 - BINANCE USDT FUTURES
+# HISTORY V7.2 - BINANCE USDT FUTURES
 # 365-DAY HISTORICAL DATA
 # PAPER RESEARCH ONLY
 # ============================================================
@@ -10,6 +10,7 @@ import io
 import os
 import time
 import zipfile
+
 from datetime import datetime, timedelta, timezone
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -18,18 +19,26 @@ SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 TIMEFRAMES = [1, 5, 15]
 
 DATA_DIR = "data/history"
+
 BASE_URL = "https://data.binance.vision/data/futures/um"
 
 DAYS_TO_COLLECT = 365
+PUBLICATION_DELAY_DAYS = 3
 MAX_RETRIES = 3
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
+# ============================================================
+# DOWNLOAD
+# ============================================================
+
 def download_zip(url):
+
     last_error = None
 
     for attempt in range(MAX_RETRIES):
+
         try:
             request = Request(
                 url,
@@ -40,19 +49,26 @@ def download_zip(url):
                 content = response.read()
 
             with zipfile.ZipFile(io.BytesIO(content)) as archive:
+
                 csv_name = next(
-                    name for name in archive.namelist()
+                    name
+                    for name in archive.namelist()
                     if name.endswith(".csv")
                 )
 
                 with archive.open(csv_name) as file:
+
                     reader = csv.reader(
-                        io.TextIOWrapper(file, encoding="utf-8")
+                        io.TextIOWrapper(
+                            file,
+                            encoding="utf-8"
+                        )
                     )
+
                     return list(reader)
 
         except HTTPError as error:
-            # Recent daily archives may not be published yet.
+
             if error.code == 404:
                 return None
 
@@ -65,6 +81,7 @@ def download_zip(url):
             StopIteration,
             OSError,
         ) as error:
+
             last_error = error
 
         print(
@@ -81,7 +98,12 @@ def download_zip(url):
     )
 
 
+# ============================================================
+# TIMESTAMP
+# ============================================================
+
 def normalize_timestamp(value):
+
     timestamp = int(value)
 
     if timestamp > 10**14:
@@ -90,13 +112,19 @@ def normalize_timestamp(value):
     return timestamp // 1000
 
 
+# ============================================================
+# ADD CANDLES
+# ============================================================
+
 def add_rows(candles, rows, start_ts, end_ts):
+
     if rows is None:
         return 0
 
     added = 0
 
     for row in rows:
+
         try:
             timestamp = normalize_timestamp(row[0])
 
@@ -128,46 +156,80 @@ def add_rows(candles, rows, start_ts, end_ts):
                 added += 1
 
             candles[timestamp] = [
-                timestamp, op, hi, lo, cl, vol
+                timestamp,
+                op,
+                hi,
+                lo,
+                cl,
+                vol
             ]
 
-        except (ValueError, TypeError, IndexError):
+        except (
+            ValueError,
+            TypeError,
+            IndexError
+        ):
             continue
 
     return added
 
 
+# ============================================================
+# MONTH ITERATOR
+# ============================================================
+
 def month_starts(start, end):
+
     current = datetime(
-        start.year, start.month, 1,
+        start.year,
+        start.month,
+        1,
         tzinfo=timezone.utc
     )
 
     while current < end:
+
         yield current
 
         if current.month == 12:
+
             current = datetime(
-                current.year + 1, 1, 1,
-                tzinfo=timezone.utc
-            )
-        else:
-            current = datetime(
-                current.year, current.month + 1, 1,
+                current.year + 1,
+                1,
+                1,
                 tzinfo=timezone.utc
             )
 
+        else:
+
+            current = datetime(
+                current.year,
+                current.month + 1,
+                1,
+                tzinfo=timezone.utc
+            )
+
+
+# ============================================================
+# SAVE CSV
+# ============================================================
 
 def save_csv(symbol, timeframe, candles):
+
     short_symbol = symbol.replace("USDT", "")
 
     path = (
-        f"{DATA_DIR}/{short_symbol}_{timeframe}m.csv"
+        f"{DATA_DIR}/"
+        f"{short_symbol}_{timeframe}m.csv"
     )
 
     with open(
-        path, "w", newline="", encoding="utf-8"
+        path,
+        "w",
+        newline="",
+        encoding="utf-8"
     ) as file:
+
         writer = csv.writer(file)
 
         writer.writerow([
@@ -187,21 +249,40 @@ def save_csv(symbol, timeframe, candles):
     )
 
 
+# ============================================================
+# AGGREGATE TIMEFRAMES
+# ============================================================
+
 def aggregate_candles(one_minute, timeframe):
+
     result = {}
+
     interval = timeframe * 60
 
     for candle in one_minute:
+
         timestamp, op, hi, lo, cl, vol = candle
 
-        bucket = (timestamp // interval) * interval
+        bucket = (
+            timestamp // interval
+        ) * interval
 
         if bucket not in result:
+
             result[bucket] = [
-                bucket, op, hi, lo, cl, vol, 1
+                bucket,
+                op,
+                hi,
+                lo,
+                cl,
+                vol,
+                1
             ]
+
         else:
+
             item = result[bucket]
+
             item[2] = max(item[2], hi)
             item[3] = min(item[3], lo)
             item[4] = cl
@@ -215,31 +296,51 @@ def aggregate_candles(one_minute, timeframe):
     ]
 
 
+# ============================================================
+# COLLECT SYMBOL
+# ============================================================
+
 def collect_symbol(symbol, start, end):
-    print(f"\nCollecting {symbol}", flush=True)
+
+    print(
+        f"\nCollecting {symbol}",
+        flush=True
+    )
 
     candles = {}
 
     start_ts = int(start.timestamp())
     end_ts = int(end.timestamp())
 
-    # 1. Download completed monthly archives.
+    # Download monthly archives.
+
     for month in month_starts(start, end):
-        next_month = (
-            datetime(month.year + 1, 1, 1, tzinfo=timezone.utc)
-            if month.month == 12
-            else datetime(
-                month.year, month.month + 1, 1,
+
+        if month.month == 12:
+
+            next_month = datetime(
+                month.year + 1,
+                1,
+                1,
                 tzinfo=timezone.utc
             )
-        )
 
-        # The current month is handled through daily files.
+        else:
+
+            next_month = datetime(
+                month.year,
+                month.month + 1,
+                1,
+                tzinfo=timezone.utc
+            )
+
+        # Skip unfinished months.
         if next_month > end:
             continue
 
         filename = (
-            f"{symbol}-1m-{month.year}-"
+            f"{symbol}-1m-"
+            f"{month.year}-"
             f"{month.month:02d}.zip"
         )
 
@@ -251,14 +352,19 @@ def collect_symbol(symbol, start, end):
         rows = download_zip(url)
 
         if rows is None:
+
             print(
-                f"Monthly archive unavailable: {filename}",
+                f"Monthly unavailable: {filename}",
                 flush=True
             )
+
             continue
 
         added = add_rows(
-            candles, rows, start_ts, end_ts
+            candles,
+            rows,
+            start_ts,
+            end_ts
         )
 
         print(
@@ -266,18 +372,30 @@ def collect_symbol(symbol, start, end):
             flush=True
         )
 
-    # 2. Fill missing days from daily archives.
+    # Fill missing days with daily archives.
+
     current_day = datetime(
-        start.year, start.month, start.day,
+        start.year,
+        start.month,
+        start.day,
         tzinfo=timezone.utc
     )
 
     while current_day < end:
-        day_ts = int(current_day.timestamp())
 
-        # Skip days already completely covered.
-        expected_start = max(day_ts, start_ts)
-        expected_end = min(day_ts + 86400, end_ts)
+        day_ts = int(
+            current_day.timestamp()
+        )
+
+        expected_start = max(
+            day_ts,
+            start_ts
+        )
+
+        expected_end = min(
+            day_ts + 86400,
+            end_ts
+        )
 
         expected_count = max(
             0,
@@ -290,6 +408,7 @@ def collect_symbol(symbol, start, end):
         )
 
         if existing_count < expected_count:
+
             filename = (
                 f"{symbol}-1m-"
                 f"{current_day:%Y-%m-%d}.zip"
@@ -303,8 +422,12 @@ def collect_symbol(symbol, start, end):
             rows = download_zip(url)
 
             if rows is not None:
+
                 added = add_rows(
-                    candles, rows, start_ts, end_ts
+                    candles,
+                    rows,
+                    start_ts,
+                    end_ts
                 )
 
                 print(
@@ -320,14 +443,22 @@ def collect_symbol(symbol, start, end):
     ]
 
     if not one_minute:
+
         raise RuntimeError(
             f"No data collected for {symbol}"
         )
 
-    # 3. Check missing one-minute candles.
+    # ========================================================
+    # DATA VALIDATION
+    # ========================================================
+
     missing = 0
 
-    for index in range(1, len(one_minute)):
+    for index in range(
+        1,
+        len(one_minute)
+    ):
+
         previous = one_minute[index - 1][0]
         current = one_minute[index][0]
 
@@ -336,35 +467,51 @@ def collect_symbol(symbol, start, end):
             (current - previous) // 60 - 1
         )
 
-    expected_total = (end_ts - start_ts) // 60
+    expected_total = (
+        end_ts - start_ts
+    ) // 60
+
     coverage = (
         len(one_minute) / expected_total * 100
         if expected_total else 0
     )
 
     print(
-        f"{symbol}: {len(one_minute)} candles, "
+        f"{symbol}: "
+        f"{len(one_minute)} candles, "
         f"coverage={coverage:.2f}%, "
-        f"internal_missing={missing}",
+        f"missing={missing}",
         flush=True
     )
 
-    # Reject incomplete datasets.
     if coverage < 99.0:
+
         raise RuntimeError(
             f"{symbol}: insufficient coverage "
             f"({coverage:.2f}%)"
         )
 
-    save_csv(symbol, 1, one_minute)
+    # Save 1-minute candles.
+
+    save_csv(
+        symbol,
+        1,
+        one_minute
+    )
+
+    # Generate 5m and 15m candles.
 
     for timeframe in [5, 15]:
+
         aggregated = aggregate_candles(
-            one_minute, timeframe
+            one_minute,
+            timeframe
         )
 
         save_csv(
-            symbol, timeframe, aggregated
+            symbol,
+            timeframe,
+            aggregated
         )
 
     print(
@@ -373,19 +520,28 @@ def collect_symbol(symbol, start, end):
     )
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
+
     print(
-        "SPACE BAR AI HISTORY V7.1",
+        "SPACE BAR AI HISTORY V7.2",
         flush=True
     )
 
     now = datetime.now(timezone.utc)
 
-    # Use completed minutes only.
-    end_ts = int(now.timestamp() // 60) * 60
+    # Exclude the most recent 3 UTC days.
+    end_ts = (
+        int(now.timestamp() // 86400)
+        - PUBLICATION_DELAY_DAYS
+    ) * 86400
 
     end = datetime.fromtimestamp(
-        end_ts, tz=timezone.utc
+        end_ts,
+        tz=timezone.utc
     )
 
     start = end - timedelta(
@@ -400,23 +556,33 @@ def main():
     failures = []
 
     for symbol in SYMBOLS:
+
         try:
-            collect_symbol(symbol, start, end)
+
+            collect_symbol(
+                symbol,
+                start,
+                end
+            )
+
         except Exception as error:
+
             print(
                 f"ERROR {symbol}: {error}",
                 flush=True
             )
+
             failures.append(symbol)
 
     if failures:
+
         raise RuntimeError(
             "History collection failed: "
             + ", ".join(failures)
         )
 
     print(
-        "\nHISTORY V7.1 COMPLETED",
+        "\nHISTORY V7.2 COMPLETED",
         flush=True
     )
 
