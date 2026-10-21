@@ -1,4 +1,4 @@
-name: SPACE BAR AI Backtest V12
+name: SPACE BAR AI Backtest V13
 
 on:
   workflow_dispatch:
@@ -43,15 +43,15 @@ jobs:
               raise RuntimeError("Insufficient BTC 5m candles")
           PY
 
-      - name: Run V12 research backtest
-        run: python agents/tester_v12.py
+      - name: Run V13 research backtest
+        run: python agents/tester_v13.py
 
-      - name: Save V12 reports
+      - name: Save V13 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v12-reports
-          path: reports/v12/
+          name: space-bar-v13-reports
+          path: reports/v13/
           if-no-files-found: warn
           retention-days: 30
 
@@ -59,7 +59,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v12-market-data
+          name: space-bar-v13-market-data
           path: data/history/*.csv
           if-no-files-found: warn
           retention-days: 30
