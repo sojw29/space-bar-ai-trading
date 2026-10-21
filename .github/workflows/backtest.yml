@@ -1,15 +1,10 @@
-name: SPACE BAR AI Backtest V6
+name: SPACE BAR AI Backtest V7
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: read
-
-concurrency:
-  group: space-bar-backtest-v6
-  cancel-in-progress: false
 
 jobs:
   backtest:
@@ -25,37 +20,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Restore previous market data
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Clean previous market data
         run: |
+          rm -rf data/history
           mkdir -p data/history
 
-          echo "Searching previous V6 market data..."
-
-          RUN_ID=$(gh run list \
-            --workflow backtest.yml \
-            --status success \
-            --limit 30 \
-            --json databaseId,artifacts \
-            --jq '[.[] | select(any(.artifacts[]?; .name == "space-bar-v6-market-data"))][0].databaseId // empty' \
-            2>/dev/null || true)
-
-          if [ -n "$RUN_ID" ]; then
-            echo "Restoring data from run $RUN_ID"
-
-            gh run download "$RUN_ID" \
-              --name space-bar-v6-market-data \
-              --dir data/history \
-              || echo "No previous data restored."
-          else
-            echo "No previous V6 data found."
-          fi
-
-      - name: Collect market history V6
+      - name: Collect Binance Futures history
         run: python agents/history.py
 
-      - name: Check downloaded data
+      - name: Verify futures data
         run: |
           python - <<'PY'
           import csv
@@ -64,30 +37,36 @@ jobs:
 
           symbols = ["BTC", "ETH", "SOL"]
           timeframes = [1, 5, 15]
-
-          missing = []
+          errors = []
 
           for symbol in symbols:
               for timeframe in timeframes:
                   path = f"data/history/{symbol}_{timeframe}m.csv"
 
-                  if not os.path.exists(path):
-                      missing.append(path)
+                  if not os.path.isfile(path):
+                      errors.append(f"Missing: {path}")
                       continue
 
                   with open(path, newline="") as f:
-                      count = sum(1 for _ in csv.reader(f)) - 1
+                      reader = csv.DictReader(f)
+                      rows = list(reader)
 
-                  print(f"{path}: {count} candles")
+                  print(f"{path}: {len(rows)} candles")
 
-                  if count <= 0:
-                      missing.append(path)
+                  if len(rows) < 600:
+                      errors.append(f"Insufficient data: {path}")
 
-          if missing:
-              print("Missing or empty files:", missing)
+                  timestamps = [int(float(r["timestamp"])) for r in rows]
+
+                  if timestamps != sorted(set(timestamps)):
+                      errors.append(f"Invalid timestamps: {path}")
+
+          if errors:
+              for error in errors:
+                  print("ERROR:", error)
               sys.exit(1)
 
-          print("All 9 market data files verified.")
+          print("All Binance Futures data files verified.")
           PY
 
       - name: Run robustness backtest
@@ -97,16 +76,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v6-reports
+          name: space-bar-v7-reports
           path: reports/
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Save market data
+      - name: Save Binance Futures data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v6-market-data
+          name: space-bar-v7-futures-data
           path: data/history/*.csv
           if-no-files-found: warn
           retention-days: 30
