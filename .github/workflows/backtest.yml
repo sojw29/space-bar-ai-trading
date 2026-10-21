@@ -1,4 +1,4 @@
-name: SPACE BAR AI Backtest V8
+name: SPACE BAR AI Backtest V10
 
 on:
   workflow_dispatch:
@@ -6,99 +6,86 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: space-bar-backtest-v10
+  cancel-in-progress: false
+
 jobs:
   backtest:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
+      # 1. 프로젝트 다운로드
       - name: Download project
         uses: actions/checkout@v4
 
+      # 2. Python 설치
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Clean previous market data
+      # 3. 데이터 폴더 준비
+      - name: Prepare folders
         run: |
-          rm -rf data/history
           mkdir -p data/history
+          mkdir -p reports/v10
 
-      - name: Collect Binance Futures history
-        run: python agents/history.py
+      # 4. Binance Futures 과거 데이터 수집
+      - name: Collect Binance Futures data
+        run: |
+          python agents/history.py
 
-      - name: Verify futures data
+      # 5. BTC 5분봉 데이터 확인
+      - name: Verify BTC 5m data
         run: |
           python - <<'PY'
           import csv
           import os
-          import sys
 
-          symbols = ["BTC", "ETH", "SOL"]
-          timeframes = [1, 5, 15]
-          errors = []
+          path = "data/history/BTC_5m.csv"
 
-          for symbol in symbols:
-              for timeframe in timeframes:
-                  path = f"data/history/{symbol}_{timeframe}m.csv"
+          if not os.path.exists(path):
+              raise RuntimeError(
+                  "BTC 5m data file not found."
+              )
 
-                  if not os.path.isfile(path):
-                      errors.append(f"Missing: {path}")
-                      continue
+          with open(path, encoding="utf-8-sig") as f:
+              reader = csv.DictReader(f)
+              count = sum(1 for _ in reader)
 
-                  count = 0
-                  previous_timestamp = None
+          print("BTC 5m candles:", count)
 
-                  with open(path, newline="") as f:
-                      reader = csv.DictReader(f)
+          if count < 1000:
+              raise RuntimeError(
+                  "Insufficient BTC 5m candles."
+              )
 
-                      for row in reader:
-                          timestamp = int(float(row["timestamp"]))
-                          count += 1
-
-                          if (
-                              previous_timestamp is not None
-                              and timestamp <= previous_timestamp
-                          ):
-                              errors.append(
-                                  f"Invalid timestamp: {path}"
-                              )
-
-                          previous_timestamp = timestamp
-
-                  print(f"{path}: {count} candles")
-
-                  if count < 600:
-                      errors.append(
-                          f"Insufficient data: {path}"
-                      )
-
-          if errors:
-              for error in errors:
-                  print("ERROR:", error)
-              sys.exit(1)
-
-          print("All Binance Futures data files verified.")
+          print("BTC 5m data verified.")
           PY
 
-      - name: Run V6 diagnostic backtest
-        run: python agents/tester_v6.py
+      # 6. V10 백테스트 실행
+      - name: Run V10 research backtest
+        run: |
+          python agents/tester_v10.py
 
-      - name: Save V6 backtest reports
+      # 7. V10 보고서 저장
+      - name: Save V10 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v8-reports
-          path: reports/v6/
+          name: space-bar-v10-reports
+          path: reports/v10/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30
 
+      # 8. 시장 데이터 저장
       - name: Save Binance Futures data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v8-futures-data
+          name: space-bar-v10-futures-data
           path: data/history/*.csv
           if-no-files-found: warn
           retention-days: 14
