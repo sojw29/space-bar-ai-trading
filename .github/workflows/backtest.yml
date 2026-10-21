@@ -1,123 +1,65 @@
-name: SPACE BAR AI Backtest V11
+name: SPACE BAR AI Backtest V12
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: read
-
-concurrency:
-  group: space-bar-backtest-v11
-  cancel-in-progress: false
 
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
 
     steps:
-      # ========================================
-      # 1. DOWNLOAD PROJECT
-      # ========================================
-
       - name: Download project
         uses: actions/checkout@v4
-
-      # ========================================
-      # 2. INSTALL PYTHON
-      # ========================================
 
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      # ========================================
-      # 3. COLLECT MARKET DATA
-      # ========================================
+      - name: Collect market history
+        run: python agents/history.py
 
-      - name: Collect Binance Futures data
-        run: |
-          python agents/history.py
-
-      # ========================================
-      # 4. VERIFY MARKET DATA
-      # ========================================
-
-      - name: Verify BTC 5M data
+      - name: Verify BTC 5m data
         run: |
           python - <<'PY'
           import csv
           import os
-          import sys
 
           path = "data/history/BTC_5m.csv"
 
           if not os.path.exists(path):
-              print("ERROR: BTC 5M data missing")
-              sys.exit(1)
+              raise RuntimeError(f"Missing data: {path}")
 
-          with open(path, newline="") as f:
-              reader = csv.DictReader(f)
-              count = sum(1 for _ in reader)
+          with open(path, newline="", encoding="utf-8-sig") as f:
+              count = sum(1 for _ in csv.reader(f)) - 1
 
-          print("BTC 5M candles:", count)
+          print(f"BTC 5m candles: {count}")
 
           if count < 1000:
-              print("ERROR: Insufficient market history")
-              sys.exit(1)
-
-          print("Market data verified")
+              raise RuntimeError("Insufficient BTC 5m candles")
           PY
 
-      # ========================================
-      # 5. VERIFY V11 FILE
-      # ========================================
+      - name: Run V12 research backtest
+        run: python agents/tester_v12.py
 
-      - name: Verify V11 engine
-        run: |
-          test -f agents/tester.py
-          test -f agents/tester_v10.py
-          test -f agents/tester_v11.py
-
-          python -m py_compile \
-            agents/tester.py \
-            agents/tester_v10.py \
-            agents/tester_v11.py
-
-          echo "V11 engine verified"
-
-      # ========================================
-      # 6. RUN V11 BACKTEST
-      # ========================================
-
-      - name: Run V11 research backtest
-        run: |
-          python agents/tester_v11.py
-
-      # ========================================
-      # 7. SAVE REPORTS
-      # ========================================
-
-      - name: Save V11 reports
+      - name: Save V12 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v11-reports
-          path: reports/v11/
+          name: space-bar-v12-reports
+          path: reports/v12/
           if-no-files-found: warn
           retention-days: 30
 
-      # ========================================
-      # 8. SAVE MARKET DATA
-      # ========================================
-
-      - name: Save Binance Futures data
+      - name: Save market data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v11-market-data
+          name: space-bar-v12-market-data
           path: data/history/*.csv
           if-no-files-found: warn
           retention-days: 30
