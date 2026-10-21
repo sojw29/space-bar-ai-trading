@@ -1,14 +1,15 @@
 # ============================================================
 # SPACE BAR AI TRADING
-# HISTORY V6.0 - LONG TERM MARKET DATA
+# HISTORY V6.1 - BINANCE PUBLIC MARKET DATA
 # PAPER RESEARCH ONLY
 # ============================================================
 
 import csv
+import json
 import os
 import time
-import json
-from datetime import datetime, timedelta, timezone
+
+from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
@@ -17,98 +18,119 @@ TIMEFRAMES = [1, 5, 15]
 
 DATA_DIR = "data/history"
 
-API_URL = "https://api.bybit.com/v5/market/kline"
+API_URLS = [
+    "https://data-api.binance.vision/api/v3/klines",
+    "https://api.binance.com/api/v3/klines",
+]
 
-DAYS_TO_COLLECT = 365
+TARGET_1M_CANDLES = 10000
 LIMIT = 1000
-MAX_RETRIES = 5
-
-# Keep individual GitHub Actions runs manageable.
-MAX_REQUESTS_PER_SYMBOL = 60
+MAX_RETRIES = 3
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
 def request_klines(symbol, end_ms):
+
     params = (
-        f"?category=linear"
-        f"&symbol={symbol}"
-        f"&interval=1"
+        f"?symbol={symbol}"
+        f"&interval=1m"
         f"&limit={LIMIT}"
-        f"&end={end_ms}"
+        f"&endTime={end_ms}"
     )
 
-    url = API_URL + params
+    last_error = None
 
-    for attempt in range(MAX_RETRIES):
-        try:
-            request = Request(
-                url,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
+    for base_url in API_URLS:
 
-            with urlopen(request, timeout=30) as response:
-                data = json.loads(response.read().decode())
+        url = base_url + params
 
-            if data.get("retCode") != 0:
-                raise RuntimeError(
-                    f"Bybit API error: {data.get('retMsg')}"
+        for attempt in range(MAX_RETRIES):
+
+            try:
+
+                request = Request(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0",
+                        "Accept": "application/json",
+                    },
                 )
 
-            return data["result"]["list"]
+                with urlopen(request, timeout=30) as response:
+                    data = json.loads(
+                        response.read().decode("utf-8")
+                    )
 
-        except (HTTPError, URLError, TimeoutError, RuntimeError) as error:
-            print(
-                f"Retry {attempt + 1}/{MAX_RETRIES}: {error}",
-                flush=True
-            )
+                if not isinstance(data, list):
+                    raise RuntimeError(
+                        f"Unexpected response: {data}"
+                    )
 
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(3 * (attempt + 1))
+                return data
 
-    raise RuntimeError(f"Failed to download {symbol}")
+            except (
+                HTTPError,
+                URLError,
+                TimeoutError,
+                ValueError,
+                RuntimeError,
+            ) as error:
 
+                last_error = error
 
-def load_existing(symbol):
-    short_symbol = symbol.replace("USDT", "")
-    path = f"{DATA_DIR}/{short_symbol}_1m.csv"
+                print(
+                    f"API retry {attempt + 1}/{MAX_RETRIES}: "
+                    f"{error}",
+                    flush=True,
+                )
 
-    candles = {}
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(2)
 
-    if not os.path.exists(path):
-        return candles
-
-    with open(path, "r", newline="") as file:
-        reader = csv.DictReader(file)
-
-        for row in reader:
-            try:
-                timestamp = int(float(row["timestamp"]))
-
-                candles[timestamp] = [
-                    timestamp,
-                    float(row["open"]),
-                    float(row["high"]),
-                    float(row["low"]),
-                    float(row["close"]),
-                    float(row["volume"])
-                ]
-            except (ValueError, KeyError, TypeError):
-                continue
-
-    print(
-        f"Loaded existing {symbol}: {len(candles)} candles",
-        flush=True
+    raise RuntimeError(
+        f"Failed to download {symbol}: {last_error}"
     )
 
-    return candles
+
+def validate_candle(candle):
+
+    timestamp, op, hi, lo, cl, vol = candle
+
+    if min(op, hi, lo, cl) <= 0:
+        return False
+
+    if vol < 0:
+        return False
+
+    if hi < max(op, cl):
+        return False
+
+    if lo > min(op, cl):
+        return False
+
+    if timestamp % 60 != 0:
+        return False
+
+    return True
 
 
 def save_csv(symbol, timeframe, candles):
-    short_symbol = symbol.replace("USDT", "")
-    path = f"{DATA_DIR}/{short_symbol}_{timeframe}m.csv"
 
-    with open(path, "w", newline="") as file:
+    short_symbol = symbol.replace("USDT", "")
+
+    path = (
+        f"{DATA_DIR}/"
+        f"{short_symbol}_{timeframe}m.csv"
+    )
+
+    with open(
+        path,
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as file:
+
         writer = csv.writer(file)
 
         writer.writerow([
@@ -117,153 +139,229 @@ def save_csv(symbol, timeframe, candles):
             "high",
             "low",
             "close",
-            "volume"
+            "volume",
         ])
 
         writer.writerows(candles)
 
     print(
         f"Saved {path}: {len(candles)} candles",
-        flush=True
+        flush=True,
     )
 
 
 def aggregate_candles(one_minute, timeframe):
+
     result = {}
 
+    seconds = timeframe * 60
+
     for candle in one_minute:
+
         timestamp, op, hi, lo, cl, vol = candle
 
-        bucket = (
-            timestamp // (timeframe * 60)
-        ) * (timeframe * 60)
+        bucket = (timestamp // seconds) * seconds
 
         if bucket not in result:
+
             result[bucket] = [
-                bucket, op, hi, lo, cl, vol
+                bucket,
+                op,
+                hi,
+                lo,
+                cl,
+                vol,
+                1,
             ]
+
         else:
+
             item = result[bucket]
+
             item[2] = max(item[2], hi)
             item[3] = min(item[3], lo)
             item[4] = cl
             item[5] += vol
+            item[6] += 1
 
-    return [result[key] for key in sorted(result)]
+    # Incomplete 5m/15m candles are excluded.
+    candles = []
+
+    for bucket in sorted(result):
+
+        item = result[bucket]
+
+        if item[6] == timeframe:
+            candles.append(item[:6])
+
+    return candles
 
 
 def collect_symbol(symbol):
-    print(f"\nCollecting {symbol}", flush=True)
 
-    candles = load_existing(symbol)
+    print(
+        f"\nCollecting {symbol}",
+        flush=True,
+    )
+
+    candles = {}
 
     now = datetime.now(timezone.utc)
-    current_minute = int(now.timestamp() // 60) * 60
+
+    current_minute = (
+        int(now.timestamp()) // 60
+    ) * 60
 
     end_ms = current_minute * 1000 - 1
 
-    target_start = int(
-        (now - timedelta(days=DAYS_TO_COLLECT)).timestamp()
-    )
+    max_requests = 20
 
-    requests = 0
+    for request_number in range(max_requests):
 
-    while requests < MAX_REQUESTS_PER_SYMBOL:
-        batch = request_klines(symbol, end_ms)
+        batch = request_klines(
+            symbol,
+            end_ms,
+        )
 
         if not batch:
             break
 
-        oldest_timestamp = None
-        new_count = 0
+        oldest_ms = None
 
         for item in batch:
-            timestamp = int(item[0]) // 1000
+
+            timestamp_ms = int(item[0])
+            timestamp = timestamp_ms // 1000
+
+            if (
+                oldest_ms is None
+                or timestamp_ms < oldest_ms
+            ):
+                oldest_ms = timestamp_ms
 
             if timestamp >= current_minute:
                 continue
 
-            if timestamp < target_start:
-                continue
-
-            if timestamp not in candles:
-                new_count += 1
-
-            candles[timestamp] = [
+            candle = [
                 timestamp,
                 float(item[1]),
                 float(item[2]),
                 float(item[3]),
                 float(item[4]),
-                float(item[5])
+                float(item[5]),
             ]
 
-        oldest_timestamp = min(
-            int(item[0]) for item in batch
-        )
-
-        requests += 1
+            if validate_candle(candle):
+                candles[timestamp] = candle
 
         print(
-            f"{symbol}: request {requests}, "
-            f"new={new_count}, total={len(candles)}",
-            flush=True
+            f"{symbol}: request {request_number + 1}, "
+            f"total={len(candles)}",
+            flush=True,
         )
 
-        if oldest_timestamp // 1000 <= target_start:
+        if len(candles) >= TARGET_1M_CANDLES:
             break
 
-        end_ms = oldest_timestamp - 1
+        if oldest_ms is None:
+            break
 
-        time.sleep(0.2)
+        end_ms = oldest_ms - 1
+
+        time.sleep(0.3)
 
     one_minute = [
         candles[key]
         for key in sorted(candles)
-        if target_start <= key < current_minute
     ]
 
-    if not one_minute:
-        raise RuntimeError(f"No data collected for {symbol}")
+    one_minute = one_minute[-TARGET_1M_CANDLES:]
 
-    save_csv(symbol, 1, one_minute)
+    if len(one_minute) < TARGET_1M_CANDLES:
 
-    for timeframe in [5, 15]:
-        aggregated = aggregate_candles(
-            one_minute,
-            timeframe
+        raise RuntimeError(
+            f"{symbol}: insufficient data "
+            f"({len(one_minute)}/"
+            f"{TARGET_1M_CANDLES})"
         )
 
-        save_csv(symbol, timeframe, aggregated)
+    # Require consecutive 1-minute candles.
+    for index in range(1, len(one_minute)):
+
+        previous = one_minute[index - 1][0]
+        current = one_minute[index][0]
+
+        if current - previous != 60:
+
+            raise RuntimeError(
+                f"{symbol}: missing 1m candles "
+                f"between {previous} and {current}"
+            )
+
+    save_csv(
+        symbol,
+        1,
+        one_minute,
+    )
+
+    for timeframe in [5, 15]:
+
+        aggregated = aggregate_candles(
+            one_minute,
+            timeframe,
+        )
+
+        if not aggregated:
+            raise RuntimeError(
+                f"{symbol}: no {timeframe}m data"
+            )
+
+        save_csv(
+            symbol,
+            timeframe,
+            aggregated,
+        )
 
     print(
-        f"{symbol} completed: {len(one_minute)} 1m candles",
-        flush=True
+        f"{symbol} completed!",
+        flush=True,
     )
 
 
 def main():
-    print("SPACE BAR AI HISTORY V6.0", flush=True)
+
+    print(
+        "SPACE BAR AI HISTORY V6.1",
+        flush=True,
+    )
 
     failures = []
 
     for symbol in SYMBOLS:
+
         try:
             collect_symbol(symbol)
+
         except Exception as error:
+
             print(
                 f"ERROR {symbol}: {error}",
-                flush=True
+                flush=True,
             )
+
             failures.append(symbol)
 
     if failures:
+
         raise RuntimeError(
             "History collection failed: "
             + ", ".join(failures)
         )
 
-    print("\nHistory collection completed!", flush=True)
+    print(
+        "\nAll market history collected!",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
