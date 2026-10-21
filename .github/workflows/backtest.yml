@@ -1,4 +1,4 @@
-name: SPACE BAR AI Backtest V7
+name: SPACE BAR AI Backtest V8
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Download project
@@ -47,19 +47,32 @@ jobs:
                       errors.append(f"Missing: {path}")
                       continue
 
+                  count = 0
+                  previous_timestamp = None
+
                   with open(path, newline="") as f:
                       reader = csv.DictReader(f)
-                      rows = list(reader)
 
-                  print(f"{path}: {len(rows)} candles")
+                      for row in reader:
+                          timestamp = int(float(row["timestamp"]))
+                          count += 1
 
-                  if len(rows) < 600:
-                      errors.append(f"Insufficient data: {path}")
+                          if (
+                              previous_timestamp is not None
+                              and timestamp <= previous_timestamp
+                          ):
+                              errors.append(
+                                  f"Invalid timestamp: {path}"
+                              )
 
-                  timestamps = [int(float(r["timestamp"])) for r in rows]
+                          previous_timestamp = timestamp
 
-                  if timestamps != sorted(set(timestamps)):
-                      errors.append(f"Invalid timestamps: {path}")
+                  print(f"{path}: {count} candles")
+
+                  if count < 600:
+                      errors.append(
+                          f"Insufficient data: {path}"
+                      )
 
           if errors:
               for error in errors:
@@ -69,15 +82,15 @@ jobs:
           print("All Binance Futures data files verified.")
           PY
 
-      - name: Run robustness backtest
-        run: python agents/tester_v5.py
+      - name: Run V6 diagnostic backtest
+        run: python agents/tester_v6.py
 
-      - name: Save backtest reports
+      - name: Save V6 backtest reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v7-reports
-          path: reports/
+          name: space-bar-v8-reports
+          path: reports/v6/
           if-no-files-found: warn
           retention-days: 14
 
@@ -85,7 +98,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v7-futures-data
+          name: space-bar-v8-futures-data
           path: data/history/*.csv
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 14
