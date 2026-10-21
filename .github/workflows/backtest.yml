@@ -1,91 +1,123 @@
-name: SPACE BAR AI Backtest V10
+name: SPACE BAR AI Backtest V11
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: space-bar-backtest-v10
+  group: space-bar-backtest-v11
   cancel-in-progress: false
 
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
 
     steps:
-      # 1. 프로젝트 다운로드
+      # ========================================
+      # 1. DOWNLOAD PROJECT
+      # ========================================
+
       - name: Download project
         uses: actions/checkout@v4
 
-      # 2. Python 설치
+      # ========================================
+      # 2. INSTALL PYTHON
+      # ========================================
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      # 3. 데이터 폴더 준비
-      - name: Prepare folders
-        run: |
-          mkdir -p data/history
-          mkdir -p reports/v10
+      # ========================================
+      # 3. COLLECT MARKET DATA
+      # ========================================
 
-      # 4. Binance Futures 과거 데이터 수집
       - name: Collect Binance Futures data
         run: |
           python agents/history.py
 
-      # 5. BTC 5분봉 데이터 확인
-      - name: Verify BTC 5m data
+      # ========================================
+      # 4. VERIFY MARKET DATA
+      # ========================================
+
+      - name: Verify BTC 5M data
         run: |
           python - <<'PY'
           import csv
           import os
+          import sys
 
           path = "data/history/BTC_5m.csv"
 
           if not os.path.exists(path):
-              raise RuntimeError(
-                  "BTC 5m data file not found."
-              )
+              print("ERROR: BTC 5M data missing")
+              sys.exit(1)
 
-          with open(path, encoding="utf-8-sig") as f:
+          with open(path, newline="") as f:
               reader = csv.DictReader(f)
               count = sum(1 for _ in reader)
 
-          print("BTC 5m candles:", count)
+          print("BTC 5M candles:", count)
 
           if count < 1000:
-              raise RuntimeError(
-                  "Insufficient BTC 5m candles."
-              )
+              print("ERROR: Insufficient market history")
+              sys.exit(1)
 
-          print("BTC 5m data verified.")
+          print("Market data verified")
           PY
 
-      # 6. V10 백테스트 실행
-      - name: Run V10 research backtest
-        run: |
-          python agents/tester_v10.py
+      # ========================================
+      # 5. VERIFY V11 FILE
+      # ========================================
 
-      # 7. V10 보고서 저장
-      - name: Save V10 reports
+      - name: Verify V11 engine
+        run: |
+          test -f agents/tester.py
+          test -f agents/tester_v10.py
+          test -f agents/tester_v11.py
+
+          python -m py_compile \
+            agents/tester.py \
+            agents/tester_v10.py \
+            agents/tester_v11.py
+
+          echo "V11 engine verified"
+
+      # ========================================
+      # 6. RUN V11 BACKTEST
+      # ========================================
+
+      - name: Run V11 research backtest
+        run: |
+          python agents/tester_v11.py
+
+      # ========================================
+      # 7. SAVE REPORTS
+      # ========================================
+
+      - name: Save V11 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v10-reports
-          path: reports/v10/
+          name: space-bar-v11-reports
+          path: reports/v11/
           if-no-files-found: warn
           retention-days: 30
 
-      # 8. 시장 데이터 저장
+      # ========================================
+      # 8. SAVE MARKET DATA
+      # ========================================
+
       - name: Save Binance Futures data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v10-futures-data
+          name: space-bar-v11-market-data
           path: data/history/*.csv
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30
