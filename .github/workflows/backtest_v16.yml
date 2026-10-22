@@ -1,0 +1,32 @@
+name: SPACE BAR AI Backtest V16
+
+on:
+  push:
+    branches:
+      - research/v16-cost-stability
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  v16-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect BTC history
+        run: python agents/history.py
+      - name: Run V16 retrospective audit
+        run: python agents/tester_v16.py
+      - name: Upload V16 audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v16-audit
+          path: reports/v16/
+          if-no-files-found: warn
+          retention-days: 30
