@@ -114,7 +114,7 @@ def run():
         "max_consecutive_losses", "sample_status", "independent_oos_verified",
         "live_trading_approved",
     ])
-    write_csv("trades.csv", trades_out, ["candidate", "scenario", *v10.TRADE_FIELDS])
+    write_csv("trades.csv", trades_out, ["candidate", *v10.TRADE_FIELDS])
     protocol = {
         "version": "V17.0", "symbol": "BTCUSDT", "timeframe": "5m",
         "cutoff_utc": utc(CUTOFF), "candidates": {
