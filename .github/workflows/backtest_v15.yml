@@ -1,6 +1,9 @@
 name: SPACE BAR AI Backtest V15
 
 on:
+  push:
+    branches:
+      - research/v15-validation
   workflow_dispatch:
 
 permissions:
