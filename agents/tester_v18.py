@@ -59,9 +59,9 @@ def build():
             flags = []
             if n < MIN_TRADES:
                 flags.append("INSUFFICIENT_TRADES")
-            if n >= MIN_TRADES and ((pf is None or pf < 1.0) or ret <= 0):
+            if n >= MIN_TRADES and ((pf is None or pf < 1.0) or ret is None or ret <= 0):
                 flags.append("NEGATIVE_PERFORMANCE")
-            if scenario == "SEVERE" and n >= MIN_TRADES and ((pf is None or pf < 1.0) or ret <= 0):
+            if scenario == "SEVERE" and n >= MIN_TRADES and ((pf is None or pf < 1.0) or ret is None or ret <= 0):
                 flags.append("SEVERE_COST_FAILURE")
             if old:
                 if now["cutoff_utc"] != old["cutoff_utc"]:
@@ -72,7 +72,7 @@ def build():
                     flags.append("TRADE_COUNT_DECREASED")
                 if n >= MIN_TRADES and pf is not None and number(old, "profit_factor") is not None and pf < number(old, "profit_factor") - 0.25:
                     flags.append("PF_DETERIORATION")
-                if n >= MIN_TRADES and ret < number(old, "return_pct") - 0.5:
+                if n >= MIN_TRADES and ret is not None and number(old, "return_pct") is not None and ret < number(old, "return_pct") - 0.5:
                     flags.append("RETURN_DETERIORATION")
             else:
                 flags.append("NO_PREVIOUS_SNAPSHOT")
@@ -88,7 +88,7 @@ def build():
                 "previous_trades": old["trades"] if old else "",
                 "previous_return_pct": old["return_pct"] if old else "",
                 "previous_profit_factor": old["profit_factor"] if old else "",
-                "delta_return_pct": round(ret - number(old, "return_pct"), 6) if old else "",
+                "delta_return_pct": round(ret - number(old, "return_pct"), 6) if old and ret is not None and number(old, "return_pct") is not None else "",
                 "delta_profit_factor": round(pf - number(old, "profit_factor"), 6) if old and pf is not None and number(old, "profit_factor") is not None else "",
                 "flags": "|".join(flags) if flags else "OBSERVATION_ONLY",
                 "independent_oos_verified": False,
