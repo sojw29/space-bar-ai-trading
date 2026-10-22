@@ -1,4 +1,4 @@
-name: SPACE BAR AI Backtest V13
+name: SPACE BAR AI Backtest V14
 
 on:
   workflow_dispatch:
@@ -32,34 +32,44 @@ jobs:
           path = "data/history/BTC_5m.csv"
 
           if not os.path.exists(path):
-              raise RuntimeError(f"Missing data: {path}")
+              raise RuntimeError(
+                  f"Missing data: {path}"
+              )
 
-          with open(path, newline="", encoding="utf-8-sig") as f:
-              count = sum(1 for _ in csv.reader(f)) - 1
+          with open(
+              path,
+              newline="",
+              encoding="utf-8-sig"
+          ) as f:
+              count = sum(
+                  1 for _ in csv.reader(f)
+              ) - 1
 
           print(f"BTC 5m candles: {count}")
 
           if count < 1000:
-              raise RuntimeError("Insufficient BTC 5m candles")
+              raise RuntimeError(
+                  "Insufficient BTC 5m candles"
+              )
           PY
 
-      - name: Run V13 research backtest
-        run: python agents/tester_v13.py
+      - name: Run V14 research backtest
+        run: python agents/tester_v14.py
 
-      - name: Save V13 reports
+      - name: Save V14 reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v13-reports
-          path: reports/v13/
-          if-no-files-found: warn
+          name: space-bar-v14-reports
+          path: reports/v14/
+          if-no-files-found: error
           retention-days: 30
 
       - name: Save market data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: space-bar-v13-market-data
+          name: space-bar-v14-market-data
           path: data/history/*.csv
           if-no-files-found: warn
           retention-days: 30
