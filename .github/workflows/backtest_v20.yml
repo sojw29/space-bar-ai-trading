@@ -1,0 +1,49 @@
+name: SPACE BAR AI Backtest V20
+
+on:
+  push:
+    branches:
+      - research/v20-data-integrity
+  workflow_dispatch:
+  schedule:
+    - cron: '10 9 * * 1'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  integrity-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect BTC history
+        run: python agents/history.py
+      - name: Retrieve previous V18 main snapshot if available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p previous_v18
+          previous_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backtest_v18.yml --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
+          if [ -n "$previous_id" ]; then
+            gh run download "$previous_id" --repo "$GITHUB_REPOSITORY" --name space-bar-v18-monitor --dir previous_v18 || echo "No prior artifact available."
+          fi
+      - name: Run V20 integrity audit
+        run: python agents/tester_v20.py
+      - name: Upload audit and supporting reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v20-audit
+          path: |
+            reports/v17/
+            reports/v18/
+            reports/v19/
+            reports/v20/
+          if-no-files-found: warn
+          retention-days: 90
