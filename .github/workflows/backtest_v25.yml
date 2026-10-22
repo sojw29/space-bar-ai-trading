@@ -1,0 +1,52 @@
+name: SPACE BAR AI V25 Evidence Readiness
+
+on:
+  push:
+    branches:
+      - research/v25-evidence-readiness
+      - main
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 10 * * 1'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  evidence-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile modules
+        run: python -m compileall -q agents
+      - name: Offline regression tests
+        run: |
+          python agents/test_v23_regression.py
+          python agents/test_v24_report.py
+          python agents/test_v25_readiness.py
+      - name: Collect market history
+        run: python agents/history.py
+      - name: Run V25 evidence readiness
+        run: python agents/tester_v25.py
+      - name: Upload paper research reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v25-readiness
+          path: |
+            reports/v17/
+            reports/v18/
+            reports/v19/
+            reports/v20/
+            reports/v21/
+            reports/v22/
+            reports/v24/
+            reports/v25/
+          if-no-files-found: warn
+          retention-days: 90
