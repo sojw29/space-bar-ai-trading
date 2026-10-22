@@ -3,7 +3,8 @@ name: SPACE BAR AI Backtest V19
 on:
   push:
     branches:
-      - research/v19-observation-quality
+      - main
+      - fix/v19-main-monitoring
   workflow_dispatch:
   schedule:
     - cron: '55 8 * * 1'
