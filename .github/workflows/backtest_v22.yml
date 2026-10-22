@@ -1,0 +1,65 @@
+name: SPACE BAR AI Backtest V22
+
+on:
+  push:
+    branches:
+      - research/v22-forward-evidence
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '40 9 * * 1'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  forward-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect BTC history
+        run: python agents/history.py
+      - name: Retrieve prior V22 evidence and V21/V18 snapshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p previous_v22 previous_v21 previous_v18
+          for version in v22 v21 v18; do
+            id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "backtest_${version}.yml" --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
+            if [ -n "$id" ]; then
+              case "$version" in
+                v22) artifact=space-bar-v22-evidence; target=previous_v22 ;;
+                v21) artifact=space-bar-v21-audit; target=previous_v21 ;;
+                v18) artifact=space-bar-v18-monitor; target=previous_v18 ;;
+              esac
+              gh run download "$id" --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir "$target" || echo "Prior $version artifact unavailable"
+            fi
+          done
+          if [ -f previous_v22/reports/v22/evidence.json ]; then
+            cp previous_v22/reports/v22/evidence.json previous_v22/evidence.json
+          fi
+          if [ -f previous_v21/reports/v17/trades.csv ]; then
+            cp previous_v21/reports/v17/trades.csv previous_v21/trades.csv
+          fi
+      - name: Run V22 evidence gate
+        run: python agents/tester_v22.py
+      - name: Upload evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v22-evidence
+          path: |
+            reports/v17/
+            reports/v18/
+            reports/v19/
+            reports/v20/
+            reports/v21/
+            reports/v22/
+          if-no-files-found: warn
+          retention-days: 90
