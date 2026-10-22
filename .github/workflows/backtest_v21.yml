@@ -33,8 +33,8 @@ jobs:
           previous_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backtest_v21.yml --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
           if [ -n "$previous_id" ]; then
             gh run download "$previous_id" --repo "$GITHUB_REPOSITORY" --name space-bar-v21-audit --dir previous_v21 || echo "No previous V21 artifact."
-            if [ -f previous_v21/v17/trades.csv ]; then
-              cp previous_v21/v17/trades.csv previous_v21/trades.csv
+            if [ -f previous_v21/reports/v17/trades.csv ]; then
+              cp previous_v21/reports/v17/trades.csv previous_v21/trades.csv
             fi
           fi
           v18_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backtest_v18.yml --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
