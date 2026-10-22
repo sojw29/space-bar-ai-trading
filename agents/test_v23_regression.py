@@ -1,6 +1,5 @@
 """Offline regression checks for V18-V22. No exchange access required."""
 import csv
-import json
 import sys
 import tempfile
 import unittest
@@ -42,6 +41,10 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(result["status"], "RECONCILIATION_WARNING")
         self.assertEqual(len(v21.reconcile([base], [new])["missing_previous_trades"]), 1)
 
+    def test_v19_quality_empty_sample(self):
+        self.assertIsNone(v19.parse_float("nan"))
+        self.assertIsNone(v19.parse_float("null"))
+
     def test_v21_duplicate_trade_identity(self):
         base = dict(candidate="A", scenario="BASE", side="LONG",
                     entry_time="100", entry_price="50", exit_time="200",
@@ -61,6 +64,8 @@ class RegressionTests(unittest.TestCase):
             self.assertEqual(result["forward_candle_count"], 3)
             self.assertEqual(result["nonconsecutive_intervals"], 1)
             self.assertEqual(result["duplicate_or_unsorted_timestamps"], 1)
+            self.assertEqual(result["first_forward_candle_utc"], v22.v17.utc(1200))
+            self.assertEqual(result["last_forward_candle_utc"], v22.v17.utc(1500))
 
 
 if __name__ == "__main__":
