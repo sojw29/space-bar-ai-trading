@@ -1,0 +1,58 @@
+name: SPACE BAR AI Backtest V21
+
+on:
+  push:
+    branches:
+      - research/v21-forward-ledger-audit
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '25 9 * * 1'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reconcile-paper-snapshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect BTC history
+        run: python agents/history.py
+      - name: Download previous V21 main snapshot if available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p previous_v21 previous_v18
+          previous_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backtest_v21.yml --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
+          if [ -n "$previous_id" ]; then
+            gh run download "$previous_id" --repo "$GITHUB_REPOSITORY" --name space-bar-v21-audit --dir previous_v21 || echo "No previous V21 artifact."
+            if [ -f previous_v21/v17/trades.csv ]; then
+              cp previous_v21/v17/trades.csv previous_v21/trades.csv
+            fi
+          fi
+          v18_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backtest_v18.yml --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
+          if [ -n "$v18_id" ]; then
+            gh run download "$v18_id" --repo "$GITHUB_REPOSITORY" --name space-bar-v18-monitor --dir previous_v18 || echo "No prior V18 artifact."
+          fi
+      - name: Run V21 reconciliation
+        run: python agents/tester_v21.py
+      - name: Upload V21 reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v21-audit
+          path: |
+            reports/v17/
+            reports/v18/
+            reports/v19/
+            reports/v20/
+            reports/v21/
+          if-no-files-found: warn
+          retention-days: 90
