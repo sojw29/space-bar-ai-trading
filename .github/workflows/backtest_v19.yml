@@ -1,0 +1,48 @@
+name: SPACE BAR AI Backtest V19
+
+on:
+  push:
+    branches:
+      - research/v19-observation-quality
+  workflow_dispatch:
+  schedule:
+    - cron: '55 8 * * 1'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  observation-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect BTC history
+        run: python agents/history.py
+      - name: Retrieve previous V18 main snapshot when available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p previous_v18
+          previous_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backtest_v18.yml --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
+          if [ -n "$previous_id" ]; then
+            gh run download "$previous_id" --repo "$GITHUB_REPOSITORY" --name space-bar-v18-monitor --dir previous_v18 || echo "Prior artifact unavailable; first-snapshot mode."
+          fi
+      - name: Run V19 observation quality audit
+        run: python agents/tester_v19.py
+      - name: Upload V19 and V18 reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v19-observation
+          path: |
+            reports/v19/
+            reports/v18/
+            reports/v17/
+          if-no-files-found: warn
+          retention-days: 90
