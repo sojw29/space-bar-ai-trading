@@ -1,0 +1,26 @@
+name: SPACE BAR AI V23 Offline Regression
+
+on:
+  push:
+    branches:
+      - test/v23-offline-regression
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile V17-V22 Python modules
+        run: python -m compileall -q agents
+      - name: Run offline regression tests
+        run: python agents/test_v23_regression.py
