@@ -5,6 +5,7 @@ on:
     branches:
       - research/v24-integrated-report
       - main
+  pull_request:
   workflow_dispatch:
   schedule:
     - cron: '55 9 * * 1'
