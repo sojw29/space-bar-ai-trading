@@ -1,0 +1,48 @@
+name: SPACE BAR AI V24 Integrated Research Report
+
+on:
+  push:
+    branches:
+      - research/v24-integrated-report
+      - main
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '55 9 * * 1'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  integrated-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline compilation
+        run: python -m compileall -q agents
+      - name: Offline regression tests
+        run: python agents/test_v23_regression.py && python agents/test_v24_report.py
+      - name: Collect market history
+        run: python agents/history.py
+      - name: Run integrated research report
+        run: python agents/tester_v24.py
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v24-research
+          path: |
+            reports/v17/
+            reports/v18/
+            reports/v19/
+            reports/v20/
+            reports/v21/
+            reports/v22/
+            reports/v24/
+          if-no-files-found: warn
+          retention-days: 90
