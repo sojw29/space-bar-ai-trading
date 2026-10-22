@@ -1,0 +1,31 @@
+name: SPACE BAR AI Backtest V15
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect BTC history
+        run: python agents/history.py
+      - name: Run V15 paper research
+        run: python agents/tester_v15.py
+      - name: Upload V15 research reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v15-reports
+          path: reports/v15/
+          if-no-files-found: warn
+          retention-days: 30
