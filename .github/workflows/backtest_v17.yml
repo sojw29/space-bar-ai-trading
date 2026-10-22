@@ -1,0 +1,36 @@
+name: SPACE BAR AI Backtest V17
+
+on:
+  push:
+    branches:
+      - research/v17-forward-validation
+  workflow_dispatch:
+  schedule:
+    - cron: '25 8 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  forward-observation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/v17-forward-validation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect BTC history
+        run: python agents/history.py
+      - name: Run V17 forward observation
+        run: python agents/tester_v17.py
+      - name: Upload V17 snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: space-bar-v17-snapshot
+          path: reports/v17/
+          if-no-files-found: warn
+          retention-days: 90
