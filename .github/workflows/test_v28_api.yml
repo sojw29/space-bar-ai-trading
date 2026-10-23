@@ -1,0 +1,29 @@
+name: SPACE BAR V28 Local Dashboard API
+
+on:
+  push:
+    branches:
+      - feature/v28-local-dashboard-api
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-api-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile agents
+        run: python -m compileall -q agents
+      - name: Run agent and API tests
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v28_api.py
