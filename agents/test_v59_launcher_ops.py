@@ -44,8 +44,13 @@ class LocalOpsTests(unittest.TestCase):
         self.assertFalse(report["orders_enabled"])
         with self.assertRaises(ValueError):
             _get_local_json(service.base_url,"/api/v1/orders")
-        with self.assertRaises(ValueError):
-            _get_local_json("http://example.com:8765","/health")
+        for unsafe_url in ("http://example.com:8765",
+                           "http://127.0.0.1:8765@evil.example:80",
+                           "http://127.0.0.1:8765/proxy",
+                           "http://127.0.0.1:8765?target=other"):
+            with self.subTest(unsafe_url=unsafe_url):
+                with self.assertRaises(ValueError):
+                    _get_local_json(unsafe_url,"/health")
         with self.assertRaises(HTTPError) as exc:
             urlopen(Request(service.base_url+"/api/v1/agents",method="POST",data=b'{}'),timeout=2)
         self.assertEqual(exc.exception.code,405)
