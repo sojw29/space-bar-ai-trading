@@ -103,14 +103,20 @@ class LiveResearchStore:
             }
 
 
-def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, fast_warmup=False, paper_monitor=False):
+def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, fast_warmup=False, paper_monitor=False, paper_journal_path=None):
     if isinstance(port, bool) or not 1024 <= port <= 65535:
         raise ValueError("Invalid localhost port")
+    if paper_journal_path is not None and not paper_monitor:
+        raise ValueError("Paper journal requires explicitly enabled paper monitor")
     store = LiveResearchStore(clock=clock)
     paper = None
+    journal = None
     if paper_monitor:
         from paper_monitor_v42 import LocalPaperMonitor
         paper = LocalPaperMonitor(clock=clock)
+    if paper_journal_path is not None:
+        from paper_journal_v43 import PaperJournal
+        journal = PaperJournal(paper_journal_path)
     server = ThreadingHTTPServer(
         ("127.0.0.1", port), make_handler(DEFAULT_HISTORY, live_store=store,
                                            paper_monitor=paper))
@@ -124,7 +130,17 @@ def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, f
                 paper._halt("LIVE_RESEARCH_STORE_ERROR")
             raise
         if paper is not None:
-            paper.consume(item)
+            try:
+                paper.consume(item)
+                if journal is not None and (
+                    item.get("type") == "research_events" or
+                    paper.state == "HALTED"):
+                    snap = paper.snapshot()
+                    journal.append("feed_halt" if snap["state"] == "HALTED"
+                                   else "paper_snapshot", snap)
+            except Exception:
+                paper._halt("PAPER_JOURNAL_OR_FEED_FAILURE")
+                raise
     bootstrap = None
     if fast_warmup:
         from public_warmup_v40 import bootstrap_stream
@@ -152,9 +168,14 @@ def main():
                         help="Opt in to public Binance REST 5m closed-candle warmup")
     parser.add_argument("--paper-monitor", action="store_true",
                         help="Opt in to in-memory, simulated-only paper position tracking")
+    parser.add_argument("--paper-journal", type=str, default=None,
+                        help="Opt-in SQLite simulated journal path; needs --paper-monitor")
     args = parser.parse_args()
+    if args.paper_journal and not args.paper_monitor:
+        parser.error("--paper-journal requires --paper-monitor")
     start_dashboard(port=args.port, fast_warmup=args.fast_warmup,
-                    paper_monitor=args.paper_monitor)
+                    paper_monitor=args.paper_monitor,
+                    paper_journal_path=args.paper_journal)
 
 
 if __name__ == "__main__":
