@@ -127,8 +127,8 @@ async function refresh(){
   ageNode.textContent="마지막 관측 "+ageMinutes+"분 전"+(stale?" · 오래된 데이터":"");
   ageNode.className="activity-pill"+(stale?" offline":"");
   for(const event of envelope.events)updateAgent(event);
-  const apex=envelope.events.find(e=>e.agent_id==="APEX");
-  const veto=apex&&apex.risk_veto===true;
+  const commanderEvent=envelope.events.find(e=>e.agent_id==="COMMANDER");
+  const veto=commanderEvent&&commanderEvent.risk_veto===true;
   const riskNode=document.getElementById("risk-state");
   riskNode.textContent=veto?"위험 게이트 작동":"위험 게이트 미작동 · 거래 승인 아님";
   riskNode.className="activity-pill"+(veto?" warning":"");
@@ -142,6 +142,7 @@ async function refresh(){
   const output=document.getElementById("decision");output.textContent=decision;output.className="value "+decision;
   document.getElementById("status").textContent="로컬 연구 서버 연결됨 · 과거 CSV 스냅샷 · 주문 불가";
   document.getElementById("feed-state").textContent="과거 데이터 · 실시간 아님";
+  document.getElementById("feed-state").className="activity-pill";
  }catch(error){
   document.getElementById("status").textContent="데이터를 표시할 수 없습니다: "+error.message;
   document.getElementById("decision").textContent="WAIT";
