@@ -16,6 +16,20 @@ main{max-width:1300px;margin:auto;padding:24px;display:grid;gap:20px}
 .LONG{color:#59e0ae}.SHORT{color:#ff808b}.WAIT{color:#ffcc76}
 .reason{min-height:42px;color:#bacbe3;font-size:14px}
 footer{color:#9bb0ce;text-align:center;padding:20px}
+.room{position:relative;min-height:410px;overflow:hidden;border:1px solid #324766;border-radius:14px;background:radial-gradient(ellipse at 50% 0%,#203c60 0%,#0b1427 70%);perspective:800px}
+.room-floor{position:absolute;left:10%;right:10%;top:18%;bottom:8%;transform:rotateX(44deg) rotateZ(-2deg);background:repeating-linear-gradient(0deg,transparent 0 48px,#29415e66 49px 50px),repeating-linear-gradient(90deg,#14263c 0 48px,#29415e66 49px 50px);border:2px solid #3d5878;box-shadow:0 25px 50px #0008}
+.room-desk{position:absolute;width:140px;height:94px;background:#223955;border:1px solid #56708d;border-radius:9px;transform:skewY(-6deg);box-shadow:10px 12px 0 #101a2a,12px 16px 18px #0008}
+.room-desk .monitor{width:52px;height:30px;margin:9px auto 2px;border:5px solid #080e1b;border-radius:5px;background:#284665;box-shadow:0 0 14px #63d2ff44}
+.room-desk .avatar{font-size:27px;text-align:center;line-height:26px}
+.room-desk .label{text-align:center;font-weight:800;font-size:12px;margin-top:5px;letter-spacing:1px}
+.room-desk .signal{position:absolute;right:5px;top:5px;font-size:10px;font-weight:800}
+.room-desk.LONG .monitor{background:#1a896b;box-shadow:0 0 15px #4af2b488}
+.room-desk.SHORT .monitor{background:#a23b56;box-shadow:0 0 15px #ff7b9388}
+.room-desk.WAIT .monitor{background:#284665}
+.room-desk[data-agent="ATLAS"]{left:13%;top:18%}.room-desk[data-agent="ORBIT"]{left:42%;top:14%}.room-desk[data-agent="ECHO"]{left:70%;top:20%}
+.room-desk[data-agent="PULSE"]{left:14%;top:56%}.room-desk[data-agent="QUANT"]{left:43%;top:57%}.room-desk[data-agent="APEX"]{left:71%;top:55%}
+.room-desk[data-agent="COMMANDER"]{left:43%;top:35%;border-color:#e1b963;z-index:2;transform:scale(.86) skewY(-6deg)}
+@media(max-width:650px){.room{min-height:530px}.room-desk{width:104px;height:84px}.room-desk[data-agent="ATLAS"]{left:5%;top:8%}.room-desk[data-agent="ORBIT"]{left:60%;top:8%}.room-desk[data-agent="ECHO"]{left:5%;top:34%}.room-desk[data-agent="PULSE"]{left:60%;top:34%}.room-desk[data-agent="QUANT"]{left:5%;top:61%}.room-desk[data-agent="APEX"]{left:60%;top:61%}.room-desk[data-agent="COMMANDER"]{left:33%;top:80%}}
 </style></head><body>
 <header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
 <p class="muted">Multi-Agent Research Dashboard · V29 Preview</p>
@@ -26,6 +40,10 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 <div class="panel"><small>COMMANDER</small><div class="value WAIT" id="decision">WAIT</div></div>
 <div class="panel"><small>DATA MODE</small><div class="value" id="mode">HISTORICAL</div></div>
 </section>
+<section class="panel"><h2>Agent Trading Room · Isometric Preview</h2>
+<p class="muted">CSS 기반 아이소메트릭 시제품입니다. 캐릭터는 애니메이션이 아닌 상태 표시용입니다.</p>
+<div class="room" id="trading-room" aria-label="에이전트 트레이딩룸"><div class="room-floor" aria-hidden="true"></div></div>
+</section>
 <section class="panel"><h2>AI Research Room</h2><p class="muted">각 에이전트의 분석 상태를 표시합니다. 3D 캐릭터는 향후 버전에서 추가됩니다.</p><div class="grid" id="agents"></div></section>
 <section class="panel"><h2>Connection &amp; Evidence</h2><p id="status" role="status">서버 연결 대기 중…</p>
 <p class="muted" id="candle">마지막 완료 캔들: —</p><p class="muted">분석 결과는 검증되지 않은 연구용 휴리스틱입니다. 실제 투자 판단이나 주문에 사용하지 마세요.</p></section>
@@ -35,6 +53,16 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 const ids=["ATLAS","ORBIT","ECHO","PULSE","QUANT","APEX","COMMANDER"];
 const room=document.getElementById("agents");
 const nodes=new Map();
+const room3d=document.getElementById("trading-room");
+const roomNodes=new Map();
+for(const id of ids){
+ const desk=document.createElement("div");desk.className="room-desk WAIT";desk.dataset.agent=id;
+ const monitor=document.createElement("div");monitor.className="monitor";
+ const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=id==="COMMANDER"?"♛":"♟";
+ const label=document.createElement("div");label.className="label";label.textContent=id;
+ const signal=document.createElement("span");signal.className="signal WAIT";signal.textContent="WAIT";
+ desk.append(monitor,avatar,label,signal);room3d.append(desk);roomNodes.set(id,{desk,signal});
+}
 for(const id of ids){
  const card=document.createElement("article");card.className="agent";
  const title=document.createElement("h3");title.textContent=id;
@@ -47,6 +75,8 @@ function updateAgent(event){
  const decision=["LONG","SHORT","WAIT"].includes(event.decision)?event.decision:"WAIT";
  node.state.textContent=decision;node.state.className="state "+decision;
  node.reason.textContent=String(event.reason||"판단 근거 없음");
+ const station=roomNodes.get(event.agent_id);
+ if(station){station.desk.className="room-desk "+decision;station.signal.textContent=decision;station.signal.className="signal "+decision;station.desk.title=String(event.reason||"");}
 }
 async function refresh(){
  try{
