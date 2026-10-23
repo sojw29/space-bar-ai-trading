@@ -18,7 +18,7 @@ class CharacterV51Tests(unittest.TestCase):
     def test_status_only_from_verified_research_and_error_reset(self):
         for fragment in ('id="agent-activity"','hasValid?events.get(selected):null',
                          'function verifyEnvelope(payload)',
-                         'seat.signalState=record.decision',
+                         'keys.get(id).signalState=record.decision',
                          'seat.signalState="OFFLINE"',
                          'phase.dataset.status=data?"READY":"OFFLINE"',
                          'function resetResearch(reason)', 'if(reduced.matches)',
