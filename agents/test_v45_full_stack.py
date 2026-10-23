@@ -94,7 +94,7 @@ class FullStackTests(unittest.TestCase):
             self.get("/api/v1/agents")
         self.assertEqual(error.exception.code, 503)
         with self.assertRaises(HTTPError) as error:
-            self.get("/api/v1/paper/analytics") if False else self._post()
+            self._post()
         self.assertEqual(error.exception.code, 405)
 
         sock = MockSocket(build_public_messages())
