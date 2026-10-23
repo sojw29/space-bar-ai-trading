@@ -103,19 +103,35 @@ class LiveResearchStore:
             }
 
 
-def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, fast_warmup=False):
+def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, fast_warmup=False, paper_monitor=False):
     if isinstance(port, bool) or not 1024 <= port <= 65535:
         raise ValueError("Invalid localhost port")
     store = LiveResearchStore(clock=clock)
+    paper = None
+    if paper_monitor:
+        from paper_monitor_v42 import LocalPaperMonitor
+        paper = LocalPaperMonitor(clock=clock)
     server = ThreadingHTTPServer(
-        ("127.0.0.1", port), make_handler(DEFAULT_HISTORY, live_store=store))
+        ("127.0.0.1", port), make_handler(DEFAULT_HISTORY, live_store=store,
+                                           paper_monitor=paper))
+    def on_feed_event(item):
+        # Both sinks see feed transitions. Any paper error triggers its own
+        # fail-closed halt; it must never prevent clearing the live UI.
+        try:
+            store.consume(item)
+        except Exception:
+            if paper is not None:
+                paper._halt("LIVE_RESEARCH_STORE_ERROR")
+            raise
+        if paper is not None:
+            paper.consume(item)
     bootstrap = None
     if fast_warmup:
         from public_warmup_v40 import bootstrap_stream
         bootstrap = bootstrap_stream
     worker = threading.Thread(
         target=feed.run_forever,
-        kwargs={"connect": connect, "emit": store.consume,
+        kwargs={"connect": connect, "emit": on_feed_event,
                 "max_attempts": max_attempts, "bootstrap": bootstrap},
         daemon=True, name="space-bar-readonly-feed")
     worker.start()
@@ -134,8 +150,11 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--fast-warmup", action="store_true",
                         help="Opt in to public Binance REST 5m closed-candle warmup")
+    parser.add_argument("--paper-monitor", action="store_true",
+                        help="Opt in to in-memory, simulated-only paper position tracking")
     args = parser.parse_args()
-    start_dashboard(port=args.port, fast_warmup=args.fast_warmup)
+    start_dashboard(port=args.port, fast_warmup=args.fast_warmup,
+                    paper_monitor=args.paper_monitor)
 
 
 if __name__ == "__main__":
