@@ -1,0 +1,46 @@
+name: SPACE BAR V33 Consensus Flow
+
+on:
+  push:
+    branches:
+      - feature/v33-consensus-flow
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consensus-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Python agents
+        run: python -m compileall -q agents
+      - name: Check browser JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path('web/command_center.html').read_text(encoding='utf-8')
+          script = html.split('<script>', 1)[1].split('</script>', 1)[0]
+          Path('/tmp/space-bar-v33.js').write_text(script, encoding='utf-8')
+          PY
+          node --check /tmp/space-bar-v33.js
+      - name: Offline regression and UI contract tests
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v28_api.py
+          python agents/test_v29_dashboard.py
+          python agents/test_v30_room.py
+          python agents/test_v31_activity.py
+          python agents/test_v32_inspector.py
+          python agents/test_v33_consensus.py
