@@ -11,6 +11,14 @@ header h1{font-size:18px;letter-spacing:.1em;margin:0}header a{color:#91d9ff}
 main{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px;max-width:1500px;margin:auto;padding:16px}
 #stage{position:relative;min-height:560px;height:min(78vh,850px);border:1px solid #37536e;background:radial-gradient(#213954,#0b1528 76%);border-radius:16px;overflow:hidden;touch-action:none}
 #stage canvas{display:block;width:100%;height:100%}
+#camera-toolbar{display:flex;gap:7px;flex-wrap:wrap}
+.camera-btn{background:#1c3550;border:1px solid #527696;color:#d8edff;padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit;font-size:12px}
+.camera-btn:focus-visible{outline:3px solid #93e0ff;outline-offset:2px}
+.camera-btn[aria-pressed="true"]{border-color:#80d6f2;background:#1c4a61}
+#camera-mode{font-size:12px;color:#a3c9e8}
+#office-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#bad5ec}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.dot.LONG{background:#39d8a6}.dot.SHORT{background:#ef637e}.dot.WAIT{background:#dbad68}.dot.OFFLINE{background:#496078}
 #stage-hint{position:absolute;left:16px;bottom:16px;padding:9px 12px;background:#0b192bdd;color:#bed9ef;border-radius:8px;font-size:12px;pointer-events:none}
 #stage-status{position:absolute;left:16px;top:16px;right:16px;padding:9px 12px;background:#0b192be8;border:1px solid #34516f;border-radius:9px;color:#b7d4ec;font-size:13px}
 aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;border-radius:14px;padding:18px;background:#121f35}.panel h2{font-size:17px;margin:0 0 12px}.tag{font-size:11px;padding:4px 7px;background:#49301b;color:#ffd69e;border-radius:6px}
@@ -30,7 +38,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <main>
 <section id="stage" aria-label="WebGL 연구 사무실. 드래그로 회전하고 책상을 선택하세요">
 <div id="stage-status" role="status">WebGL 장면을 초기화하는 중…</div>
-<div id="stage-hint">드래그: 카메라 회전 · 휠: 확대 · 책상 클릭: 분석 근거</div>
+<div id="stage-hint">드래그: 카메라 회전 · 휠/버튼: 확대 · 책상 클릭: 분석 근거</div>
 </section>
 <aside>
 <section class="panel"><h2>선택 에이전트 · 연구 정보</h2>
@@ -42,8 +50,22 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div class="metric"><small>위험 게이트</small><strong id="selected-risk">확인 대기</strong></div>
 <p class="notice">에이전트는 규칙 기반 연구 모듈입니다. 3D 아바타의 동작은 실제 자율 AI 작업을 뜻하지 않습니다.</p>
 </section>
+<section class="panel"><h2>카메라 컨트롤</h2>
+<div id="camera-toolbar" role="group" aria-label="3D 카메라">
+<button type="button" class="camera-btn" data-view="overview" aria-pressed="true">전체</button>
+<button type="button" class="camera-btn" data-view="front" aria-pressed="false">정면</button>
+<button type="button" class="camera-btn" data-view="top" aria-pressed="false">위에서</button>
+<button type="button" class="camera-btn" data-view="commander" aria-pressed="false">COMMANDER</button>
+<button type="button" class="camera-btn" data-view="zoom-in" aria-label="3D 확대">＋</button>
+<button type="button" class="camera-btn" data-view="zoom-out" aria-label="3D 축소">－</button>
+</div><p id="camera-mode">전체 사무실 관찰</p>
+<p class="notice">책상을 클릭하거나 아래 선택 버튼을 사용하세요. 카메라 전환은 연구 판단에 영향을 주지 않습니다.</p></section>
 <section class="panel"><h2>책상 빠른 선택</h2><div id="agent-buttons"></div>
 <p class="notice">화면을 표시하려면 WebGL 지원 브라우저와 Three.js 모듈 로딩이 필요합니다. 연결 실패 시 2.5D 화면을 이용하세요.</p>
+</section>
+<section class="panel"><h2>연구 판단 범례</h2>
+<div id="office-legend"><span><i class="dot LONG"></i>LONG</span><span><i class="dot SHORT"></i>SHORT</span><span><i class="dot WAIT"></i>WAIT</span><span><i class="dot OFFLINE"></i>데이터 없음</span></div>
+<p class="notice">색상은 규칙 기반 연구 판단이지 매수·매도 권유가 아닙니다.</p>
 </section>
 <section class="panel"><h2>연구 상태</h2>
 <div class="metric"><small>DATA SOURCE</small><strong id="data-mode">확인 중</strong></div>
@@ -74,6 +96,13 @@ renderer.shadowMap.enabled=false;
 stage.prepend(renderer.domElement);
 const ambient=new THREE.HemisphereLight(0x9dc7ee,0x162238,2.1);scene.add(ambient);
 const keyLight=new THREE.DirectionalLight(0xe2ecff,2.5);keyLight.position.set(-6,12,5);scene.add(keyLight);
+// Independent primitive geometry: local, deterministic 3D decorations only.
+const overhead=new THREE.Group();scene.add(overhead);
+for(const pos of [[-5,3.4,-4],[0,3.4,-4],[5,3.4,-4]]){
+ const fixture=new THREE.Mesh(new THREE.BoxGeometry(2.3,.09,.34),
+  new THREE.MeshStandardMaterial({color:0xa7d3e4,emissive:0x193a52,roughness:.4}));
+ fixture.position.set(...pos);overhead.add(fixture);
+}
 const ground=new THREE.Mesh(new THREE.BoxGeometry(16,.25,12),new THREE.MeshStandardMaterial({color:0x243951,roughness:.9}));
 ground.position.y=-.22;scene.add(ground);
 const grid=new THREE.GridHelper(16,16,0x45617c,0x2f465e);grid.position.y=-.081;grid.scale.z=.75;scene.add(grid);
@@ -105,6 +134,9 @@ for(const name of names){
  head.position.set(0,1.08,.75);group.add(head);
  const badge=new THREE.Mesh(new THREE.SphereGeometry(.08,10,8),new THREE.MeshBasicMaterial({color:colors.OFFLINE}));
  badge.position.set(0,1.11,1.05);group.add(badge);
+ // Workstations have local 3D accessories, not live numerical data.
+ const keyboard=block(group,.72,.035,.18,0x29384c,0,.96,.27);
+ const mouse=block(group,.11,.055,.16,0x668aa4,.6,.98,.25);
  const pedestal=block(group,1.5,.08,.44,isCommander?0x8f7044:0x233d59,0,.18,1.2);
  pedestal.userData.agent=name;
  const pick=new THREE.Mesh(new THREE.BoxGeometry(2.3,2.2,2.0),new THREE.MeshBasicMaterial({visible:false}));
@@ -204,7 +236,33 @@ async function refresh(){
  }
 }
 let azimuth=.62,elevation=.63,distance=21,dragged=false,startX=0,startY=0;
+let activeCameraView="overview";
 const focus=new THREE.Vector3(0,0,0);
+function setCameraView(view){
+ const presets={
+  overview:{az:.62,el:.63,dist:21,focus:[0,0,0],label:"전체 사무실 관찰"},
+  front:{az:0,el:.34,dist:24,focus:[0,.2,0],label:"정면 관찰"},
+  top:{az:.01,el:1.25,dist:22,focus:[0,0,0],label:"위에서 관찰"},
+  commander:{az:.48,el:.57,dist:11,focus:[0,.75,0],label:"COMMANDER 통제석"}
+ };
+ if(Object.hasOwn(presets,view)){
+  const target=presets[view];
+  azimuth=target.az;elevation=target.el;distance=target.dist;
+  focus.set(...target.focus);
+  activeCameraView=view;document.getElementById("camera-mode").textContent=target.label;
+ }else if(view==="zoom-in"||view==="zoom-out"){
+  distance+=view==="zoom-in"?-2:2;
+  activeCameraView="custom";document.getElementById("camera-mode").textContent="사용자 카메라";
+ }else return;
+ document.querySelectorAll("[data-view]").forEach(button=>{
+  if(button.hasAttribute("aria-pressed"))button.setAttribute(
+   "aria-pressed",String(button.dataset.view===activeCameraView));
+ });
+ updateCamera();
+}
+document.querySelectorAll("[data-view]").forEach(button=>{
+ button.addEventListener("click",()=>setCameraView(button.dataset.view));
+});
 function updateCamera(){
  elevation=Math.max(.28,Math.min(1.28,elevation));
  distance=Math.max(10,Math.min(31,distance));
@@ -228,7 +286,12 @@ renderer.domElement.addEventListener("pointermove",e=>{
  if(!active)return;
  const dx=e.clientX-downX,dy=e.clientY-downY;
  if(Math.abs(e.clientX-startX)+Math.abs(e.clientY-startY)>5)dragged=true;
- if(dragged){azimuth-=dx*.006;elevation+=dy*.005;updateCamera();}
+ if(dragged){
+  activeCameraView="custom";
+  document.getElementById("camera-mode").textContent="사용자 카메라";
+  document.querySelectorAll('[data-view][aria-pressed]').forEach(button=>button.setAttribute("aria-pressed","false"));
+  azimuth-=dx*.006;elevation+=dy*.005;updateCamera();
+ }
  downX=e.clientX;downY=e.clientY;
 });
 const picker=new THREE.Raycaster(),pointer=new THREE.Vector2();
@@ -242,7 +305,13 @@ renderer.domElement.addEventListener("pointerup",e=>{
  if(hits.length)selectAgent(hits[0].object.userData.agent);
 });
 renderer.domElement.addEventListener("pointercancel",()=>{active=false;});
-renderer.domElement.addEventListener("wheel",e=>{e.preventDefault();distance+=Math.sign(e.deltaY)*1.0;updateCamera();},{passive:false});
+renderer.domElement.addEventListener("lostpointercapture",()=>{active=false;});
+renderer.domElement.addEventListener("wheel",e=>{
+ e.preventDefault();distance+=Math.sign(e.deltaY)*1.0;
+ activeCameraView="custom";document.getElementById("camera-mode").textContent="사용자 카메라";
+ document.querySelectorAll('[data-view][aria-pressed]').forEach(button=>button.setAttribute("aria-pressed","false"));
+ updateCamera();
+},{passive:false});
 const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
 let frame=0;
 function renderFrame(){
@@ -254,6 +323,7 @@ document.addEventListener("visibilitychange",()=>{
  else if(!frame)renderFrame();
 });
 selectAgent("COMMANDER");
+setCameraView("overview");
 refresh();setInterval(refresh,30000);renderFrame();
 </script>
 </body></html>
