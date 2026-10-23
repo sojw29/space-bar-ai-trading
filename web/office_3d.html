@@ -52,6 +52,10 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 .agent-btn[aria-pressed="true"]{outline:2px solid #87defa}.agent-btn:focus-visible{outline:3px solid #fff}
 .notice{color:#9ebbd3;font-size:12px;line-height:1.5}
 #renderer-error{color:#ff9eae;font-weight:700}
+#webgl-fallback{display:none;border:1px solid #a96c73;border-radius:11px;background:#371e30;color:#ffccd1;padding:14px;margin:14px;position:absolute;bottom:55px;left:0;right:0;z-index:10}
+#webgl-fallback[data-visible="true"]{display:block}
+#webgl-fallback a{color:#a9e8ff;text-decoration:underline;font-weight:700}
+#stage[data-render-ready="false"]{background:#111e31}
 @media(max-width:800px){main{grid-template-columns:1fr}#stage{min-height:410px;height:58vh}aside{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 </style>
@@ -60,9 +64,11 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <header><h1>SPACE BAR <span style="color:#80def8">3D RESEARCH OFFICE</span></h1>
 <a href="/dashboard">← 2.5D 대시보드</a><span class="tag">PAPER RESEARCH ONLY · NO ORDERS</span></header>
 <main>
-<section id="stage" aria-label="WebGL 연구 사무실. 드래그로 회전하고 책상을 선택하세요">
+<section id="stage" data-render-ready="false" aria-label="WebGL 연구 사무실. 드래그로 회전하고 책상을 선택하세요">
 <div id="stage-status" role="status">WebGL 장면을 초기화하는 중…</div>
 <div id="stage-hint">드래그: 카메라 회전 · 휠/버튼: 확대 · 책상 클릭: 분석 근거</div>
+<div id="webgl-fallback" data-visible="false" role="alert">3D 화면이 준비되지 않았습니다.
+<a href="/dashboard">2.5D 연구 대시보드로 이동</a></div>
 </section>
 <aside>
 <section class="panel" id="operations-panel"><h2>운영 상태 · LOCAL OPS</h2>
@@ -116,6 +122,46 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 </section>
 </aside>
 </main>
+<script>
+/* V55: classic-script boot watchdog still runs when the external ES module fails to download. */
+(function(){
+ const stage=document.getElementById("stage");
+ const fallback=document.getElementById("webgl-fallback");
+ const error=document.getElementById("renderer-error");
+ let watchdog=null;
+ function fail(reason){
+  if(stage.dataset.renderReady==="true")return;
+  fallback.dataset.visible="true";
+  fallback.firstChild.textContent="3D 화면을 사용할 수 없습니다: "+reason+" ";
+  error.textContent="WebGL / Three.js 초기화 실패 · 2.5D 화면을 이용하세요.";
+  document.getElementById("stage-status").textContent="3D 초기화 실패 · 실제 주문 불가";
+ }
+ window.spacebar3DReady=function(){
+  stage.dataset.renderReady="true";
+  fallback.dataset.visible="false";
+  error.textContent="";
+  if(watchdog!==null)clearTimeout(watchdog);
+ };
+ window.spacebar3DFailed=fail;
+ let supported=false;
+ try{
+  const canvas=document.createElement("canvas");
+  const gl=canvas.getContext("webgl2")||canvas.getContext("webgl");
+  supported=Boolean(gl);
+  if(gl&&gl.getExtension("WEBGL_lose_context"))gl.getExtension("WEBGL_lose_context").loseContext();
+ }catch(_){supported=false;}
+ if(!supported){fail("브라우저 WebGL 사용 불가");return;}
+ watchdog=setTimeout(function(){
+  if(stage.dataset.renderReady!=="true")fail("Three.js 모듈 로딩 지연 또는 GPU 오류");
+ },15000);
+ window.addEventListener("error",function(event){
+  if(stage.dataset.renderReady!=="true")fail("3D 스크립트 로딩 오류");
+ });
+ window.addEventListener("unhandledrejection",function(){
+  if(stage.dataset.renderReady!=="true")fail("3D 모듈 초기화 오류");
+ });
+})();
+</script>
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 const names=["ATLAS","ORBIT","ECHO","PULSE","QUANT","APEX","COMMANDER"];
@@ -558,9 +604,10 @@ async function verifyFeedStatus(){
  throw Error("Unknown feed mode or state");
 }
 
+let webglContextLost=false;
 let refreshActive=false;
 async function refresh(){
- if(refreshActive)return;
+ if(webglContextLost||refreshActive)return;
  refreshActive=true;
  setOpsField("ops-research","연구 API 확인 중","warn");
  try{
@@ -677,19 +724,51 @@ renderer.domElement.addEventListener("wheel",e=>{
 },{passive:false});
 const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
 let frame=0;
+function stopRendering(){if(frame){cancelAnimationFrame(frame);frame=0;}}
+function reportRendererFailure(reason){
+ stopRendering();
+ resetResearch(reason);
+ document.getElementById("renderer-error").textContent=reason+" · 2.5D 화면 사용 가능";
+ document.getElementById("webgl-fallback").dataset.visible="true";
+}
+renderer.domElement.addEventListener("webglcontextlost",event=>{
+ event.preventDefault();
+ webglContextLost=true;
+ reportRendererFailure("WebGL 그래픽 컨텍스트 손실");
+});
+renderer.domElement.addEventListener("webglcontextrestored",()=>{
+ webglContextLost=false;
+ document.getElementById("webgl-fallback").dataset.visible="false";
+ document.getElementById("renderer-error").textContent="";
+ resetResearch("WebGL 복구 후 새 연구 결과 확인 중");
+ resize();
+ refresh();
+ if(!document.hidden)renderFrame();
+});
 function renderFrame(){
- frame=requestAnimationFrame(renderFrame);
+ if(webglContextLost||document.hidden)return;
  // Small static pose difference by observed decision; no fabricated AI work.
  for(const [id,seat] of keys){
   if(reduced.matches){seat.head.rotation.y=0;seat.insignia.rotation.y=0;continue;}
   seat.head.rotation.y=seat.signalState==="OFFLINE"?0:
    seat.signalState==="LONG"?.12:seat.signalState==="SHORT"?-.12:0;
  }
- renderer.render(scene,camera);
+ try{
+  renderer.render(scene,camera);
+  if(stage.dataset.renderReady!=="true")window.spacebar3DReady();
+  frame=requestAnimationFrame(renderFrame);
+ }catch(error){
+  webglContextLost=true;
+  reportRendererFailure("WebGL 렌더링 실패");
+ }
 }
 document.addEventListener("visibilitychange",()=>{
- if(document.hidden){cancelAnimationFrame(frame);frame=0;}
- else if(!frame)renderFrame();
+ if(document.hidden)stopRendering();
+ else if(!frame&&!webglContextLost){
+  resetResearch("화면 복귀 · 신규 데이터 검증 중");
+  refresh();
+  renderFrame();
+ }
 });
 selectAgent("COMMANDER");
 setCameraView("overview");
