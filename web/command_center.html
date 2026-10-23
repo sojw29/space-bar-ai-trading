@@ -30,6 +30,17 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 .room-desk[data-agent="PULSE"]{left:14%;top:56%}.room-desk[data-agent="QUANT"]{left:43%;top:57%}.room-desk[data-agent="APEX"]{left:71%;top:55%}
 .room-desk[data-agent="COMMANDER"]{left:43%;top:35%;border-color:#e1b963;z-index:2;transform:scale(.86) skewY(-6deg)}
 @media(max-width:650px){.room{min-height:530px}.room-desk{width:104px;height:84px}.room-desk[data-agent="ATLAS"]{left:5%;top:8%}.room-desk[data-agent="ORBIT"]{left:60%;top:8%}.room-desk[data-agent="ECHO"]{left:5%;top:34%}.room-desk[data-agent="PULSE"]{left:60%;top:34%}.room-desk[data-agent="QUANT"]{left:5%;top:61%}.room-desk[data-agent="APEX"]{left:60%;top:61%}.room-desk[data-agent="COMMANDER"]{left:33%;top:80%}}
+
+.activity-line{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 18px}
+.activity-pill{display:inline-block;padding:5px 9px;border:1px solid #466181;background:#122943;border-radius:99px;font-size:12px;font-weight:700;color:#bfd8f4}
+.activity-pill.warning{color:#ffab9f;border-color:#a45d60;background:#46252b}
+.activity-pill.offline{color:#ffdb97;border-color:#805f34}
+.room-desk{transition:border-color .3s,box-shadow .3s}
+.room-desk.veto{border-color:#ff7070;box-shadow:0 0 0 2px #ff707055,10px 12px 0 #101a2a}
+.room-desk .activity{position:absolute;left:5px;top:5px;background:#101b31db;padding:3px 5px;border-radius:4px;font-size:9px;color:#cce1ff;white-space:nowrap}
+.room-desk .activity.warning{color:#ff9f9f;font-weight:900}
+.room-desk .activity.offline{color:#ffcf84}
+@media(prefers-reduced-motion:reduce){.room-desk{transition:none}}
 </style></head><body>
 <header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
 <p class="muted">Multi-Agent Research Dashboard · V29 Preview</p>
@@ -42,6 +53,7 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 </section>
 <section class="panel"><h2>Agent Trading Room · Isometric Preview</h2>
 <p class="muted">CSS 기반 아이소메트릭 시제품입니다. 캐릭터는 애니메이션이 아닌 상태 표시용입니다.</p>
+<div class="activity-line" aria-live="polite"><span class="activity-pill" id="feed-state">기록 데이터</span><span class="activity-pill" id="risk-state">위험 검토 대기</span><span class="activity-pill" id="observation-age">데이터 시각 확인 대기</span></div>
 <div class="room" id="trading-room" aria-label="에이전트 트레이딩룸"><div class="room-floor" aria-hidden="true"></div></div>
 </section>
 <section class="panel"><h2>AI Research Room</h2><p class="muted">각 에이전트의 분석 상태를 표시합니다. 3D 캐릭터는 향후 버전에서 추가됩니다.</p><div class="grid" id="agents"></div></section>
@@ -61,7 +73,8 @@ for(const id of ids){
  const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=id==="COMMANDER"?"♛":"♟";
  const label=document.createElement("div");label.className="label";label.textContent=id;
  const signal=document.createElement("span");signal.className="signal WAIT";signal.textContent="WAIT";
- desk.append(monitor,avatar,label,signal);room3d.append(desk);roomNodes.set(id,{desk,signal});
+ const activity=document.createElement("span");activity.className="activity";activity.textContent="대기";
+ desk.append(monitor,avatar,label,signal,activity);room3d.append(desk);roomNodes.set(id,{desk,signal,activity});
 }
 for(const id of ids){
  const card=document.createElement("article");card.className="agent";
@@ -70,13 +83,28 @@ for(const id of ids){
  const reason=document.createElement("p");reason.className="reason";reason.textContent="분석 대기 중";
  card.append(title,state,reason);room.append(card);nodes.set(id,{state,reason});
 }
+function resetRoom(message){
+ for(const id of ids){
+  const node=nodes.get(id),station=roomNodes.get(id);
+  node.state.textContent="WAIT";node.state.className="state WAIT";node.reason.textContent=message;
+  station.desk.className="room-desk WAIT";station.signal.textContent="WAIT";station.signal.className="signal WAIT";
+  station.activity.textContent="연결 대기";station.activity.className="activity offline";station.desk.removeAttribute("title");
+ }
+}
 function updateAgent(event){
  const node=nodes.get(event.agent_id);if(!node)return;
  const decision=["LONG","SHORT","WAIT"].includes(event.decision)?event.decision:"WAIT";
  node.state.textContent=decision;node.state.className="state "+decision;
  node.reason.textContent=String(event.reason||"판단 근거 없음");
  const station=roomNodes.get(event.agent_id);
- if(station){station.desk.className="room-desk "+decision;station.signal.textContent=decision;station.signal.className="signal "+decision;station.desk.title=String(event.reason||"");}
+ if(station){
+  const veto=event.agent_id==="APEX"&&event.risk_veto===true;
+  station.desk.className="room-desk "+decision+(veto?" veto":"");
+  station.signal.textContent=decision;station.signal.className="signal "+decision;
+  station.activity.textContent=veto?"위험 경고":decision==="WAIT"?"관망":"판단 완료";
+  station.activity.className="activity"+(veto?" warning":"");
+  station.desk.title=String(event.reason||"");
+ }
 }
 async function refresh(){
  try{
@@ -89,15 +117,42 @@ async function refresh(){
   document.getElementById("symbol").textContent=envelope.symbol||"—";
   document.getElementById("timeframe").textContent=envelope.timeframe||"—";
   document.getElementById("candle").textContent="마지막 완료 캔들: "+(envelope.observed_candle_utc||"—");
+  if(envelope.events.length!==ids.length||new Set(envelope.events.map(e=>e.agent_id)).size!==ids.length||
+   ids.some(id=>!envelope.events.some(e=>e.agent_id===id)))throw Error("에이전트 이벤트 누락");
+  const candleDate=new Date(envelope.observed_candle_utc);
+  if(!Number.isFinite(candleDate.getTime()))throw Error("캔들 시간 오류");
+  const ageMinutes=Math.round((Date.now()-candleDate.getTime())/60000);
+  const stale=ageMinutes>30||ageMinutes<0;
+  const ageNode=document.getElementById("observation-age");
+  ageNode.textContent="마지막 관측 "+ageMinutes+"분 전"+(stale?" · 오래된 데이터":"");
+  ageNode.className="activity-pill"+(stale?" offline":"");
   for(const event of envelope.events)updateAgent(event);
+  const apex=envelope.events.find(e=>e.agent_id==="APEX");
+  const veto=apex&&apex.risk_veto===true;
+  const riskNode=document.getElementById("risk-state");
+  riskNode.textContent=veto?"위험 게이트 작동":"위험 게이트 미작동 · 거래 승인 아님";
+  riskNode.className="activity-pill"+(veto?" warning":"");
+  const apexDesk=roomNodes.get("APEX");
+  if(veto&&apexDesk){
+   apexDesk.desk.classList.add("veto");apexDesk.activity.textContent="위험 경고";
+   apexDesk.activity.className="activity warning";
+  }
   const commander=envelope.events.find(x=>x.agent_id==="COMMANDER");
   const decision=commander&&["LONG","SHORT","WAIT"].includes(commander.decision)?commander.decision:"WAIT";
   const output=document.getElementById("decision");output.textContent=decision;output.className="value "+decision;
   document.getElementById("status").textContent="로컬 연구 서버 연결됨 · 과거 CSV 스냅샷 · 주문 불가";
+  document.getElementById("feed-state").textContent="과거 데이터 · 실시간 아님";
  }catch(error){
   document.getElementById("status").textContent="데이터를 표시할 수 없습니다: "+error.message;
   document.getElementById("decision").textContent="WAIT";
   document.getElementById("decision").className="value WAIT";
+  document.getElementById("feed-state").textContent="연결 오류";
+  document.getElementById("feed-state").className="activity-pill offline";
+  document.getElementById("risk-state").textContent="위험 상태 알 수 없음";
+  document.getElementById("risk-state").className="activity-pill offline";
+  document.getElementById("observation-age").textContent="데이터 시각 확인 불가";
+  document.getElementById("observation-age").className="activity-pill offline";
+  resetRoom("데이터 수신 실패");
  }
 }
 refresh();setInterval(refresh,30000);
