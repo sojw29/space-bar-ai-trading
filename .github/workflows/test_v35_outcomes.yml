@@ -1,0 +1,30 @@
+name: SPACE BAR V35 Historical Outcome Annotations
+
+on:
+  push:
+    branches:
+      - feature/v35-posthoc-outcomes
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  posthoc-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile
+        run: python -m compileall -q agents
+      - name: Ledger and posthoc tests
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v34_ledger.py
+          python agents/test_v35_outcomes.py
