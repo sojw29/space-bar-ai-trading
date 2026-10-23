@@ -276,7 +276,20 @@ function setOfficePhase(phase, note){
    activity.textContent="데이터 중단";activity.className="activity offline";}
   else if(phase==="FETCHING"){activity.textContent="결과 요청";activity.className="activity";}
   else if(phase==="WAITING" && lastFailure){activity.textContent="확인 대기";}
-  else if(phase==="OBSERVED"){desk.classList.remove("offline-station");}
+  else if(phase==="OBSERVED"||phase==="WAITING"){
+   if(!lastFailure){
+    desk.classList.remove("offline-station");
+    const id=desk.dataset.agent;
+    const current=latestEvents.get(id);
+    if(current){
+     const commander=latestEvents.get("COMMANDER");
+     const veto=id==="APEX"&&commander&&commander.risk_veto===true;
+     activity.textContent=veto?"위험 경고":
+      current.decision==="WAIT"?"관망":"분석 완료";
+     activity.className="activity"+(veto?" warning":"");
+    }
+   }
+  }
  }
 }
 function selectAgent(id){
