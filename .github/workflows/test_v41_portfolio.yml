@@ -1,0 +1,34 @@
+name: SPACE BAR V41 Closed-Candle Paper Portfolio
+
+on:
+  push:
+    branches:
+      - feature/v41-stateful-paper-portfolio
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-state-machine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile agents
+        run: python -m compileall -q agents
+      - name: Test existing research and new paper positions
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v34_ledger.py
+          python agents/test_v36_paper.py
+          python agents/test_v37_stream.py
+          python agents/test_v39_bridge.py
+          python agents/test_v40_warmup.py
+          python agents/test_v41_portfolio.py
