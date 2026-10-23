@@ -1,0 +1,46 @@
+name: SPACE BAR V39 Local Live Dashboard Bridge
+
+on:
+  push:
+    branches:
+      - feature/v39-live-dashboard-bridge
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-bridge-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Python
+        run: python -m compileall -q agents
+      - name: Validate browser script
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          h=Path('web/command_center.html').read_text(encoding='utf-8')
+          Path('/tmp/space-bar-v39.js').write_text(h.split('<script>',1)[1].split('</script>',1)[0])
+          PY
+          node --check /tmp/space-bar-v39.js
+      - name: Offline agent, websocket and HTTP bridge tests
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v28_api.py
+          python agents/test_v29_dashboard.py
+          python agents/test_v33_consensus.py
+          python agents/test_v34_ledger.py
+          python agents/test_v37_stream.py
+          python agents/test_v38_binance_ws.py
+          python agents/test_v39_bridge.py
