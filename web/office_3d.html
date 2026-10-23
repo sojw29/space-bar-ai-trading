@@ -591,6 +591,7 @@ async function refresh(){
   await refreshMarketWall(verified);
  }catch(error){
   resetResearch(error instanceof Error?error.message:"API 오류");
+  setOpsField("ops-feed","연결 확인 실패 / 사용 불가","error");
  }finally{
   opsCheckedAt=Date.now();
   document.getElementById("ops-check").textContent=new Date(opsCheckedAt).toLocaleString();
