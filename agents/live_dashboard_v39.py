@@ -103,16 +103,20 @@ class LiveResearchStore:
             }
 
 
-def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None):
+def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, fast_warmup=False):
     if isinstance(port, bool) or not 1024 <= port <= 65535:
         raise ValueError("Invalid localhost port")
     store = LiveResearchStore(clock=clock)
     server = ThreadingHTTPServer(
         ("127.0.0.1", port), make_handler(DEFAULT_HISTORY, live_store=store))
+    bootstrap = None
+    if fast_warmup:
+        from public_warmup_v40 import bootstrap_stream
+        bootstrap = bootstrap_stream
     worker = threading.Thread(
         target=feed.run_forever,
         kwargs={"connect": connect, "emit": store.consume,
-                "max_attempts": max_attempts},
+                "max_attempts": max_attempts, "bootstrap": bootstrap},
         daemon=True, name="space-bar-readonly-feed")
     worker.start()
     print("V39 read-only dashboard: http://127.0.0.1:%d/" % server.server_port,
@@ -128,8 +132,10 @@ def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None):
 def main():
     parser = argparse.ArgumentParser(description="Read-only local public-stream dashboard")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--fast-warmup", action="store_true",
+                        help="Opt in to public Binance REST 5m closed-candle warmup")
     args = parser.parse_args()
-    start_dashboard(port=args.port)
+    start_dashboard(port=args.port, fast_warmup=args.fast_warmup)
 
 
 if __name__ == "__main__":

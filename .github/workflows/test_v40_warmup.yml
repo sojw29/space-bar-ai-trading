@@ -1,0 +1,32 @@
+name: SPACE BAR V40 Safe Public Warmup
+
+on:
+  push:
+    branches:
+      - feature/v40-safe-public-warmup
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  warmup-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile agents
+        run: python -m compileall -q agents
+      - name: Offline market and HTTP contracts
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v37_stream.py
+          python agents/test_v38_binance_ws.py
+          python agents/test_v39_bridge.py
+          python agents/test_v40_warmup.py
