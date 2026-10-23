@@ -1,0 +1,32 @@
+name: SPACE BAR V62 Chronological Holdout Guard
+
+on:
+  push:
+    branches:
+      - feature/v62-chronological-holdout
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-holdout-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile all research modules
+        run: python -m compileall -q agents space_bar_launcher.py
+      - name: Prior read-only paper and launcher regressions
+        run: |
+          python agents/test_v58_launcher.py
+          python agents/test_v59_launcher_ops.py
+          python agents/test_v60_historical_paper.py
+          python agents/test_v61_paper_performance.py
+      - name: V62 chronological split and no-lookahead research checks
+        run: python agents/test_v62_holdout.py
