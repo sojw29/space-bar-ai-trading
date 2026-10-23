@@ -66,7 +66,7 @@ async function smoke(){
   args:["--enable-webgl","--use-gl=angle","--use-angle=swiftshader",
         "--disable-gpu-sandbox","--no-sandbox"]
  });
- const context=await browser.newContext({viewport:{width:1360,height:900},deviceScaleFactor:1});
+ const context=await browser.newContext({viewport:{width:1360,height:900},deviceScaleFactor:1.5});
  async function serveThree(page){
   await page.route(moduleURL,route=>route.fulfill({
    status:200,contentType:"text/javascript; charset=utf-8",body:bundledThree
