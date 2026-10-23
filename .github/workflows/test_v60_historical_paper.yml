@@ -1,0 +1,34 @@
+name: SPACE BAR V60 Explicit Historical Paper Controls
+
+on:
+  push:
+    branches:
+      - feature/v60-historical-paper-control
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-paper-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile launcher and simulation modules
+        run: python -m compileall -q agents space_bar_launcher.py
+      - name: Launch, diagnostics, and paper replay regressions
+        run: |
+          python agents/test_v58_launcher.py
+          python agents/test_v59_launcher_ops.py
+          python agents/test_v60_historical_paper.py
+      - name: Existing paper financial accounting safety
+        run: |
+          python agents/test_v41_paper_portfolio.py
+          python agents/test_v42_paper_monitor.py
+          python agents/test_v28_api.py
