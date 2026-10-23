@@ -16,6 +16,9 @@ main{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px
 .camera-btn:focus-visible{outline:3px solid #93e0ff;outline-offset:2px}
 .camera-btn[aria-pressed="true"]{border-color:#80d6f2;background:#1c4a61}
 #camera-mode{font-size:12px;color:#a3c9e8}
+#market-board-status{font-size:12px;color:#bad4e6}
+#market-board-status[data-status="BLOCKED"]{color:#ffadbb}
+#market-board-status[data-status="READY"]{color:#8fe0cb}
 #agent-activity{font-size:13px;color:#c3deee;line-height:1.5}
 #agent-activity[data-status="OFFLINE"]{color:#ffb6bc}
 #agent-activity[data-status="READY"]{color:#9de6c8}
@@ -72,6 +75,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <p class="notice">색상은 규칙 기반 연구 판단이지 매수·매도 권유가 아닙니다.</p>
 </section>
 <section class="panel"><h2>연구 상태</h2>
+<div class="metric"><small>3D BTC MARKET WALL · 확정된 5분봉</small><strong id="market-board-status" data-status="BLOCKED">캔들 데이터 대기</strong></div>
 <div class="metric"><small>DATA SOURCE</small><strong id="data-mode">확인 중</strong></div>
 <div class="metric"><small>COMMANDER</small><strong id="consensus">WAIT</strong></div>
 <p id="renderer-error" role="alert"></p>
@@ -123,6 +127,105 @@ const backWall=new THREE.Mesh(new THREE.BoxGeometry(16,3,.18),new THREE.MeshStan
 backWall.position.set(0,1.4,-6.1);scene.add(backWall);
 const sideWall=new THREE.Mesh(new THREE.BoxGeometry(.18,3,12),new THREE.MeshStandardMaterial({color:0x15253a,roughness:1}));
 sideWall.position.set(-8.1,1.4,0);scene.add(sideWall);
+// A genuine 3D plane textured with canvas-rendered VERIFIED completed OHLCV,
+// never a simulated/random candle series and never an executable trade chart.
+const boardCanvas=document.createElement("canvas");
+boardCanvas.width=1024;boardCanvas.height=512;
+const boardCtx=boardCanvas.getContext("2d");
+const boardTexture=new THREE.CanvasTexture(boardCanvas);
+boardTexture.colorSpace=THREE.SRGBColorSpace;
+const marketWall=new THREE.Mesh(
+ new THREE.PlaneGeometry(7.0,3.12),
+ new THREE.MeshBasicMaterial({map:boardTexture,side:THREE.DoubleSide})
+);
+marketWall.position.set(1,2.0,-5.79);
+scene.add(marketWall);
+function clearMarketWall(reason){
+ const context=boardCtx;
+ context.fillStyle="#0b1829";context.fillRect(0,0,1024,512);
+ context.strokeStyle="#37516b";context.strokeRect(14,14,996,483);
+ context.fillStyle="#a5c2de";context.font="bold 27px system-ui";
+ context.fillText("BTCUSDT / 5m · CLOSED CANDLES",36,66);
+ context.fillStyle="#e8b2bc";context.font="24px system-ui";
+ context.fillText("NO VERIFIED CHART DATA",36,248);
+ boardTexture.needsUpdate=true;
+ const label=document.getElementById("market-board-status");
+ label.dataset.status="BLOCKED";label.textContent=String(reason||"확정 캔들 대기");
+}
+function drawMarketWall(board){
+ const bars=board.candles;
+ const context=boardCtx;
+ const low=Math.min(...bars.map(x=>x.low)),high=Math.max(...bars.map(x=>x.high));
+ const spread=Math.max(high-low,1e-9);
+ const xStart=46,xEnd=986,plotTop=106,plotBottom=435;
+ const priceY=p=>plotBottom-(p-low)/spread*(plotBottom-plotTop);
+ context.fillStyle="#0b1829";context.fillRect(0,0,1024,512);
+ context.fillStyle="#e6f3ff";context.font="bold 27px system-ui";
+ context.fillText("BTCUSDT / 5m · CLOSED",36,49);
+ context.fillStyle="#9dbbd5";context.font="19px system-ui";
+ context.fillText(board.realtime?"PUBLIC STREAM / VERIFIED":"HISTORICAL CSV / NOT LIVE",36,80);
+ context.strokeStyle="#29435e";context.lineWidth=1;
+ for(let i=0;i<5;i++){
+  const y=plotTop+i*(plotBottom-plotTop)/4;
+  context.beginPath();context.moveTo(xStart,y);context.lineTo(xEnd,y);context.stroke();
+ }
+ const step=(xEnd-xStart)/bars.length,bodyWidth=Math.max(2,Math.min(step*.66,13));
+ for(let i=0;i<bars.length;i++){
+  const bar=bars[i],x=xStart+(i+.5)*step;
+  context.strokeStyle=context.fillStyle=bar.close>=bar.open?"#5adfb3":"#ef839b";
+  context.lineWidth=2;
+  context.beginPath();context.moveTo(x,priceY(bar.high));context.lineTo(x,priceY(bar.low));context.stroke();
+  const openY=priceY(bar.open),closeY=priceY(bar.close);
+  context.fillRect(x-bodyWidth/2,Math.min(openY,closeY),bodyWidth,Math.max(2,Math.abs(openY-closeY)));
+ }
+ context.fillStyle="#d9e7f8";context.font="22px system-ui";
+ const last=bars[bars.length-1];
+ context.fillText("Last "+last.close.toFixed(2),36,481);
+ context.fillStyle="#9dbbd5";context.font="17px system-ui";
+ context.fillText(new Date(last.timestamp*1000).toISOString().slice(0,16)+" UTC",675,481);
+ boardTexture.needsUpdate=true;
+ const label=document.getElementById("market-board-status");
+ label.dataset.status="READY";
+ label.textContent=(board.realtime?"공개 스트림":"과거 기록")+" · 확정 봉 "+
+ bars.length+"개 · "+last.close.toFixed(2);
+}
+function verifyMarketBoard(board,research){
+ if(!board||board.mode!=="COMPLETED_CANDLE_MARKET_BOARD"||
+  board.paper_only!==true||board.orders_enabled!==false||
+  board.live_trading_approved!==false||board.independent_oos_verified!==false||
+  board.symbol!=="BTCUSDT"||board.timeframe!=="5m"||
+  board.realtime!==research.realtime||
+  board.source!==(research.realtime?"public_binance_usdm_ws":"historical_csv_snapshot")||
+  !Array.isArray(board.candles)||board.candles.length<1||board.candles.length>60)
+  throw Error("차트 데이터 안전 검증 실패");
+ const last=board.candles[board.candles.length-1];
+ if(!Number.isInteger(last.timestamp)||last.timestamp!==board.last_closed_timestamp||
+  last.timestamp*1000!==Date.parse(research.when))
+  throw Error("차트와 에이전트의 확정 봉 시각 불일치");
+ let previous=null;
+ for(const bar of board.candles){
+  if(!Number.isInteger(bar.timestamp)||bar.timestamp%300!==0||
+    (previous!==null&&bar.timestamp!==previous+300)||
+    Date.now()<bar.timestamp*1000+300000||
+    !["open","high","low","close","volume"].every(k=>typeof bar[k]==="number"&&Number.isFinite(bar[k]))||
+    Math.min(bar.open,bar.high,bar.low,bar.close)<=0||
+    bar.high<Math.max(bar.open,bar.close)||bar.low>Math.min(bar.open,bar.close)||bar.volume<0)
+   throw Error("불완전하거나 누락된 캔들");
+  previous=bar.timestamp;
+ }
+ return board;
+}
+async function refreshMarketWall(research){
+ try{
+  const response=await fetch("/api/v1/market",{cache:"no-store"});
+  if(!response.ok)throw Error("차트 API 준비 안 됨");
+  const board=verifyMarketBoard(await response.json(),research);
+  drawMarketWall(board);
+ }catch(error){
+  clearMarketWall(error instanceof Error?error.message:"검증된 차트 없음");
+ }
+}
+clearMarketWall("시장 데이터 연결 대기");
 function block(group,w,h,d,color,x,y,z){
  const obj=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.65,metalness:.13}));
  obj.position.set(x,y,z);group.add(obj);return obj;
@@ -213,6 +316,7 @@ function renderInspector(){
 }
 let lastObserved="—";
 function resetResearch(reason){
+ clearMarketWall("분석 연결 종료 / 데이터 무효");
  events.clear();hasValid=false;lastObserved="—";
  for(const seat of keys.values()){
   seat.screen.material.color.setHex(colors.OFFLINE);
@@ -260,7 +364,10 @@ function verifyEnvelope(payload){
  if(commander.decision!==expected)throw Error("COMMANDER 판단 불일치");
  return {events:out,when:envelope.observed_candle_utc,realtime:payload.realtime};
 }
+let refreshActive=false;
 async function refresh(){
+ if(refreshActive)return;
+ refreshActive=true;
  try{
   const response=await fetch("/api/v1/agents",{cache:"no-store"});
   if(!response.ok)throw Error("연구 서버 대기 "+response.status);
@@ -278,9 +385,10 @@ async function refresh(){
   document.getElementById("consensus").textContent=events.get("COMMANDER").decision;
   status.textContent="분석 표시 완료 · "+lastObserved+" · 실제 주문 불가";
   renderInspector();
+  await refreshMarketWall(verified);
  }catch(error){
   resetResearch(error instanceof Error?error.message:"API 오류");
- }
+ }finally{refreshActive=false;}
 }
 let azimuth=.62,elevation=.63,distance=21,dragged=false,startX=0,startY=0;
 let activeCameraView="overview";
