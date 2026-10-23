@@ -65,8 +65,10 @@ class FullStackTests(unittest.TestCase):
         def consume(event):
             self.events.append(event)
             self.live.consume(event)
+            previous_state = self.paper.state
             self.paper.consume(event)
-            if event["type"] == "research_events" or self.paper.state == "HALTED":
+            if event["type"] == "research_events" or (
+                    self.paper.state == "HALTED" and previous_state != "HALTED"):
                 snapshot = self.paper.snapshot()
                 kind = "feed_halt" if snapshot["state"] == "HALTED" else "paper_snapshot"
                 self.journal.append(kind, snapshot)
