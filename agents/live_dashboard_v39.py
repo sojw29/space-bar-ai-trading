@@ -131,10 +131,11 @@ def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, f
             raise
         if paper is not None:
             try:
+                previous_paper_state = paper.state
                 paper.consume(item)
                 if journal is not None and (
                     item.get("type") == "research_events" or
-                    paper.state == "HALTED"):
+                    (paper.state == "HALTED" and previous_paper_state != "HALTED")):
                     snap = paper.snapshot()
                     journal.append("feed_halt" if snap["state"] == "HALTED"
                                    else "paper_snapshot", snap)
