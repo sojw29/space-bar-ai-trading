@@ -1,0 +1,51 @@
+name: SPACE BAR V49 Three.js Office Foundation
+
+on:
+  push:
+    branches:
+      - feature/v49-webgl-3d-office
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  webgl-3d-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile
+        run: python -m compileall -q agents
+      - name: Parse 3D JavaScript module and legacy UI script
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          page=Path('web/office_3d.html').read_text(encoding='utf-8')
+          Path('/tmp/spacebar-v49.mjs').write_text(
+            page.split('<script type="module">',1)[1].split('</script>',1)[0],
+            encoding='utf-8')
+          old=Path('web/command_center.html').read_text(encoding='utf-8')
+          Path('/tmp/spacebar-ui-v49.js').write_text(
+            old.split('<script>',1)[1].split('</script>',1)[0],
+            encoding='utf-8')
+          PY
+          node --check /tmp/spacebar-v49.mjs
+          node --check /tmp/spacebar-ui-v49.js
+      - name: Offline UI, API and no-order compatibility
+        run: |
+          python agents/test_v29_dashboard.py
+          python agents/test_v30_room.py
+          python agents/test_v32_inspector.py
+          python agents/test_v47_office.py
+          python agents/test_v48_office_activity.py
+          python agents/test_v28_api.py
+          python agents/test_v49_3d_office.py

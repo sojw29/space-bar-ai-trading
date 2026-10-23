@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPACE BAR | 3D Research Office</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color-scheme:dark;background:#080e1b;color:#e8f2ff}
+*{box-sizing:border-box}body{margin:0}header{padding:14px 20px;background:#101b31;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:1px solid #31506b}
+header h1{font-size:18px;letter-spacing:.1em;margin:0}header a{color:#91d9ff}
+main{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px;max-width:1500px;margin:auto;padding:16px}
+#stage{position:relative;min-height:560px;height:min(78vh,850px);border:1px solid #37536e;background:radial-gradient(#213954,#0b1528 76%);border-radius:16px;overflow:hidden;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%}
+#stage-hint{position:absolute;left:16px;bottom:16px;padding:9px 12px;background:#0b192bdd;color:#bed9ef;border-radius:8px;font-size:12px;pointer-events:none}
+#stage-status{position:absolute;left:16px;top:16px;right:16px;padding:9px 12px;background:#0b192be8;border:1px solid #34516f;border-radius:9px;color:#b7d4ec;font-size:13px}
+aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;border-radius:14px;padding:18px;background:#121f35}.panel h2{font-size:17px;margin:0 0 12px}.tag{font-size:11px;padding:4px 7px;background:#49301b;color:#ffd69e;border-radius:6px}
+.metric{border-bottom:1px solid #30445c;padding:9px 0}.metric small{color:#91aeca;display:block}.metric strong{display:block;margin-top:3px;overflow-wrap:anywhere}
+#selected-decision.LONG{color:#6be1b4}#selected-decision.SHORT{color:#ff9cad}#selected-decision.WAIT{color:#ffcf83}
+#agent-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.agent-btn{border:1px solid #3b5879;border-radius:8px;background:#1c3350;padding:9px;color:#e4f0ff;cursor:pointer}
+.agent-btn[aria-pressed="true"]{outline:2px solid #87defa}.agent-btn:focus-visible{outline:3px solid #fff}
+.notice{color:#9ebbd3;font-size:12px;line-height:1.5}
+#renderer-error{color:#ff9eae;font-weight:700}
+@media(max-width:800px){main{grid-template-columns:1fr}#stage{min-height:410px;height:58vh}aside{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header><h1>SPACE BAR <span style="color:#80def8">3D RESEARCH OFFICE</span></h1>
+<a href="/dashboard">← 2.5D 대시보드</a><span class="tag">PAPER RESEARCH ONLY · NO ORDERS</span></header>
+<main>
+<section id="stage" aria-label="WebGL 연구 사무실. 드래그로 회전하고 책상을 선택하세요">
+<div id="stage-status" role="status">WebGL 장면을 초기화하는 중…</div>
+<div id="stage-hint">드래그: 카메라 회전 · 휠: 확대 · 책상 클릭: 분석 근거</div>
+</section>
+<aside>
+<section class="panel"><h2>선택 에이전트 · 연구 정보</h2>
+<div class="metric"><small>AGENT</small><strong id="selected-name">COMMANDER</strong></div>
+<div class="metric"><small>ROLE</small><strong id="selected-role">합의 판단</strong></div>
+<div class="metric"><small>결정 (주문 신호 아님)</small><strong id="selected-decision" class="WAIT">WAIT</strong></div>
+<div class="metric"><small>분석 근거</small><strong id="selected-reason">데이터 확인 대기</strong></div>
+<div class="metric"><small>완료 캔들 (UTC)</small><strong id="selected-time">—</strong></div>
+<div class="metric"><small>위험 게이트</small><strong id="selected-risk">확인 대기</strong></div>
+<p class="notice">에이전트는 규칙 기반 연구 모듈입니다. 3D 아바타의 동작은 실제 자율 AI 작업을 뜻하지 않습니다.</p>
+</section>
+<section class="panel"><h2>책상 빠른 선택</h2><div id="agent-buttons"></div>
+<p class="notice">화면을 표시하려면 WebGL 지원 브라우저와 Three.js 모듈 로딩이 필요합니다. 연결 실패 시 2.5D 화면을 이용하세요.</p>
+</section>
+<section class="panel"><h2>연구 상태</h2>
+<div class="metric"><small>DATA SOURCE</small><strong id="data-mode">확인 중</strong></div>
+<div class="metric"><small>COMMANDER</small><strong id="consensus">WAIT</strong></div>
+<p id="renderer-error" role="alert"></p>
+<p class="notice">5분봉이 완료된 후 생성된 판단만 표시합니다. 공개 시장 스트림 또는 과거 데이터 연결 상태를 확인하세요. 본 화면에는 주문 기능이 없습니다.</p>
+</section>
+</aside>
+</main>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+const names=["ATLAS","ORBIT","ECHO","PULSE","QUANT","APEX","COMMANDER"];
+const roles={ATLAS:"추세 분석",ORBIT:"거래량",ECHO:"돌파 관찰",PULSE:"모멘텀",QUANT:"검증 대기",APEX:"위험 점검",COMMANDER:"합의 판단"};
+const positions={ATLAS:[-4,-2.5],ORBIT:[0,-3.1],ECHO:[4,-2.5],PULSE:[-4,2.6],QUANT:[0,3.2],APEX:[4,2.6],COMMANDER:[0,0]};
+const colors={LONG:0x39d8a6,SHORT:0xef637e,WAIT:0xdbad68,OFFLINE:0x496078};
+const stage=document.getElementById("stage");
+const status=document.getElementById("stage-status");
+const buttons=document.getElementById("agent-buttons");
+const keys=new Map(),events=new Map();
+let selected="COMMANDER",hasValid=false,sourceMode="unknown";
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x0c1627);
+scene.fog=new THREE.Fog(0x0c1627,17,45);
+const camera=new THREE.PerspectiveCamera(43,1,.1,100);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:"low-power"});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.shadowMap.enabled=false;
+stage.prepend(renderer.domElement);
+const ambient=new THREE.HemisphereLight(0x9dc7ee,0x162238,2.1);scene.add(ambient);
+const keyLight=new THREE.DirectionalLight(0xe2ecff,2.5);keyLight.position.set(-6,12,5);scene.add(keyLight);
+const ground=new THREE.Mesh(new THREE.BoxGeometry(16,.25,12),new THREE.MeshStandardMaterial({color:0x243951,roughness:.9}));
+ground.position.y=-.22;scene.add(ground);
+const grid=new THREE.GridHelper(16,16,0x45617c,0x2f465e);grid.position.y=-.081;grid.scale.z=.75;scene.add(grid);
+const backWall=new THREE.Mesh(new THREE.BoxGeometry(16,3,.18),new THREE.MeshStandardMaterial({color:0x182c43,roughness:1}));
+backWall.position.set(0,1.4,-6.1);scene.add(backWall);
+const sideWall=new THREE.Mesh(new THREE.BoxGeometry(.18,3,12),new THREE.MeshStandardMaterial({color:0x15253a,roughness:1}));
+sideWall.position.set(-8.1,1.4,0);scene.add(sideWall);
+function block(group,w,h,d,color,x,y,z){
+ const obj=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.65,metalness:.13}));
+ obj.position.set(x,y,z);group.add(obj);return obj;
+}
+for(let i=0;i<4;i++){
+ const lightWindow=block(scene,2.3,1.5,.05,0x214c70,-5.7+i*3.8,1.8,-5.98);
+ block(scene,2.15,1.36,.03,0x4580a0,-5.7+i*3.8,1.8,-5.94);
+}
+const pickables=[];
+for(const name of names){
+ const [x,z]=positions[name];const group=new THREE.Group();group.position.set(x,0,z);
+ group.userData.agent=name;scene.add(group);
+ const isCommander=name==="COMMANDER";
+ block(group,2.15,.18,1.20,isCommander?0x785d39:0x3a5573,0,.83,0);
+ for(const dx of [-.88,.88])for(const dz of [-.43,.43])block(group,.12,.8,.12,0x28384a,dx,.38,dz);
+ const monitor=block(group,1,.65,.12,0x0d1827,0,1.34,-.26);
+ const screen=block(group,.89,.53,.018,colors.OFFLINE,0,1.34,-.189);
+ block(group,.10,.24,.1,0x53657b,0,1.04,-.26);
+ const robotBody=new THREE.Mesh(new THREE.CylinderGeometry(.32,.42,.67,12),new THREE.MeshStandardMaterial({color:isCommander?0x947245:0x5b7d9f,metalness:.25,roughness:.6}));
+ robotBody.position.set(0,.47,.75);group.add(robotBody);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.32,16,12),new THREE.MeshStandardMaterial({color:isCommander?0xc5a167:0x7aa3bc,roughness:.55}));
+ head.position.set(0,1.08,.75);group.add(head);
+ const badge=new THREE.Mesh(new THREE.SphereGeometry(.08,10,8),new THREE.MeshBasicMaterial({color:colors.OFFLINE}));
+ badge.position.set(0,1.11,1.05);group.add(badge);
+ const pedestal=block(group,1.5,.08,.44,isCommander?0x8f7044:0x233d59,0,.18,1.2);
+ pedestal.userData.agent=name;
+ const pick=new THREE.Mesh(new THREE.BoxGeometry(2.3,2.2,2.0),new THREE.MeshBasicMaterial({visible:false}));
+ pick.position.set(0,1.0,.25);pick.userData.agent=name;group.add(pick);pickables.push(pick);
+ keys.set(name,{group,screen,badge,monitor});
+ const button=document.createElement("button");button.type="button";button.className="agent-btn";
+ button.textContent=name;button.addEventListener("click",()=>selectAgent(name));buttons.append(button);
+ keys.get(name).button=button;
+}
+function selectAgent(name){
+ if(!keys.has(name))return;
+ selected=name;
+ for(const [id,seat] of keys){
+  seat.button.setAttribute("aria-pressed",String(id===name));
+  seat.monitor.material.color.setHex(id===name?0x9ad9f0:0x0d1827);
+ }
+ renderInspector();
+}
+function renderInspector(){
+ const data=hasValid?events.get(selected):null;
+ document.getElementById("selected-name").textContent=selected;
+ document.getElementById("selected-role").textContent=roles[selected];
+ const decision=data?data.decision:"WAIT";
+ const target=document.getElementById("selected-decision");target.textContent=decision;target.className=decision;
+ document.getElementById("selected-reason").textContent=data?String(data.reason||"근거 없음"):"확인된 분석 없음";
+ document.getElementById("selected-time").textContent=hasValid?lastObserved:"—";
+ const commander=hasValid?events.get("COMMANDER"):null;
+ document.getElementById("selected-risk").textContent=commander?
+  (commander.risk_veto?"위험 보류":"위험 게이트 미작동 · 주문 승인 아님"):"확인 대기";
+}
+let lastObserved="—";
+function resetResearch(reason){
+ events.clear();hasValid=false;lastObserved="—";
+ for(const seat of keys.values()){
+  seat.screen.material.color.setHex(colors.OFFLINE);
+  seat.badge.material.color.setHex(colors.OFFLINE);
+ }
+ document.getElementById("data-mode").textContent="사용 불가";
+ document.getElementById("consensus").textContent="WAIT";
+ status.textContent="데이터 대기 / 중단 · "+String(reason);
+ renderInspector();
+}
+function verifyEnvelope(payload){
+ if(!payload||payload.paper_only!==true||payload.orders_enabled!==false||
+    payload.live_trading_approved!==false||typeof payload.realtime!=="boolean")
+  throw Error("안전 플래그 불일치");
+ const envelope=payload.events;
+ if(!envelope||envelope.paper_only!==true||envelope.orders_enabled!==false||
+    envelope.live_trading_approved!==false||!Array.isArray(envelope.events))
+  throw Error("분석 메시지 형식 오류");
+ if(envelope.events.length!==names.length||new Set(envelope.events.map(e=>e.agent_id)).size!==names.length||
+    names.some(name=>!envelope.events.some(e=>e.agent_id===name)))
+  throw Error("에이전트 집계 누락");
+ const when=new Date(envelope.observed_candle_utc);
+ if(!Number.isFinite(when.getTime()))throw Error("완료 봉 시각 오류");
+ if(payload.realtime){
+   const age=Date.now()-when.getTime();
+   if(age<0||age>12*60000)throw Error("시장 데이터 지연");
+ }
+ const out=new Map();
+ for(const record of envelope.events){
+  if(!["LONG","SHORT","WAIT"].includes(record.decision))throw Error("잘못된 판단");
+  out.set(record.agent_id,record);
+ }
+ const commander=out.get("COMMANDER");
+ let longs=0,shorts=0;
+ for(const name of names.filter(n=>n!=="COMMANDER")){
+  if(out.get(name).decision==="LONG")longs++;
+  if(out.get(name).decision==="SHORT")shorts++;
+ }
+ if(commander.long_votes!==longs||commander.short_votes!==shorts||
+    typeof commander.risk_veto!=="boolean")throw Error("COMMANDER 투표 불일치");
+ const expected=commander.risk_veto?"WAIT":longs>=3&&shorts===0?"LONG":
+  shorts>=3&&longs===0?"SHORT":"WAIT";
+ if(commander.decision!==expected)throw Error("COMMANDER 판단 불일치");
+ return {events:out,when:envelope.observed_candle_utc,realtime:payload.realtime};
+}
+async function refresh(){
+ try{
+  const response=await fetch("/api/v1/agents",{cache:"no-store"});
+  if(!response.ok)throw Error("연구 서버 대기 "+response.status);
+  const payload=await response.json();
+  const verified=verifyEnvelope(payload);
+  hasValid=true;events.clear();
+  for(const [id,record] of verified.events){
+   events.set(id,record);
+   keys.get(id).screen.material.color.setHex(colors[record.decision]);
+   keys.get(id).badge.material.color.setHex(colors[record.decision]);
+  }
+  lastObserved=verified.when;sourceMode=verified.realtime?"public_stream":"historical_csv";
+  document.getElementById("data-mode").textContent=verified.realtime?"공개 시장 스트림 / 연구":"과거 CSV / 연구";
+  document.getElementById("consensus").textContent=events.get("COMMANDER").decision;
+  status.textContent="분석 표시 완료 · "+lastObserved+" · 실제 주문 불가";
+  renderInspector();
+ }catch(error){
+  resetResearch(error instanceof Error?error.message:"API 오류");
+ }
+}
+let azimuth=.62,elevation=.63,distance=21,dragged=false,startX=0,startY=0;
+const focus=new THREE.Vector3(0,0,0);
+function updateCamera(){
+ elevation=Math.max(.28,Math.min(1.28,elevation));
+ distance=Math.max(10,Math.min(31,distance));
+ camera.position.set(Math.sin(azimuth)*Math.cos(elevation)*distance,
+                     Math.sin(elevation)*distance,Math.cos(azimuth)*Math.cos(elevation)*distance);
+ camera.lookAt(focus);
+}
+updateCamera();
+function resize(){
+ const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);
+ renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
+}
+window.addEventListener("resize",resize);
+resize();
+let downX=0,downY=0,active=false;
+renderer.domElement.addEventListener("pointerdown",e=>{
+ active=true;dragged=false;startX=e.clientX;startY=e.clientY;downX=e.clientX;downY=e.clientY;
+ renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener("pointermove",e=>{
+ if(!active)return;
+ const dx=e.clientX-downX,dy=e.clientY-downY;
+ if(Math.abs(e.clientX-startX)+Math.abs(e.clientY-startY)>5)dragged=true;
+ if(dragged){azimuth-=dx*.006;elevation+=dy*.005;updateCamera();}
+ downX=e.clientX;downY=e.clientY;
+});
+const picker=new THREE.Raycaster(),pointer=new THREE.Vector2();
+renderer.domElement.addEventListener("pointerup",e=>{
+ if(!active)return;active=false;
+ if(dragged)return;
+ const box=renderer.domElement.getBoundingClientRect();
+ pointer.set((e.clientX-box.left)/box.width*2-1,-(e.clientY-box.top)/box.height*2+1);
+ picker.setFromCamera(pointer,camera);
+ const hits=picker.intersectObjects(pickables,false);
+ if(hits.length)selectAgent(hits[0].object.userData.agent);
+});
+renderer.domElement.addEventListener("pointercancel",()=>{active=false;});
+renderer.domElement.addEventListener("wheel",e=>{e.preventDefault();distance+=Math.sign(e.deltaY)*1.0;updateCamera();},{passive:false});
+const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
+let frame=0;
+function renderFrame(){
+ frame=requestAnimationFrame(renderFrame);
+ renderer.render(scene,camera);
+}
+document.addEventListener("visibilitychange",()=>{
+ if(document.hidden){cancelAnimationFrame(frame);frame=0;}
+ else if(!frame)renderFrame();
+});
+selectAgent("COMMANDER");
+refresh();setInterval(refresh,30000);renderFrame();
+</script>
+</body></html>
