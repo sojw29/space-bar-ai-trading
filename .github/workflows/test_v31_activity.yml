@@ -1,0 +1,44 @@
+name: SPACE BAR V31 Activity States
+
+on:
+  push:
+    branches:
+      - feature/v31-agent-activity-states
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activity-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Python
+        run: python -m compileall -q agents
+      - name: Check dashboard script syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path('web/command_center.html').read_text(encoding='utf-8')
+          script = html.split('<script>', 1)[1].split('</script>', 1)[0]
+          Path('/tmp/space-bar-dashboard-v31.js').write_text(script, encoding='utf-8')
+          PY
+          node --check /tmp/space-bar-dashboard-v31.js
+      - name: Run V26-V31 contract tests
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v28_api.py
+          python agents/test_v29_dashboard.py
+          python agents/test_v30_room.py
+          python agents/test_v31_activity.py
