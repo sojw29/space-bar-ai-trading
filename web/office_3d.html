@@ -19,6 +19,17 @@ main{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px
 #market-board-status{font-size:12px;color:#bad4e6}
 #market-board-status[data-status="BLOCKED"]{color:#ffadbb}
 #market-board-status[data-status="READY"]{color:#8fe0cb}
+#commander-tally{font-size:13px;color:#d0e6f4}
+#commander-veto[data-risk="BLOCKED"]{color:#ffa4aa}
+#commander-veto[data-risk="CLEAR"]{color:#8fe3bc}
+#commander-veto[data-risk="UNKNOWN"]{color:#e0c68b}
+#commander-votes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.vote-card{background:#162e45;border:1px solid #3c5672;border-radius:9px;padding:8px;font-size:12px;color:#bed7ec}
+.vote-card strong{display:block;color:#f2faff;margin-top:5px}
+.vote-card[data-decision="LONG"]{border-color:#3b9e83}
+.vote-card[data-decision="SHORT"]{border-color:#a45b72}
+.vote-card[data-decision="WAIT"]{border-color:#856a40}
+.vote-card[data-decision="OFFLINE"]{opacity:.65}
 #agent-activity{font-size:13px;color:#c3deee;line-height:1.5}
 #agent-activity[data-status="OFFLINE"]{color:#ffb6bc}
 #agent-activity[data-status="READY"]{color:#9de6c8}
@@ -56,6 +67,13 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div class="metric"><small>연구 활동 표시</small><strong id="agent-activity" data-status="OFFLINE">확정된 연구 이벤트 대기</strong></div>
 <div class="metric"><small>위험 게이트</small><strong id="selected-risk">확인 대기</strong></div>
 <p class="notice">에이전트는 규칙 기반 연구 모듈입니다. 3D 아바타의 동작은 실제 자율 AI 작업을 뜻하지 않습니다.</p>
+</section>
+<section class="panel" id="commander-consensus-panel"><h2>COMMANDER · 3D CONSENSUS</h2>
+<div class="metric"><small>검증된 투표 합계</small><strong id="commander-tally">LONG 0 · SHORT 0 · WAIT 0</strong></div>
+<div class="metric"><small>RISK VETO</small><strong id="commander-veto" data-risk="UNKNOWN">확인 대기</strong></div>
+<div class="metric"><small>최종 연구 판단</small><strong id="commander-decision">WAIT · 주문 승인 아님</strong></div>
+<div id="commander-votes" aria-label="각 에이전트의 완료 봉 연구 투표"></div>
+<p class="notice">6개 분석 모듈의 결과를 규칙으로 집계한 연구 화면입니다. 실제 AI 회의나 주문 실행이 아닙니다.</p>
 </section>
 <section class="panel"><h2>카메라 컨트롤</h2>
 <div id="camera-toolbar" role="group" aria-label="3D 카메라">
@@ -226,6 +244,111 @@ async function refreshMarketWall(research){
  }
 }
 clearMarketWall("시장 데이터 연결 대기");
+
+/* V53: stateful visual consensus, never invented votes or account orders. */
+const voteNames=names.filter(name=>name!=="COMMANDER");
+const voteNodes=new Map();
+for(const id of voteNames){
+ const card=document.createElement("div");card.className="vote-card";
+ card.dataset.decision="OFFLINE";
+ const label=document.createElement("span");label.textContent=id;
+ const value=document.createElement("strong");value.textContent="데이터 없음";
+ card.append(label,value);document.getElementById("commander-votes").append(card);
+ voteNodes.set(id,{card,value});
+}
+const consensusCanvas=document.createElement("canvas");
+consensusCanvas.width=768;consensusCanvas.height=768;
+const consensusCtx=consensusCanvas.getContext("2d");
+const consensusTexture=new THREE.CanvasTexture(consensusCanvas);
+consensusTexture.colorSpace=THREE.SRGBColorSpace;
+const consensusWall=new THREE.Mesh(
+ new THREE.PlaneGeometry(3.05,3.05),
+ new THREE.MeshBasicMaterial({map:consensusTexture,side:THREE.DoubleSide})
+);
+consensusWall.position.set(-5.54,1.8,-5.78);
+scene.add(consensusWall);
+const consensusLinks=new Map();
+for(const id of voteNames){
+ const start=positions[id],end=positions.COMMANDER;
+ const points=[
+  new THREE.Vector3(start[0],.09,start[1]),
+  new THREE.Vector3(end[0],.09,end[1])
+ ];
+ const line=new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints(points),
+  new THREE.LineBasicMaterial({color:colors.OFFLINE,transparent:true,opacity:.48})
+ );
+ scene.add(line);consensusLinks.set(id,line);
+}
+function paintConsensusWall(result){
+ const g=consensusCtx;
+ g.fillStyle="#0a172a";g.fillRect(0,0,768,768);
+ g.strokeStyle="#45627a";g.lineWidth=6;g.strokeRect(12,12,744,744);
+ g.fillStyle="#8fdbf3";g.font="bold 37px system-ui";g.fillText("COMMANDER",35,75);
+ g.fillStyle="#bbd7ed";g.font="29px system-ui";g.fillText("VERIFIED 5m CONSENSUS",35,122);
+ if(!result){
+  g.fillStyle="#ffbac2";g.font="bold 33px system-ui";
+  g.fillText("NO VERIFIED VOTES",35,359);
+  g.font="26px system-ui";g.fillText("WAIT · ORDERS DISABLED",35,412);
+ }else{
+  g.fillStyle="#e4f5ff";g.font="bold 41px system-ui";
+  g.fillText("LONG "+result.longVotes+"  SHORT "+result.shortVotes,35,228);
+  g.fillText("WAIT "+result.waitVotes,35,286);
+  g.fillStyle=result.veto?"#f58b9a":"#86deb9";
+  g.font="bold 31px system-ui";
+  g.fillText(result.veto?"APEX RISK VETO":"NO RISK VETO",35,373);
+  g.fillStyle=result.decision==="LONG"?"#67e2b5":
+    result.decision==="SHORT"?"#ff97ab":"#e5cb8e";
+  g.font="bold 48px system-ui";g.fillText(result.decision,35,458);
+  g.fillStyle="#b0cce2";g.font="24px system-ui";
+  g.fillText("RESEARCH ONLY",35,552);g.fillText("NO LIVE ORDERS",35,593);
+ }
+ consensusTexture.needsUpdate=true;
+}
+function resetCommanderConsensus(){
+ for(const [id,node] of voteNodes){
+  node.value.textContent="데이터 없음";node.card.dataset.decision="OFFLINE";
+  consensusLinks.get(id).material.color.setHex(colors.OFFLINE);
+ }
+ document.getElementById("commander-tally").textContent="LONG 0 · SHORT 0 · WAIT 0";
+ const veto=document.getElementById("commander-veto");
+ veto.textContent="확인 대기";veto.dataset.risk="UNKNOWN";
+ document.getElementById("commander-decision").textContent="WAIT · 주문 승인 아님";
+ paintConsensusWall(null);
+}
+function renderCommanderConsensus(verified){
+ const data=verified.events,commander=data.get("COMMANDER");
+ if(!commander)throw Error("COMMANDER 투표 누락");
+ let longs=0,shorts=0,waits=0;
+ for(const id of voteNames){
+  const entry=data.get(id);
+  if(!entry||!Object.hasOwn(colors,entry.decision)||entry.decision==="OFFLINE")
+   throw Error("유효하지 않은 연구 투표");
+  if(entry.decision==="LONG")longs++;
+  else if(entry.decision==="SHORT")shorts++;
+  else waits++;
+ }
+ const expected=commander.risk_veto?"WAIT":
+  longs>=3&&shorts===0?"LONG":shorts>=3&&longs===0?"SHORT":"WAIT";
+ if(longs!==commander.long_votes||shorts!==commander.short_votes||
+  expected!==commander.decision)throw Error("CONSENSUS 불일치");
+ for(const id of voteNames){
+  const decision=data.get(id).decision,node=voteNodes.get(id);
+  node.card.dataset.decision=decision;node.value.textContent=decision;
+  consensusLinks.get(id).material.color.setHex(colors[decision]);
+ }
+ document.getElementById("commander-tally").textContent=
+  "LONG "+longs+" · SHORT "+shorts+" · WAIT "+waits;
+ const veto=document.getElementById("commander-veto");
+ veto.dataset.risk=commander.risk_veto?"BLOCKED":"CLEAR";
+ veto.textContent=commander.risk_veto?"APEX 위험 보류":"위험 거부 미작동 · 거래 승인 아님";
+ document.getElementById("commander-decision").textContent=
+  commander.decision+" · 연구용 최종 판단";
+ paintConsensusWall({longVotes:longs,shortVotes:shorts,waitVotes:waits,
+                     veto:commander.risk_veto,decision:commander.decision});
+}
+resetCommanderConsensus();
+
 function block(group,w,h,d,color,x,y,z){
  const obj=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.65,metalness:.13}));
  obj.position.set(x,y,z);group.add(obj);return obj;
@@ -316,6 +439,7 @@ function renderInspector(){
 }
 let lastObserved="—";
 function resetResearch(reason){
+ resetCommanderConsensus();
  clearMarketWall("분석 연결 종료 / 데이터 무효");
  events.clear();hasValid=false;lastObserved="—";
  for(const seat of keys.values()){
@@ -373,6 +497,7 @@ async function refresh(){
   if(!response.ok)throw Error("연구 서버 대기 "+response.status);
   const payload=await response.json();
   const verified=verifyEnvelope(payload);
+  renderCommanderConsensus(verified);
   hasValid=true;events.clear();
   for(const [id,record] of verified.events){
    events.set(id,record);
