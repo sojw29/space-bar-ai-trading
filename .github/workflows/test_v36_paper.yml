@@ -1,0 +1,30 @@
+name: SPACE BAR V36 Offline Paper Execution
+
+on:
+  push:
+    branches:
+      - feature/v36-offline-paper-execution
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile
+        run: python -m compileall -q agents
+      - name: Agent, evidence and paper contracts
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v34_ledger.py
+          python agents/test_v35_outcomes.py
+          python agents/test_v36_paper.py
