@@ -20,6 +20,7 @@ from market_board_v52 import market_board  # noqa: E402
 from launcher_diagnostics_v59 import probe_local_research, LocalEventLog  # noqa: E402
 from historical_paper_replay_v60 import replay_historical_paper  # noqa: E402
 from paper_performance_v61 import report_historical_paper  # noqa: E402
+from chronological_holdout_v62 import evaluate_chronological_holdout  # noqa: E402
 
 DEFAULT_CSV = ROOT / "data" / "history" / "BTC_5m.csv"
 LOCAL_HOST = "127.0.0.1"
@@ -118,11 +119,12 @@ def run_gui():
     health_future = None
     paper_future = None
     report_future = None
+    holdout_future = None
     paper_epoch = 0
     closing = False
     app = tk.Tk()
     app.title("SPACE BAR AI TRADING · Local Research")
-    app.geometry("850x795")
+    app.geometry("860x850")
     app.minsize(660, 660)
     app.configure(bg="#101b2e")
 
@@ -190,6 +192,7 @@ def run_gui():
         service.stop()
         paper_summary.set("PAPER · NOT RUN · local historical session stopped")
         performance_summary.set("PERFORMANCE · NOT RUN · no independent out-of-sample test")
+        holdout_summary.set("HOLDOUT · NOT RUN · local historical session stopped")
         log_event("STOPPED")
         ops_label.set("DIAGNOSTICS · stopped · simulated paper mode unavailable")
         state.set("STOPPED · local server is not running")
@@ -250,16 +253,50 @@ def run_gui():
         performance_button.configure(state="disabled")
     performance_button=ttk.Button(frame,text="Analyze paper performance (manual)",
                                    command=run_performance_report)
-    performance_button.pack(anchor="w",pady=(0,8))
+    performance_button.pack(anchor="w",pady=(0,4))
+    holdout_summary=tk.StringVar(value="HOLDOUT · NOT RUN · chronological historical test, not independently OOS")
+    ttk.Label(frame,textvariable=holdout_summary,wraplength=780,justify="left").pack(anchor="w",pady=(0,4))
+    def run_holdout():
+        nonlocal holdout_future
+        if holdout_future is not None or not service.running:
+            return
+        selected=service.history_path
+        if selected is None:
+            return
+        holdout_future=executor.submit(evaluate_chronological_holdout,selected)
+        holdout_summary.set("HOLDOUT · evaluating pre-defined historical rules")
+        holdout_button.configure(state="disabled")
+    holdout_button=ttk.Button(frame,text="Evaluate chronological holdout (manual)",
+                              command=run_holdout)
+    holdout_button.pack(anchor="w",pady=(0,8))
     ttk.Label(frame,text="LOCAL DIAGNOSTICS · no account or exchange connection").pack(anchor="w",pady=(12,2))
     log_view=tk.Text(frame,height=7,wrap="word",state="disabled",font=("Consolas",9))
     log_view.pack(fill="both",expand=True)
     log_event("STOPPED")
 
     def refresh_health():
-        nonlocal health_future,paper_future,report_future
+        nonlocal health_future,paper_future,report_future,holdout_future
         if closing:
             return
+        if holdout_future is not None and holdout_future.done():
+            try:
+                result=holdout_future.result()
+                if (result.get("orders_enabled") is not False or
+                    result.get("oos_validated") is not False):
+                    raise ValueError("Unsafe holdout result")
+                if service.running:
+                    holdout_summary.set(
+                        "HOLDOUT · development bars "+str(result["development"]["evaluated_bars"])+
+                        " / holdout bars "+str(result["holdout"]["evaluated_bars"])+
+                        " · holdout paper MDD "+str(result["holdout"]["paper_max_observed_drawdown_pct"])+"%"+
+                        " · closed trades "+str(result["holdout"]["paper_closed_trades"])+
+                        " · INDEPENDENT OOS NOT VERIFIED")
+            except Exception:
+                holdout_summary.set("HOLDOUT · unavailable / insufficient or invalid data")
+            holdout_future=None
+        holdout_button.configure(state="normal" if service.running and
+                                  holdout_future is None and
+                                  paper_future is None and report_future is None else "disabled")
         if report_future is not None and report_future.done():
             try:
                 result=report_future.result()
@@ -338,6 +375,8 @@ def run_gui():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Local historical research launcher, never live orders")
+    parser.add_argument("--holdout-report", type=Path, default=None,
+                        help="Chronological historical descriptive evaluation only, no server")
     parser.add_argument("--paper-report", type=Path, default=None,
                         help="Print descriptive hypothetical in-sample report; no server")
     parser.add_argument("--paper-replay", type=Path, default=None,
@@ -345,6 +384,10 @@ def main(argv=None):
     parser.add_argument("--check-history", type=Path, default=None,
                         help="Validate a historical CSV and exit without starting any service")
     args = parser.parse_args(argv)
+    if args.holdout_report is not None:
+        print(json.dumps(evaluate_chronological_holdout(args.holdout_report),
+                         ensure_ascii=False,indent=2))
+        return 0
     if args.paper_report is not None:
         validate_history(args.paper_report)
         print(json.dumps(report_historical_paper(args.paper_report),
