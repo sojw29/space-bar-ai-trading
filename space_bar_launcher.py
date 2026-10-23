@@ -8,6 +8,7 @@ import json
 import sys
 import threading
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import urlopen
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agents"))
 from dashboard_api_v28 import load_candles, make_handler, snapshot  # noqa: E402
 from market_board_v52 import market_board  # noqa: E402
+from launcher_diagnostics_v59 import probe_local_research, LocalEventLog  # noqa: E402
 
 DEFAULT_CSV = ROOT / "data" / "history" / "BTC_5m.csv"
 LOCAL_HOST = "127.0.0.1"
@@ -109,10 +111,14 @@ def run_gui():
         raise RuntimeError("Tkinter is not installed. Install Python with Tcl/Tk support.") from exc
 
     service = LocalResearchService()
+    events = LocalEventLog()
+    executor = ThreadPoolExecutor(max_workers=1,thread_name_prefix="spacebar-local-probe")
+    health_future = None
+    closing = False
     app = tk.Tk()
     app.title("SPACE BAR AI TRADING · Local Research")
-    app.geometry("710x465")
-    app.minsize(580, 415)
+    app.geometry("760x640")
+    app.minsize(620, 560)
     app.configure(bg="#101b2e")
 
     frame = ttk.Frame(app, padding=22)
@@ -139,6 +145,8 @@ def run_gui():
     ttk.Label(frame, textvariable=state, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=8)
     address = ttk.Label(frame, text="http://127.0.0.1:8765", foreground="#2477ab")
     address.pack(anchor="w", pady=(0, 12))
+    ops_label = tk.StringVar(value="DIAGNOSTICS · historical server stopped")
+    ttk.Label(frame,textvariable=ops_label).pack(anchor="w",pady=(0,8))
     controls = ttk.Frame(frame)
     controls.pack(fill="x")
     action = {"start": None, "stop": None}
@@ -148,19 +156,30 @@ def run_gui():
         action["start"].configure(state="disabled" if running else "normal")
         action["stop"].configure(state="normal" if running else "disabled")
 
+    def log_event(event, detail=""):
+        events.record(event, detail)
+        log_view.configure(state="normal")
+        log_view.delete("1.0","end")
+        log_view.insert("end","\n".join(events.recent()))
+        log_view.configure(state="disabled")
+
     def start_service():
         try:
             url = service.start(csv_path.get())
         except (OSError, ValueError, RuntimeError) as exc:
             state.set("NOT STARTED · " + str(exc)[:95])
+            log_event("START_FAILED","PORT_BUSY" if isinstance(exc,OSError) else "MISSING_DATA")
             messagebox.showerror("SPACE BAR research server", str(exc), parent=app)
         else:
             state.set("RUNNING · historical research only · no orders")
+            log_event("STARTED","HISTORICAL_CSV")
             webbrowser.open(url + "/dashboard")
         update_buttons()
 
     def stop_service():
         service.stop()
+        log_event("STOPPED")
+        ops_label.set("DIAGNOSTICS · stopped · simulated paper mode unavailable")
         state.set("STOPPED · local server is not running")
         update_buttons()
 
@@ -184,16 +203,44 @@ def run_gui():
     ttk.Label(frame, text="3D requires internet for Three.js and WebGL support.\n"
               "Uses existing historical snapshots; no public-market feed is started.\n"
               "Closing this window stops only the local research service.",
-              justify="left").pack(anchor="w", pady=(16, 4))
+              justify="left").pack(anchor="w", pady=(12, 4))
+    ttk.Label(frame,text="LOCAL DIAGNOSTICS · no account or exchange connection").pack(anchor="w",pady=(12,2))
+    log_view=tk.Text(frame,height=7,wrap="word",state="disabled",font=("Consolas",9))
+    log_view.pack(fill="both",expand=True)
+    log_event("STOPPED")
 
     def refresh_health():
+        nonlocal health_future
+        if closing:
+            return
         if service.running:
-            # No blocking local HTTP requests on the GUI event loop.
-            state.set("RUNNING · 127.0.0.1:8765 · historical data · orders disabled")
+            if health_future is None:
+                health_future = executor.submit(probe_local_research,service.base_url)
+            elif health_future.done():
+                try:
+                    report = health_future.result()
+                except Exception:
+                    report = {"state":"UNAVAILABLE","orders_enabled":False}
+                health_future = None
+                if report.get("state")=="READY" and report.get("orders_enabled") is False:
+                    state.set("RUNNING · historical research only · no orders")
+                    ops_label.set("API VERIFIED · historical CSV · market chart OK · paper not enabled")
+                    if not events.recent() or "CHECK_OK" not in events.recent()[-1]:
+                        log_event("CHECK_OK","HISTORICAL_CSV")
+                else:
+                    state.set("WARNING · research data not verified")
+                    ops_label.set("API CHECK FAILED · no valid signal · paper not enabled")
+                    if not events.recent() or "CHECK_FAILED" not in events.recent()[-1]:
+                        log_event("CHECK_FAILED","UNAVAILABLE")
+        else:
+            ops_label.set("DIAGNOSTICS · stopped · paper not enabled")
         app.after(2000, refresh_health)
 
     def on_close():
+        nonlocal closing
+        closing = True
         service.stop()
+        executor.shutdown(wait=False,cancel_futures=True)
         app.destroy()
 
     app.protocol("WM_DELETE_WINDOW", on_close)
