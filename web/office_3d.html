@@ -30,6 +30,13 @@ main{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px
 .vote-card[data-decision="SHORT"]{border-color:#a45b72}
 .vote-card[data-decision="WAIT"]{border-color:#856a40}
 .vote-card[data-decision="OFFLINE"]{opacity:.65}
+/* V54 local read-only operation visibility; no exchange/account status. */
+.ops-status{font-size:12px;letter-spacing:.03em}
+.ops-status[data-level="ok"]{color:#77e2bd}
+.ops-status[data-level="warn"]{color:#f0cf8d}
+.ops-status[data-level="error"]{color:#ff96a9}
+#ops-check{font-size:11px;color:#9bbad2}
+#ops-now{font-variant-numeric:tabular-nums}
 #agent-activity{font-size:13px;color:#c3deee;line-height:1.5}
 #agent-activity[data-status="OFFLINE"]{color:#ffb6bc}
 #agent-activity[data-status="READY"]{color:#9de6c8}
@@ -58,6 +65,14 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div id="stage-hint">드래그: 카메라 회전 · 휠/버튼: 확대 · 책상 클릭: 분석 근거</div>
 </section>
 <aside>
+<section class="panel" id="operations-panel"><h2>운영 상태 · LOCAL OPS</h2>
+<div class="metric"><small>RESEARCH API</small><strong id="ops-research" class="ops-status" data-level="warn">응답 대기</strong></div>
+<div class="metric"><small>DATA FEED</small><strong id="ops-feed" class="ops-status" data-level="warn">연결 확인 대기</strong></div>
+<div class="metric"><small>OBSERVED CANDLE AGE</small><strong id="ops-candle-age" class="ops-status" data-level="warn">확인 대기</strong></div>
+<div class="metric"><small>LOCAL BROWSER TIME</small><strong id="ops-now">—</strong></div>
+<div class="metric"><small>LAST LOCAL API CHECK</small><strong id="ops-check">실행 전</strong></div>
+<p class="notice" id="ops-disclosure">이 상태는 현재 브라우저와 localhost 연구 API를 확인한 결과이며 실제 거래소 계좌의 연결 상태나 실거래 가능 여부를 뜻하지 않습니다.</p>
+</section>
 <section class="panel"><h2>선택 에이전트 · 연구 정보</h2>
 <div class="metric"><small>AGENT</small><strong id="selected-name">COMMANDER</strong></div>
 <div class="metric"><small>ROLE</small><strong id="selected-role">합의 판단</strong></div>
@@ -439,6 +454,9 @@ function renderInspector(){
 }
 let lastObserved="—";
 function resetResearch(reason){
+ opsRealtime=false;
+ setOpsField("ops-research","분석 불가 · "+String(reason),"error");
+ setOpsField("ops-candle-age","확인된 분석 없음","warn");
  resetCommanderConsensus();
  clearMarketWall("분석 연결 종료 / 데이터 무효");
  events.clear();hasValid=false;lastObserved="—";
@@ -488,15 +506,70 @@ function verifyEnvelope(payload){
  if(commander.decision!==expected)throw Error("COMMANDER 판단 불일치");
  return {events:out,when:envelope.observed_candle_utc,realtime:payload.realtime};
 }
+
+/* V54: Trust only same-origin research transport status, never infer
+   exchange connectivity from browser/WebGL rendering or stale snapshots. */
+const OPS_LIVE_MAX_AGE_MS=12*60*1000;
+let opsRealtime=false,opsCheckedAt=null;
+function setOpsField(id,value,level){
+ const field=document.getElementById(id);
+ field.textContent=String(value);
+ if(level)field.dataset.level=level;
+}
+function updateOpsClock(){
+ const now=Date.now();
+ document.getElementById("ops-now").textContent=new Date(now).toLocaleString();
+ const ageField=document.getElementById("ops-candle-age");
+ if(!hasValid||lastObserved==="—"){
+  setOpsField("ops-candle-age","확인된 분석 없음","warn");
+  return;
+ }
+ const age=now-Date.parse(lastObserved);
+ if(!Number.isFinite(age)||age<0){
+  resetResearch("브라우저 시각 또는 분석 캔들 시간 오류");
+  setOpsField("ops-research","데이터 검증 실패","error");
+  return;
+ }
+ const minutes=Math.floor(age/60000);
+ ageField.textContent=minutes+"분 전 · "+(opsRealtime?"공개 스트림 확정 봉":"과거 CSV");
+ ageField.dataset.level=opsRealtime?(age>OPS_LIVE_MAX_AGE_MS?"error":"ok"):"warn";
+ if(opsRealtime&&age>OPS_LIVE_MAX_AGE_MS){
+  resetResearch("확정된 공개 스트림 캔들이 오래되었습니다");
+  setOpsField("ops-research","분석 데이터 지연","error");
+  setOpsField("ops-feed","스트림 오래됨 / 확인 필요","error");
+ }
+}
+async function verifyFeedStatus(){
+ const response=await fetch("/api/v1/feed",{cache:"no-store"});
+ if(!response.ok)throw Error("Feed HTTP "+response.status);
+ const feed=await response.json();
+ if(!feed||feed.orders_enabled!==false)throw Error("Feed safety flag rejected");
+ if(feed.mode==="public_market_data_research"){
+  const state=String(feed.state||"UNKNOWN");
+  const ready=feed.ready===true&&state==="RESEARCH_READY";
+  setOpsField("ops-feed","공개 스트림 · "+state,ready?"ok":"warn");
+  if(!ready)throw Error("Feed not ready: "+state);
+  return true;
+ }
+ if(feed.state==="HISTORICAL"&&feed.ready===false){
+  setOpsField("ops-feed","과거 CSV · 실시간 아님","warn");
+  return false;
+ }
+ throw Error("Unknown feed mode or state");
+}
+
 let refreshActive=false;
 async function refresh(){
  if(refreshActive)return;
  refreshActive=true;
+ setOpsField("ops-research","연구 API 확인 중","warn");
  try{
+  const feedIsLive=await verifyFeedStatus();
   const response=await fetch("/api/v1/agents",{cache:"no-store"});
   if(!response.ok)throw Error("연구 서버 대기 "+response.status);
   const payload=await response.json();
   const verified=verifyEnvelope(payload);
+  if(verified.realtime!==feedIsLive)throw Error("Feed/agent provenance mismatch");
   renderCommanderConsensus(verified);
   hasValid=true;events.clear();
   for(const [id,record] of verified.events){
@@ -506,6 +579,11 @@ async function refresh(){
    keys.get(id).signalState=record.decision;
   }
   lastObserved=verified.when;sourceMode=verified.realtime?"public_stream":"historical_csv";
+  opsRealtime=verified.realtime;
+  opsCheckedAt=Date.now();
+  document.getElementById("ops-check").textContent=new Date(opsCheckedAt).toLocaleString();
+  setOpsField("ops-research","검증된 연구 응답 · 주문 비활성화","ok");
+  updateOpsClock();
   document.getElementById("data-mode").textContent=verified.realtime?"공개 시장 스트림 / 연구":"과거 CSV / 연구";
   document.getElementById("consensus").textContent=events.get("COMMANDER").decision;
   status.textContent="분석 표시 완료 · "+lastObserved+" · 실제 주문 불가";
@@ -513,7 +591,11 @@ async function refresh(){
   await refreshMarketWall(verified);
  }catch(error){
   resetResearch(error instanceof Error?error.message:"API 오류");
- }finally{refreshActive=false;}
+ }finally{
+  opsCheckedAt=Date.now();
+  document.getElementById("ops-check").textContent=new Date(opsCheckedAt).toLocaleString();
+  refreshActive=false;
+ }
 }
 let azimuth=.62,elevation=.63,distance=21,dragged=false,startX=0,startY=0;
 let activeCameraView="overview";
@@ -610,6 +692,10 @@ document.addEventListener("visibilitychange",()=>{
 });
 selectAgent("COMMANDER");
 setCameraView("overview");
-refresh();setInterval(refresh,30000);renderFrame();
+refresh();
+setInterval(refresh,30000);
+setInterval(updateOpsClock,5000);
+updateOpsClock();
+renderFrame();
 </script>
 </body></html>
