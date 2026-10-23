@@ -1,0 +1,35 @@
+name: SPACE BAR V61 Historical Paper Performance Integrity
+
+on:
+  push:
+    branches:
+      - feature/v61-paper-performance-report
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulated-performance-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python compile
+        run: python -m compileall -q agents space_bar_launcher.py
+      - name: Regress local desktop and prior hypothetical controls
+        run: |
+          python agents/test_v58_launcher.py
+          python agents/test_v59_launcher_ops.py
+          python agents/test_v60_historical_paper.py
+      - name: V61 in-sample equity, drawdown and integrity tests
+        run: python agents/test_v61_paper_performance.py
+      - name: Existing portfolio accounting regressions
+        run: |
+          python agents/test_v41_portfolio.py
+          python agents/test_v42_paper_monitor.py
