@@ -21,11 +21,32 @@ def evaluate(report, evidence, reconciliation):
         blockers.append("TRADE_RECORD_REVISIONS")
     if report.get("warnings"):
         blockers.append("UPSTREAM_REPORT_WARNINGS")
+    finalized_counts = (reconciliation or {}).get("current_finalized_by_candidate_scenario")
+    if not isinstance(finalized_counts, dict):
+        blockers.append("FINALIZED_SAMPLE_COUNTS_UNAVAILABLE")
+        finalized_counts = {}
     candidates = []
     for row in report.get("candidates", []):
         reasons = list(blockers)
+        candidate_finalized = finalized_counts.get(row["candidate"], {})
+        if not isinstance(candidate_finalized, dict):
+            candidate_finalized = {}
+        sample_counts = {}
         for scenario in ("base", "stress", "severe"):
-            n = row.get(scenario + "_trades")
+            raw = row.get(scenario + "_trades")
+            finalized = candidate_finalized.get(scenario.upper(), 0)
+            if (isinstance(finalized, bool) or not isinstance(finalized, int)
+                    or finalized < 0):
+                finalized = None
+                reasons.append("INVALID_FINALIZED_" + scenario.upper() + "_COUNT")
+            if (isinstance(raw, bool) or not isinstance(raw, (int, float))
+                    or raw < 0):
+                raw = None
+            if raw is not None and finalized is not None and finalized > raw:
+                reasons.append("FINALIZED_EXCEEDS_SUMMARY_" + scenario.upper())
+            # END-of-data forced closes do not count as finalized samples.
+            n = min(raw, finalized) if raw is not None and finalized is not None else None
+            sample_counts[scenario] = n
             if n is None or n < MIN_TRADES:
                 reasons.append("INSUFFICIENT_" + scenario.upper() + "_TRADES")
             ret = row.get(scenario + "_return_pct")
@@ -36,8 +57,9 @@ def evaluate(report, evidence, reconciliation):
             reasons.append("COST_STABILITY_NOT_DEMONSTRATED")
         candidates.append({
             "candidate": row["candidate"],
+            "finalized_sample_counts": sample_counts,
             "sample_minimum_met": all(
-                row.get(s + "_trades") is not None and row[s + "_trades"] >= MIN_TRADES
+                sample_counts[s] is not None and sample_counts[s] >= MIN_TRADES
                 for s in ("base", "stress", "severe")
             ),
             "observation_quality_status": "NEEDS_MORE_EVIDENCE" if reasons else "PRELIMINARY_RESEARCH_ONLY",
