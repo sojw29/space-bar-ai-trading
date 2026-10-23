@@ -96,9 +96,31 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 .office-jump{display:inline-block;color:#90e6ff;text-decoration:underline;text-underline-offset:4px}
 @media(max-width:650px){.room{min-height:560px}.room-desk{width:110px;height:90px;min-height:90px}.room-desk .label{font-size:11px}.room-desk .role-label{font-size:8px}.room-desk .avatar{left:2px;top:33px;width:25px;height:25px;font-size:11px}.room-desk .monitor{width:43px;height:25px}.room-desk[data-agent="COMMANDER"]{top:81%}}
 @media(prefers-reduced-motion:reduce){.room-desk,.monitor{animation:none!important;transition:none!important}}
+
+/* V48: truthful display-only phases; no fabricated background agent work. */
+.room-desk{--phase-accent:#6c849e}
+.room-desk[data-phase="FETCHING"]{--phase-accent:#83d6ff;border-color:#557c9b}
+.room-desk[data-phase="OBSERVED"]{--phase-accent:#6de0b5}
+.room-desk[data-phase="WAITING"]{--phase-accent:#e7c783}
+.room-desk[data-phase="BLOCKED"]{--phase-accent:#f18b9d}
+.room-desk .phase-light{position:absolute;right:7px;bottom:6px;width:7px;height:7px;border-radius:50%;background:var(--phase-accent);box-shadow:0 0 9px var(--phase-accent)}
+.room-desk[data-phase="FETCHING"] .phase-light{animation:office-pulse 1.2s ease-in-out infinite}
+.room-desk[data-phase="BLOCKED"]{border-color:#b76673;filter:saturate(.6)}
+.room-desk[data-phase="BLOCKED"] .monitor{background:#383646;box-shadow:none}
+.room-desk[data-phase="OBSERVED"] .phase-light{background:#6de0b5}
+.room-desk[data-phase="WAITING"] .phase-light{background:#edc176}
+.room-desk .activity{max-width:78px;overflow:hidden;text-overflow:ellipsis}
+.office-phase-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}
+.office-phase-tile{border:1px solid #385371;background:#0e2137;color:#a7c5df;border-radius:8px;padding:9px 6px;font-size:11px;text-align:center}
+.office-phase-tile[data-active="true"]{border-color:#78d8ed;background:#17445a;color:#e1faff}
+.office-phase-tile[data-phase="BLOCKED"][data-active="true"]{border-color:#f09199;background:#502a38;color:#ffd3d6}
+.office-phase-note{margin:6px 0 10px;color:#abcee5;font-size:12px}
+@keyframes office-pulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+@media(max-width:650px){.office-phase-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){.room-desk[data-phase="FETCHING"] .phase-light{animation:none}}
 </style></head><body>
 <header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
-<p class="muted">Multi-Agent Research Dashboard · V47 Interactive Office</p>
+<p class="muted">Multi-Agent Research Dashboard · V48 Observable Agent Office</p>
 <span class="badge">PAPER RESEARCH ONLY · NO LIVE ORDERS</span></header>
 <main><section class="summary">
 <div class="panel"><small>SYMBOL</small><div class="value" id="symbol">BTCUSDT</div></div>
@@ -110,6 +132,12 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 <p class="muted">CSS 기반 2.5D 연구 사무실입니다. 실제 3D 엔진이나 자율 AI 캐릭터가 아닙니다. 책상을 선택하면 연구 판단 근거를 볼 수 있습니다.</p>
 <div class="office-topbar"><div class="office-legend" aria-label="신호 범례"><span class="bull">● LONG · 상승 판단</span><span class="bear">● SHORT · 하락 판단</span><span class="idle">● WAIT · 관망</span></div><a class="office-jump" href="#inspector-panel">선택 에이전트 상세 보기 ↓</a></div>
 <div class="activity-line" aria-live="polite"><span class="activity-pill" id="feed-state">기록 데이터</span><span class="activity-pill" id="risk-state">위험 검토 대기</span><span class="activity-pill" id="observation-age">데이터 시각 확인 대기</span></div>
+<div class="office-phase-strip" aria-label="연구 화면 갱신 단계">
+<div class="office-phase-tile" id="phase-fetching" data-phase="FETCHING" data-active="false">① 데이터 요청</div>
+<div class="office-phase-tile" id="phase-observed" data-phase="OBSERVED" data-active="false">② 결과 표시</div>
+<div class="office-phase-tile" id="phase-waiting" data-phase="WAITING" data-active="true">③ 다음 갱신 대기</div>
+<div class="office-phase-tile" id="phase-blocked" data-phase="BLOCKED" data-active="false">④ 데이터 중단</div>
+</div><p class="office-phase-note" id="office-phase-note" role="status">화면 갱신 상태이며, AI가 실시간으로 고민하거나 실행 중이라는 뜻은 아닙니다.</p>
 <div class="room" id="trading-room" aria-label="일곱 개의 연구 에이전트가 배치된 2.5D 사무실"><div class="room-floor" aria-hidden="true"></div></div>
 <p class="office-spotlight" id="office-spotlight" aria-live="polite"><strong>COMMANDER</strong> · 데이터 확인 대기 · 실제 주문 불가</p>
 </section>
@@ -173,6 +201,9 @@ let latestCandle="—";
 let lastFailure=true;
 let selectedAgent="COMMANDER";
 let isLiveTransport=false;
+let officePhase="WAITING";
+let latestValidObservation=null;
+const phaseNames={FETCHING:"데이터 요청 중",OBSERVED:"확정된 분석 결과 수신",WAITING:"다음 화면 갱신 대기",BLOCKED:"분석 결과 사용 불가"};
 const roleLabels={ATLAS:"추세 분석",ORBIT:"거래량",ECHO:"돌파 관찰",PULSE:"모멘텀",QUANT:"검증 대기",APEX:"위험 점검",COMMANDER:"합의 판단"};
 const consensusTiles=new Map();
 const voteGrid=document.getElementById("consensus-votes");
@@ -230,6 +261,37 @@ function renderConsensus(envelope){
  document.getElementById("consensus-evidence").textContent=
   "판단 추적: "+String(envelope.observed_candle_utc||"시각 없음")+" · "+(isLiveTransport?"공개 스트림":"과거 CSV");
 }
+function setOfficePhase(phase, note){
+ if(!Object.hasOwn(phaseNames,phase))return;
+ officePhase=phase;
+ for(const item of ["FETCHING","OBSERVED","WAITING","BLOCKED"]){
+  const tile=document.getElementById("phase-"+item.toLowerCase());
+  tile.dataset.active=String(item===phase);
+ }
+ document.getElementById("office-phase-note").textContent=
+  phaseNames[phase]+" · "+String(note||"읽기 전용 연구 화면");
+ for(const {desk,activity} of roomNodes.values()){
+  desk.dataset.phase=phase;
+  if(phase==="BLOCKED"){desk.classList.add("offline-station");
+   activity.textContent="데이터 중단";activity.className="activity offline";}
+  else if(phase==="FETCHING"){activity.textContent="결과 요청";activity.className="activity";}
+  else if(phase==="WAITING" && lastFailure){activity.textContent="확인 대기";}
+  else if(phase==="OBSERVED"||phase==="WAITING"){
+   if(!lastFailure){
+    desk.classList.remove("offline-station");
+    const id=desk.dataset.agent;
+    const current=latestEvents.get(id);
+    if(current){
+     const commander=latestEvents.get("COMMANDER");
+     const veto=id==="APEX"&&commander&&commander.risk_veto===true;
+     activity.textContent=veto?"위험 경고":
+      current.decision==="WAIT"?"관망":"분석 완료";
+     activity.className="activity"+(veto?" warning":"");
+    }
+   }
+  }
+ }
+}
 function selectAgent(id){
  if(!ids.includes(id))return;
  selectedAgent=id;
@@ -275,7 +337,9 @@ for(const id of ids){
  desk.setAttribute("role","button");desk.setAttribute("tabindex","0");desk.setAttribute("aria-label",id+" 분석 보기");
  desk.addEventListener("click",()=>selectAgent(id));
  desk.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();selectAgent(id);}});
- desk.append(monitor,avatar,label,role,signal,activity);room3d.append(desk);roomNodes.set(id,{desk,signal,activity});
+ const phaseLight=document.createElement("span");phaseLight.className="phase-light";
+ phaseLight.setAttribute("aria-hidden","true");desk.dataset.phase="WAITING";
+ desk.append(monitor,avatar,label,role,signal,activity,phaseLight);room3d.append(desk);roomNodes.set(id,{desk,signal,activity});
 }
 for(const id of ids){
  const card=document.createElement("article");card.className="agent";
@@ -292,7 +356,7 @@ function resetRoom(message){
  for(const id of ids){
   const node=nodes.get(id),station=roomNodes.get(id);
   node.state.textContent="WAIT";node.state.className="state WAIT";node.reason.textContent=message;
-  station.desk.className="room-desk WAIT offline-station";station.signal.textContent="WAIT";station.signal.className="signal WAIT";
+  station.desk.className="room-desk WAIT offline-station";station.desk.dataset.phase="BLOCKED";station.signal.textContent="WAIT";station.signal.className="signal WAIT";
   station.activity.textContent="연결 대기";station.activity.className="activity offline";station.desk.removeAttribute("title");
  }
 }
@@ -375,6 +439,7 @@ async function refreshAnalytics(){
  }catch(error){reset("기록을 확인할 수 없습니다: "+error.message);}
 }
 async function refresh(){
+ setOfficePhase("FETCHING","공개/과거 데이터 API 응답 대기 · 신호 계산 중이라는 의미 아님");
  try{
   const response=await fetch("/api/v1/agents",{cache:"no-store"});
   if(!response.ok)throw Error("HTTP "+response.status);
@@ -391,6 +456,7 @@ async function refresh(){
   if(!Number.isFinite(candleDate.getTime()))throw Error("캔들 시간 오류");
   const ageMinutes=Math.round((Date.now()-candleDate.getTime())/60000);
   const stale=ageMinutes>30||ageMinutes<0;
+  if(data.realtime && (ageMinutes<0||ageMinutes>12))throw Error("실시간 확정 봉 데이터 지연");
   const ageNode=document.getElementById("observation-age");
   ageNode.textContent="마지막 관측 "+ageMinutes+"분 전"+(stale?" · 오래된 데이터":"");
   ageNode.className="activity-pill"+(stale?" offline":"");
@@ -410,6 +476,7 @@ async function refresh(){
   latestCandle=envelope.observed_candle_utc;
   lastFailure=false;
   isLiveTransport=data.realtime;
+  latestValidObservation=envelope.observed_candle_utc;
   renderInspector();
   renderSpotlight();
   const commander=envelope.events.find(x=>x.agent_id==="COMMANDER");
@@ -418,6 +485,10 @@ async function refresh(){
   document.getElementById("status").textContent=data.realtime?"공개 시장 스트림 연구 결과 · 실거래 주문 불가":"로컬 연구 서버 연결됨 · 과거 CSV 스냅샷 · 주문 불가";
   document.getElementById("feed-state").textContent=data.realtime?"공개 시장 데이터 · 완료 봉 기준":"과거 데이터 · 실시간 아님";
   document.getElementById("feed-state").className="activity-pill";
+  setOfficePhase("OBSERVED",data.realtime?
+   "공개 스트림의 확정 봉 판단 표시 · 주문 불가":
+   "과거 CSV 스냅샷 표시 · 실시간 추론 아님");
+  setOfficePhase("WAITING","마지막 관측: "+latestValidObservation+" · 30초마다 갱신 확인");
  }catch(error){
   document.getElementById("status").textContent="데이터를 표시할 수 없습니다: "+error.message;
   document.getElementById("decision").textContent="WAIT";
@@ -436,11 +507,13 @@ async function refresh(){
   lastFailure=true;
   latestEvents.clear();
   latestCandle="—";
+  latestValidObservation=null;
   resetRoom("데이터 수신 실패");
   resetConsensus();
   isLiveTransport=false;
   renderInspector();
   renderSpotlight();
+  setOfficePhase("BLOCKED","사용 가능한 새 분석 결과 없음 · "+error.message);
  }
 }
 refresh();refreshPaper();refreshAnalytics();setInterval(refresh,30000);setInterval(refreshPaper,30000);setInterval(refreshAnalytics,30000);
