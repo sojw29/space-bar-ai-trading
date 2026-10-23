@@ -119,10 +119,11 @@ def dispatch_feed_event(store, paper, journal, item):
     if paper is None:
         return
     try:
+        previous_paper_state = paper.state
         paper.consume(item)
         if journal is not None and (
                 item.get("type") == "research_events" or
-                paper.state == "HALTED"):
+                (paper.state == "HALTED" and previous_paper_state != "HALTED")):
             snap = paper.snapshot()
             journal.append(
                 "feed_halt" if snap["state"] == "HALTED" else "paper_snapshot", snap)
