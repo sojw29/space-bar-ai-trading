@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "agents"))
 from dashboard_api_v28 import load_candles, make_handler, snapshot  # noqa: E402
 from market_board_v52 import market_board  # noqa: E402
 from launcher_diagnostics_v59 import probe_local_research, LocalEventLog  # noqa: E402
+from historical_paper_replay_v60 import replay_historical_paper  # noqa: E402
 
 DEFAULT_CSV = ROOT / "data" / "history" / "BTC_5m.csv"
 LOCAL_HOST = "127.0.0.1"
@@ -114,11 +115,12 @@ def run_gui():
     events = LocalEventLog()
     executor = ThreadPoolExecutor(max_workers=1,thread_name_prefix="spacebar-local-probe")
     health_future = None
+    paper_future = None
     closing = False
     app = tk.Tk()
     app.title("SPACE BAR AI TRADING · Local Research")
-    app.geometry("760x640")
-    app.minsize(620, 560)
+    app.geometry("800x735")
+    app.minsize(640, 620)
     app.configure(bg="#101b2e")
 
     frame = ttk.Frame(app, padding=22)
@@ -164,6 +166,7 @@ def run_gui():
         log_view.configure(state="disabled")
 
     def start_service():
+        paper_summary.set("PAPER · NOT RUN · click replay to simulate historical results")
         try:
             url = service.start(csv_path.get())
         except (OSError, ValueError, RuntimeError) as exc:
@@ -178,6 +181,7 @@ def run_gui():
 
     def stop_service():
         service.stop()
+        paper_summary.set("PAPER · NOT RUN · local historical session stopped")
         log_event("STOPPED")
         ops_label.set("DIAGNOSTICS · stopped · simulated paper mode unavailable")
         state.set("STOPPED · local server is not running")
@@ -204,15 +208,53 @@ def run_gui():
               "Uses existing historical snapshots; no public-market feed is started.\n"
               "Closing this window stops only the local research service.",
               justify="left").pack(anchor="w", pady=(12, 4))
+    paper_summary=tk.StringVar(value="PAPER · NOT RUN · explicit historical replay only")
+    ttk.Label(frame,text="HISTORICAL PAPER REPLAY · simulated fills / NO ORDERS").pack(anchor="w",pady=(8,2))
+    ttk.Label(frame,textvariable=paper_summary,wraplength=720,justify="left").pack(anchor="w",pady=(0,4))
+    replay_button=None
+    def run_paper_replay():
+        nonlocal paper_future
+        if paper_future is not None or not service.running:
+            return
+        # Capture the approved file path before submitting a background job.
+        selected=service.history_path
+        if selected is None:
+            return
+        paper_future=executor.submit(replay_historical_paper,selected)
+        paper_summary.set("PAPER · computing historical close-price hypothetical replay")
+        replay_button.configure(state="disabled")
+
+    replay_button=ttk.Button(frame,text="Run historical paper replay (manual)",
+                             command=run_paper_replay)
+    replay_button.pack(anchor="w",pady=(0,10))
     ttk.Label(frame,text="LOCAL DIAGNOSTICS · no account or exchange connection").pack(anchor="w",pady=(12,2))
     log_view=tk.Text(frame,height=7,wrap="word",state="disabled",font=("Consolas",9))
     log_view.pack(fill="both",expand=True)
     log_event("STOPPED")
 
     def refresh_health():
-        nonlocal health_future
+        nonlocal health_future,paper_future
         if closing:
             return
+        if paper_future is not None and paper_future.done():
+            try:
+                paper=paper_future.result()
+                if paper.get("orders_enabled") is not False or paper.get("paper_only") is not True:
+                    raise ValueError("Unsafe historical replay")
+                position=paper.get("paper_position")
+                side=position.get("side","NONE") if isinstance(position,dict) else "NONE"
+                paper_summary.set(
+                    "PAPER · simulated cash "+str(paper["paper_cash"])+
+                    " · mark equity "+str(paper["paper_equity_mark_to_close"])+
+                    " · realized net "+str(paper["paper_net_realized"])+
+                    " · position "+side+
+                    " · entries "+str(paper["paper_entries"])+
+                    " / exits "+str(paper["paper_exits"])+
+                    (" · HALTED" if paper["halted"] else ""))
+            except Exception:
+                paper_summary.set("PAPER · historical replay unavailable / invalid history")
+            paper_future=None
+        replay_button.configure(state="normal" if service.running and paper_future is None else "disabled")
         if service.running:
             if health_future is None:
                 health_future = executor.submit(probe_local_research,service.base_url)
@@ -251,9 +293,15 @@ def run_gui():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Local historical research launcher, never live orders")
+    parser.add_argument("--paper-replay", type=Path, default=None,
+                        help="Print an explicit historical-only hypothetical paper replay and exit")
     parser.add_argument("--check-history", type=Path, default=None,
                         help="Validate a historical CSV and exit without starting any service")
     args = parser.parse_args(argv)
+    if args.paper_replay is not None:
+        validate_history(args.paper_replay)
+        print(json.dumps(replay_historical_paper(args.paper_replay),ensure_ascii=False,indent=2))
+        return 0
     if args.check_history is not None:
         validate_history(args.check_history)
         print("Valid BTC 5m history; no server started")
