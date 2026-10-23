@@ -16,7 +16,7 @@ class V57Quality(unittest.TestCase):
             self.assertIn(part,self.html)
     def test_pause_reset_and_no_trade_regression(self):
         for part in ('function stopRendering()','resetPerformanceSample();',
-                     'if(document.hidden){stopRendering();',
+                     'if(document.hidden)stopRendering();',
                      'setRenderState("WebGL 오류")',
                      'function resetResearch(reason)','function verifyEnvelope(payload)',
                      'PAPER RESEARCH ONLY'):
