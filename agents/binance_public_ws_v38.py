@@ -69,7 +69,7 @@ def parse_public_kline(message):
     return candle
 
 
-def run_forever(*, connect=None, emit=None, sleep=None, max_attempts=None):
+def run_forever(*, connect=None, emit=None, sleep=None, max_attempts=None, bootstrap=None):
     """Process opt-in public messages. Connection exceptions force fresh warmup.
 
     `connect` is an injected websocket factory for offline tests. The
@@ -96,6 +96,12 @@ def run_forever(*, connect=None, emit=None, sleep=None, max_attempts=None):
               "paper_only": True, "orders_enabled": False})
         try:
             connection = connect()
+            overlap = None
+            if bootstrap is not None:
+                # Opt-in V40 warmup is safe only after the socket is open.
+                # An invalid/stale REST snapshot causes a full reconnect and
+                # no previous candle or signal can survive.
+                overlap = bootstrap(stream)
             emit({"type": "feed_status", "state": "WARMING_UP",
                   "buffered_bars": 0, "paper_only": True, "orders_enabled": False})
             while True:
@@ -105,6 +111,17 @@ def run_forever(*, connect=None, emit=None, sleep=None, max_attempts=None):
                 try:
                     candle = parse_public_kline(raw)
                     if candle is None:
+                        continue
+                    if overlap is not None and candle["timestamp"] <= overlap["timestamp"]:
+                        if candle["timestamp"] == overlap["timestamp"]:
+                            from public_warmup_v40 import compare_overlap
+                            if not compare_overlap(candle, overlap):
+                                raise ValueError("WS/REST last candle overlap conflict")
+                        # Older closed updates are only ignored when the
+                        # last candle overlap matches exactly. Older events
+                        # are unsafe: reset rather than skip them.
+                        else:
+                            raise ValueError("WS delivered a candle older than REST warmup")
                         continue
                     previous_resets = stream.status["gap_resets"]
                     event = stream.ingest(candle)
