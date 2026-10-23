@@ -26,6 +26,7 @@ class LiveResearchStore:
         self._clock = clock or time.time
         self._state = "NOT_STARTED"
         self._payload = None
+        self._market = None
         self._received_at = None
 
     def consume(self, item):
@@ -40,6 +41,7 @@ class LiveResearchStore:
                     raise ValueError("Unknown feed state")
                 self._state = state
                 self._payload = None
+                self._market = None
                 self._received_at = None
             elif kind == "research_events":
                 envelope = item.get("payload")
@@ -59,6 +61,16 @@ class LiveResearchStore:
                 event_age = float(self._clock()) - (observed + 300)
                 if not 0 <= event_age <= MAX_AGE_SECONDS:
                     raise ValueError("Candle event too old or not yet complete")
+                market_data = item.get("market_candles")
+                board = None
+                if market_data is not None:
+                    from market_board_v52 import market_board
+                    board = market_board(
+                        market_data, realtime=True,
+                        source="public_binance_usdm_ws", now=self._clock())
+                    if board["last_closed_timestamp"] != int(observed):
+                        raise ValueError("Market board candle and research timestamp mismatch")
+                self._market = board
                 self._payload = envelope
                 self._received_at = float(self._clock())
                 self._state = "RESEARCH_READY"
@@ -72,6 +84,7 @@ class LiveResearchStore:
             stale = age is not None and age > MAX_AGE_SECONDS
             if stale:
                 self._payload = None
+                self._market = None
                 self._received_at = None
                 self._state = "STALE"
             return {
@@ -101,6 +114,17 @@ class LiveResearchStore:
                 "live_trading_approved": False,
                 "independent_oos_verified": False,
             }
+
+
+    def market_snapshot(self):
+        """Read-only chart, available only for a fresh validated feed."""
+        if not self.status()["ready"]:
+            raise FeedUnavailable("No current market data")
+        with self._lock:
+            if self._state != "RESEARCH_READY" or self._market is None:
+                raise FeedUnavailable("Market board not available")
+            from copy import deepcopy
+            return deepcopy(self._market)
 
 
 

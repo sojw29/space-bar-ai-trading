@@ -135,7 +135,8 @@ def run_forever(*, connect=None, emit=None, sleep=None, max_attempts=None, boots
                               "realtime_transport": True,
                               "paper_only": True, "orders_enabled": False,
                               "payload": event,
-                              "closed_candle": candle})
+                              "closed_candle": candle,
+                              "market_candles": stream.recent_closed_candles(60)})
                 except (ValueError, StreamIntegrityError) as exc:
                     # A malformed, duplicated, or out-of-order *closed*
                     # candle destroys continuity assurance.
