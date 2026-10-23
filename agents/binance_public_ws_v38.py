@@ -134,7 +134,8 @@ def run_forever(*, connect=None, emit=None, sleep=None, max_attempts=None, boots
                               "source": "public_binance_usdm_ws",
                               "realtime_transport": True,
                               "paper_only": True, "orders_enabled": False,
-                              "payload": event})
+                              "payload": event,
+                              "closed_candle": candle})
                 except (ValueError, StreamIntegrityError) as exc:
                     # A malformed, duplicated, or out-of-order *closed*
                     # candle destroys continuity assurance.
