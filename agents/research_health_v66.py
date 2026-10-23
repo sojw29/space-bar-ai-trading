@@ -11,9 +11,33 @@ def read_json(path):
     except (OSError, ValueError):
         return None
 
+def report_age_status(report, now, max_age_hours=24):
+    """Reject absent, future or stale reports; no stale PASS reuse."""
+    raw = report.get("generated_utc") if isinstance(report, dict) else None
+    if not isinstance(raw, str):
+        return "MISSING_GENERATED_TIME"
+    try:
+        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return "INVALID_GENERATED_TIME"
+    if stamp.tzinfo is None:
+        return "INVALID_GENERATED_TIME"
+    age_seconds = (now - stamp.astimezone(timezone.utc)).total_seconds()
+    if age_seconds < -300:
+        return "FUTURE_GENERATED_TIME"
+    if age_seconds > max_age_hours * 3600:
+        return "STALE_REPORT"
+    return None
+
+
 def aggregate(v63, v64, v65, now=None):
     now = now or datetime.now(timezone.utc)
     blockers, warnings = [], []
+    for version, report in (("V63", v63), ("V64", v64), ("V65", v65)):
+        if isinstance(report, dict):
+            issue = report_age_status(report, now)
+            if issue:
+                blockers.append(version + "_" + issue)
     if not isinstance(v63, dict) or v63.get("version") != "V63.0":
         blockers.append("V63_REPORT_MISSING_OR_INVALID")
     else:
