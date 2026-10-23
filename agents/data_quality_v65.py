@@ -13,7 +13,9 @@ def score_file(path, timeframe, now=None):
     result = {"path": str(path), "timeframe_minutes": timeframe,
               "archive": lag, "rows": 0, "gaps": 0, "missing_internal_bars": 0,
               "invalid_ohlcv_rows": 0, "duplicate_or_out_of_order": 0,
-              "coverage_pct": None, "status": "UNVERIFIED", "research_usable": False}
+              "coverage_pct": None, "status": "UNVERIFIED", "research_usable": False,
+              "expected_bars": 365 * 24 * 60 // timeframe,
+              "missing_start_bars": None, "missing_end_bars": None}
     if lag["status"] == "ERROR":
         result["status"] = "FAIL"
         return result
@@ -52,12 +54,23 @@ def score_file(path, timeframe, now=None):
         if first is None or last is None:
             result["status"] = "FAIL"
             return result
-        expected = (last - first) // (timeframe * 60) + 1
-        result["coverage_pct"] = round(100 * (expected - result["missing_internal_bars"]) / expected, 4) if expected > 0 else None
+        # Coverage must include the entire 365-day requested archive window.
+        # A short, internally contiguous file is not sufficient evidence.
+        interval = timeframe * 60
+        expected_last = int(datetime.fromisoformat(
+            lag["expected_last_closed_candle_utc"]).timestamp())
+        expected_start = expected_last - (result["expected_bars"] - 1) * interval
+        result["missing_start_bars"] = max(0, (first - expected_start) // interval)
+        result["missing_end_bars"] = max(0, (expected_last - last) // interval)
+        missing = (result["missing_start_bars"] + result["missing_end_bars"]
+                   + result["missing_internal_bars"])
+        result["coverage_pct"] = round(
+            100 * max(0, result["expected_bars"] - missing) / result["expected_bars"], 4)
         invalid = result["invalid_ohlcv_rows"] or result["duplicate_or_out_of_order"]
-        if invalid or result["rows"] < 2:
+        if invalid or first < expected_start or result["rows"] < 2:
             result["status"] = "FAIL"
-        elif result["missing_internal_bars"] or lag["status"] != "ON_EXPECTED_ARCHIVE_CUTOFF":
+        elif (missing or last > expected_last
+              or lag["status"] != "ON_EXPECTED_ARCHIVE_CUTOFF"):
             result["status"] = "REVIEW"
         else:
             result["status"] = "PASS"
