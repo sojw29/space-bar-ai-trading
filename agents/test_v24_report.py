@@ -26,6 +26,14 @@ class V24Tests(unittest.TestCase):
         self.assertFalse(report["candidates"][0]["cost_return_monotonic"])
         self.assertIn("NONMONOTONIC_COST_RETURNS_A", report["warnings"])
 
+    def test_v20_integrity_pass_is_reported(self):
+        rows = [{"candidate": "A", "scenario": "BASE", "return_pct": "1"}]
+        good = v24.summarize(rows, v20={"integrity_pass": True, "errors": []})
+        bad = v24.summarize(rows, v20={"integrity_pass": False, "errors": ["x"]})
+        self.assertEqual(good["v20_audit_status"], "PASS")
+        self.assertEqual(bad["v20_audit_status"], "FAIL")
+        self.assertIn("V20_INTEGRITY_ERRORS", bad["warnings"])
+
     def test_duplicate_scenario_fails(self):
         rows = [{"candidate": "A", "scenario": "BASE"}] * 2
         with self.assertRaises(ValueError):

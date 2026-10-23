@@ -27,10 +27,39 @@ class V25Tests(unittest.TestCase):
                         scenario + "_profit_factor": 1.5})
         result = v25.evaluate({"warnings": [], "candidates": [row]},
             {"integrity_pass": True, "prior_evidence_available": True},
-            {"previous_snapshot_available": True, "status": "OBSERVATION_ONLY"})
+            {"previous_snapshot_available": True, "status": "OBSERVATION_ONLY",
+             "current_finalized_by_candidate_scenario": {"A": {"BASE": 40, "STRESS": 40, "SEVERE": 40}}})
         self.assertEqual(result["candidates"][0]["observation_quality_status"], "PRELIMINARY_RESEARCH_ONLY")
         self.assertFalse(result["independent_oos_verified"])
         self.assertFalse(result["live_trading_approved"])
+
+    def test_forced_end_rows_cannot_meet_sample_minimum(self):
+        row = {"candidate": "A", "cost_return_monotonic": True}
+        for scenario in ("base", "stress", "severe"):
+            row.update({scenario + "_trades": 40, scenario + "_return_pct": 1.0,
+                        scenario + "_profit_factor": 1.5})
+        result = v25.evaluate({"warnings": [], "candidates": [row]},
+            {"integrity_pass": True, "prior_evidence_available": True},
+            {"previous_snapshot_available": True, "status": "OBSERVATION_ONLY",
+             "current_finalized_by_candidate_scenario": {
+                 "A": {"BASE": 0, "STRESS": 0, "SEVERE": 0}}})
+        assessed = result["candidates"][0]
+        self.assertFalse(assessed["sample_minimum_met"])
+        self.assertEqual(assessed["finalized_sample_counts"]["base"], 0)
+        self.assertIn("INSUFFICIENT_BASE_TRADES", assessed["reasons"])
+        self.assertEqual(assessed["observation_quality_status"], "NEEDS_MORE_EVIDENCE")
+
+    def test_missing_finalized_breakdown_fails_closed(self):
+        row = {"candidate": "A", "cost_return_monotonic": True}
+        for scenario in ("base", "stress", "severe"):
+            row.update({scenario + "_trades": 40, scenario + "_return_pct": 1.0,
+                        scenario + "_profit_factor": 1.5})
+        assessed = v25.evaluate({"warnings": [], "candidates": [row]},
+            {"integrity_pass": True, "prior_evidence_available": True},
+            {"previous_snapshot_available": True, "status": "OBSERVATION_ONLY"})["candidates"][0]
+        self.assertIn("FINALIZED_SAMPLE_COUNTS_UNAVAILABLE", assessed["reasons"])
+        self.assertFalse(assessed["sample_minimum_met"])
+
 
 
 if __name__ == "__main__":

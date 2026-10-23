@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tester_v18 as v18
@@ -51,6 +52,45 @@ class RegressionTests(unittest.TestCase):
                     exit_price="51", net_pnl_usd="1", reason="TP")
         result = v21.reconcile(None, [base, base])
         self.assertEqual(len(result["duplicate_current_ids"]), 1)
+
+    def test_artifact_layout_resolution(self):
+        # upload-artifact may strip the shared reports/ parent.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            v21_root = root / "previous_v21"
+            v22_root = root / "previous_v22"
+            (v21_root / "v17").mkdir(parents=True)
+            (v22_root / "v22").mkdir(parents=True)
+            (v21_root / "v17" / "trades.csv").write_text("candidate,scenario\\n")
+            (v22_root / "v22" / "evidence.json").write_text("{}")
+            with patch.object(v21, "PREVIOUS", v21_root / "trades.csv"), \
+                 patch.object(v22, "PREVIOUS", v22_root):
+                self.assertEqual(v21.previous_trades_path(),
+                                 v21_root / "v17" / "trades.csv")
+                self.assertEqual(v22.previous_evidence_path(),
+                                 v22_root / "v22" / "evidence.json")
+                (v21_root / "reports" / "v17").mkdir(parents=True)
+                (v22_root / "reports" / "v22").mkdir(parents=True)
+                (v21_root / "v17" / "trades.csv").unlink()
+                (v22_root / "v22" / "evidence.json").unlink()
+                (v21_root / "reports" / "v17" / "trades.csv").write_text("candidate,scenario\\n")
+                (v22_root / "reports" / "v22" / "evidence.json").write_text("{}")
+                self.assertEqual(v21.previous_trades_path(),
+                                 v21_root / "reports" / "v17" / "trades.csv")
+                self.assertEqual(v22.previous_evidence_path(),
+                                 v22_root / "reports" / "v22" / "evidence.json")
+
+    def test_v21_finalized_counts_exclude_end(self):
+        rows = [
+            dict(candidate="A", scenario="BASE", side="LONG",
+                 entry_time="100", entry_price="50", reason="TP"),
+            dict(candidate="A", scenario="BASE", side="LONG",
+                 entry_time="200", entry_price="50", reason="END"),
+            dict(candidate="A", scenario="STRESS", side="LONG",
+                 entry_time="300", entry_price="50", reason="SL"),
+        ]
+        counts = v21.finalized_by_scenario(v21.closed(rows)[0])
+        self.assertEqual(counts, {"A": {"BASE": 1, "STRESS": 1}})
 
     def test_v22_candle_integrity(self):
         with tempfile.TemporaryDirectory() as directory:

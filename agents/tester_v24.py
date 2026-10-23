@@ -87,7 +87,8 @@ def summarize(rows, v20=None, v21=None, v22=None):
         "scenario_row_count": len(rows),
         "missing_scenarios": [{"candidate": c, "scenario": s} for c, s in missing],
         "warnings": sorted(set(warnings)),
-        "v20_audit_status": v20.get("status") if v20 else None,
+        "v20_audit_status": ("PASS" if v20.get("integrity_pass") is True else "FAIL")
+        if v20 is not None else None,
         "v21_reconciliation_status": v21.get("status") if v21 else None,
         "v22_evidence_integrity_pass": v22.get("integrity_pass") if v22 else None,
         "independent_oos_verified": False,

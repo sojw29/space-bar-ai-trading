@@ -78,12 +78,40 @@ def reconcile(previous, current):
     }
 
 
+def previous_trades_path():
+    """Resolve GitHub artifact layouts without silently using current-run trades.
+
+    Multi-path upload-artifact archives normally extract as v17/trades.csv,
+    while older archives may include reports/v17/trades.csv.
+    An explicit override is treated strictly, with no fallback.
+    """
+    if PREVIOUS.exists() or os.environ.get("V21_PREVIOUS_TRADES"):
+        return PREVIOUS
+    for candidate in (PREVIOUS.parent / "v17" / "trades.csv",
+                      PREVIOUS.parent / "reports" / "v17" / "trades.csv"):
+        if candidate.exists():
+            return candidate
+    return PREVIOUS
+
+
+def finalized_by_scenario(finalized):
+    counts = {}
+    for trade in finalized.values():
+        candidate, scenario = trade["candidate"], trade["scenario"]
+        counts.setdefault(candidate, {})
+        counts[candidate][scenario] = counts[candidate].get(scenario, 0) + 1
+    return counts
+
+
 def run():
     v20.audit()
     current = read(CURRENT)
     if current is None:
         raise RuntimeError("Missing V17 current trade report")
-    result = reconcile(read(PREVIOUS), current)
+    prior_path = previous_trades_path()
+    result = reconcile(read(prior_path), current)
+    result["current_finalized_by_candidate_scenario"] = finalized_by_scenario(closed(current)[0])
+    result["previous_snapshot_source"] = str(prior_path) if prior_path.exists() else None
     OUT.mkdir(parents=True, exist_ok=True)
     report = {
         "version": "V21.0",

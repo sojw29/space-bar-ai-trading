@@ -32,6 +32,25 @@ jobs:
           python agents/test_v25_readiness.py
       - name: Collect market history
         run: python agents/history.py
+      - name: Restore prior main V21/V22 snapshots (best effort)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p previous_v21 previous_v22
+          for version in v21 v22; do
+            case "$version" in
+              v21) artifact=space-bar-v21-audit; target=previous_v21 ;;
+              v22) artifact=space-bar-v22-evidence; target=previous_v22 ;;
+            esac
+            id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "backtest_${version}.yml" --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
+            if [ -n "$id" ]; then
+              gh run download "$id" --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir "$target" ||
+                echo "WARNING: Previous $version artifact unavailable; evidence remains unverified"
+            else
+              echo "WARNING: No previous successful $version main run"
+            fi
+          done
       - name: Run V25 evidence readiness
         run: python agents/tester_v25.py
       - name: Upload paper research reports
