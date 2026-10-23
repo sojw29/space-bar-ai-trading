@@ -1,0 +1,22 @@
+name: SPACE BAR V64 Archive Lag Diagnostics
+on:
+  push:
+    paths:
+      - 'agents/archive_lag_v64.py'
+      - 'agents/test_v64_archive_lag.py'
+      - '.github/workflows/test_v64_archive_lag.yml'
+  pull_request:
+    paths:
+      - 'agents/archive_lag_v64.py'
+      - 'agents/test_v64_archive_lag.py'
+      - '.github/workflows/test_v64_archive_lag.yml'
+  workflow_dispatch:
+jobs:
+  archive-lag-offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v64_archive_lag.py' -v
