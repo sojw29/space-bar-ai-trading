@@ -1,0 +1,22 @@
+name: SPACE BAR V67 Offline Research Pipeline
+on:
+  push:
+    paths:
+      - 'agents/research_pipeline_v67.py'
+      - 'agents/test_v67_pipeline.py'
+      - '.github/workflows/test_v67_pipeline.yml'
+  pull_request:
+    paths:
+      - 'agents/research_pipeline_v67.py'
+      - 'agents/test_v67_pipeline.py'
+      - '.github/workflows/test_v67_pipeline.yml'
+  workflow_dispatch:
+jobs:
+  offline-pipeline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v67_pipeline.py' -v
