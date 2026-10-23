@@ -42,6 +42,12 @@ class ClosedCandleStream:
             "orders_enabled": False,
         }
 
+    def recent_closed_candles(self, limit=60):
+        """Immutable-by-copy completed candle observations for read-only UI."""
+        if isinstance(limit,bool) or not isinstance(limit,int) or not 1<=limit<=80:
+            raise ValueError("Invalid market-board limit")
+        return [dict(row) for row in list(self._candles)[-limit:]]
+
     def ingest(self, candle):
         """Return a V27 envelope after warm-up; otherwise None.
 
