@@ -1,0 +1,49 @@
+name: SPACE BAR V55 WebGL Runtime Recovery
+
+on:
+  push:
+    branches:
+      - feature/v55-webgl-runtime-recovery
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-fallback-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Python
+        run: python -m compileall -q agents
+      - name: Syntax-check fallback classic script and 3D ES module
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('web/office_3d.html').read_text(encoding='utf-8')
+          classic=s.split('<script>',1)[1].split('</script>',1)[0]
+          module=s.split('<script type="module">',1)[1].split('</script>',1)[0]
+          Path('/tmp/spacebar-v55.js').write_text(classic,encoding='utf-8')
+          Path('/tmp/spacebar-v55.mjs').write_text(module,encoding='utf-8')
+          PY
+          node --check /tmp/spacebar-v55.js
+          node --check /tmp/spacebar-v55.mjs
+      - name: Read-only office regressions
+        run: |
+          python agents/test_v28_api.py
+          python agents/test_v49_3d_office.py
+          python agents/test_v50_3d_controls.py
+          python agents/test_v51_characters.py
+          python agents/test_v52_market_wall.py
+          python agents/test_v53_commander_room.py
+          python agents/test_v54_operations.py
+          python agents/test_v55_webgl_recovery.py
