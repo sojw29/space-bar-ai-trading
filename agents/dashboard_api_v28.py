@@ -51,7 +51,7 @@ def snapshot(history_path):
     }
 
 
-def make_handler(history_path, live_store=None):
+def make_handler(history_path, live_store=None, paper_monitor=None):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
@@ -71,6 +71,11 @@ def make_handler(history_path, live_store=None):
             elif path == "/health":
                 self.reply(200, {"status": "ok", "mode": "local-paper-only",
                                  "orders_enabled": False})
+            elif path == "/api/v1/paper":
+                if paper_monitor is None:
+                    self.reply(404, {"error": "paper_monitor_not_enabled", "orders_enabled": False})
+                else:
+                    self.reply(200, paper_monitor.snapshot())
             elif path == "/api/v1/feed":
                 if live_store is None:
                     self.reply(200, {"state": "HISTORICAL", "ready": False, "orders_enabled": False})
