@@ -1,0 +1,35 @@
+name: SPACE BAR V46 Full-stack Fault Injection
+
+on:
+  push:
+    branches:
+      - feature/v46-full-stack-failure-gates
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-stack-fault-injection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Python
+        run: python -m compileall -q agents
+      - name: Exercise existing simulated chain
+        run: |
+          python agents/test_v39_bridge.py
+          python agents/test_v41_portfolio.py
+          python agents/test_v42_paper_monitor.py
+          python agents/test_v43_journal.py
+          python agents/test_v44_analytics.py
+      - name: Full-stack read-only release gates
+        run: |
+          python agents/test_v45_integration.py
+          python agents/test_v46_failure_gates.py

@@ -103,6 +103,34 @@ class LiveResearchStore:
             }
 
 
+
+def dispatch_feed_event(store, paper, journal, item):
+    """Single production/test event dispatcher; never sends broker orders.
+
+    Research UI can be refreshed independently. A paper or journal error
+    always halts the simulated session and is propagated to the caller.
+    """
+    try:
+        store.consume(item)
+    except Exception:
+        if paper is not None:
+            paper._halt("LIVE_RESEARCH_STORE_ERROR")
+        raise
+    if paper is None:
+        return
+    try:
+        previous_paper_state = paper.state
+        paper.consume(item)
+        if journal is not None and (
+                item.get("type") == "research_events" or
+                (paper.state == "HALTED" and previous_paper_state != "HALTED")):
+            snap = paper.snapshot()
+            journal.append(
+                "feed_halt" if snap["state"] == "HALTED" else "paper_snapshot", snap)
+    except Exception:
+        paper._halt("PAPER_JOURNAL_OR_FEED_FAILURE")
+        raise
+
 def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, fast_warmup=False, paper_monitor=False, paper_journal_path=None):
     if isinstance(port, bool) or not 1024 <= port <= 65535:
         raise ValueError("Invalid localhost port")
@@ -121,27 +149,7 @@ def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, f
         ("127.0.0.1", port), make_handler(DEFAULT_HISTORY, live_store=store,
                                            paper_monitor=paper, paper_journal=journal))
     def on_feed_event(item):
-        # Both sinks see feed transitions. Any paper error triggers its own
-        # fail-closed halt; it must never prevent clearing the live UI.
-        try:
-            store.consume(item)
-        except Exception:
-            if paper is not None:
-                paper._halt("LIVE_RESEARCH_STORE_ERROR")
-            raise
-        if paper is not None:
-            try:
-                previous_paper_state = paper.state
-                paper.consume(item)
-                if journal is not None and (
-                    item.get("type") == "research_events" or
-                    (paper.state == "HALTED" and previous_paper_state != "HALTED")):
-                    snap = paper.snapshot()
-                    journal.append("feed_halt" if snap["state"] == "HALTED"
-                                   else "paper_snapshot", snap)
-            except Exception:
-                paper._halt("PAPER_JOURNAL_OR_FEED_FAILURE")
-                raise
+        return dispatch_feed_event(store, paper, journal, item)
     bootstrap = None
     if fast_warmup:
         from public_warmup_v40 import bootstrap_stream
