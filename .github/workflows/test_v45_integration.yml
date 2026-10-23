@@ -1,0 +1,50 @@
+name: SPACE BAR V45 Full-stack Offline Release Gate
+
+on:
+  push:
+    branches:
+      - feature/v45-end-to-end-release-gate
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile Python
+        run: python -m compileall -q agents
+      - name: Verify browser JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          h=Path('web/command_center.html').read_text(encoding='utf-8')
+          Path('/tmp/space-bar-v45.js').write_text(h.split('<script>',1)[1].split('</script>',1)[0],encoding='utf-8')
+          PY
+          node --check /tmp/space-bar-v45.js
+      - name: Prior research, feed and paper contracts
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v28_api.py
+          python agents/test_v37_stream.py
+          python agents/test_v38_binance_ws.py
+          python agents/test_v39_bridge.py
+          python agents/test_v40_warmup.py
+          python agents/test_v41_portfolio.py
+          python agents/test_v42_paper_monitor.py
+          python agents/test_v43_journal.py
+          python agents/test_v44_analytics.py
+      - name: Full-stack mock REST + WS through paper dashboard journal
+        run: python agents/test_v45_integration.py
