@@ -17,7 +17,7 @@ MIN_WARMUP_BARS=55
 REPLAY_BARS=80
 
 
-def replay_historical_paper(history_path):
+def replay_historical_paper(history_path, *, include_evidence=False):
     """Replay max 80 real supplied historical candles, after 55-bar warmup.
 
     A new portfolio is constructed for every explicit invocation; historical
@@ -27,7 +27,6 @@ def replay_historical_paper(history_path):
     if len(rows)<MIN_WARMUP_BARS:
         raise ValueError("Need 55 completed historical bars for paper replay")
     validated=market_board(rows,realtime=False,source="historical_csv_snapshot")
-    bars=validated["candles"]
     # V52 market board intentionally returns only last 60; use full validated
     # 80 OHLCV rows after checking the 60-bar suffix.
     for index in range(1,len(rows)):
@@ -37,11 +36,21 @@ def replay_historical_paper(history_path):
     portfolio=PaperPortfolio(initial_cash=INITIAL_SIM_CASH,clock=lambda: end)
     count=0
     state=None
+    equity_observations=[]
     for end_index in range(MIN_WARMUP_BARS,len(rows)+1):
         candle=rows[end_index-1]
         result=analyze_and_emit(rows[:end_index])
         state=portfolio.on_completed_candle({**candle,"closed":True},result)
         count+=1
+        if include_evidence:
+            # Capture only observed, completed-bar hypothetical valuations.
+            equity_observations.append({
+                "timestamp": candle["timestamp"],
+                "close": candle["close"],
+                "equity": state["mark_to_close_equity"],
+                "cash": state["cash"],
+                "position": state["position"]["side"] if state["position"] else None,
+            })
         if state["halted"]:
             break
     if state is None:
@@ -53,7 +62,7 @@ def replay_historical_paper(history_path):
         raise ValueError("Invalid simulated equity")
     position=final["position"]
     # No historical trade records fabricated. Keep totals separate from live.
-    return {
+    report = {
         "schema_version":"60.0",
         "mode":"EXPLICIT_HISTORICAL_PAPER_REPLAY",
         "source":"historical_csv_snapshot",
@@ -79,3 +88,7 @@ def replay_historical_paper(history_path):
         "independent_oos_verified":False,
         "warning":"HYPOTHETICAL historical close-price fills with fees/slippage; no real execution, intrabar stops, or predictive-performance validation."
     }
+    if include_evidence:
+        report["_completed_candle_equity_observations"]=equity_observations
+        report["_hypothetical_trade_events"]=final["trades"]
+    return report
