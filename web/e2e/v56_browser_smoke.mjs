@@ -12,7 +12,9 @@ import {build} from "esbuild";
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const repo=path.resolve(here,"../..");
-const output=process.env.SPACEBAR_BROWSER_ARTIFACTS||path.join(repo,"reports/v56/browser-artifacts");
+const output=process.env.SPACEBAR_BROWSER_ARTIFACTS?
+ path.resolve(repo,process.env.SPACEBAR_BROWSER_ARTIFACTS):
+ path.join(repo,"reports/v56/browser-artifacts");
 const port=Number(process.env.SPACEBAR_TEST_PORT||18956);
 const base="http://127.0.0.1:"+port;
 const moduleURL="https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
