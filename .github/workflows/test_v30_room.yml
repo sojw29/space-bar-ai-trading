@@ -1,0 +1,31 @@
+name: SPACE BAR V30 Isometric Trading Room
+
+on:
+  push:
+    branches:
+      - feature/v30-isometric-room
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  room-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile
+        run: python -m compileall -q agents
+      - name: Test API, dashboard, and room
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
+          python agents/test_v28_api.py
+          python agents/test_v29_dashboard.py
+          python agents/test_v30_room.py
