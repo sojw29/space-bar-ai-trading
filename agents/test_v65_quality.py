@@ -20,10 +20,26 @@ class QualityTests(unittest.TestCase):
     def row(self, stamp, high=2, volume=1):
         return [stamp, 1, high, 0.5, 1.5, volume]
 
-    def test_complete_series_passes(self):
+    def test_full_365_day_series_passes(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "BTC_15m.csv"
+            end = LAST - 600  # 15m final candle is 23:45 UTC
+            count = 365 * 24 * 4
+            with path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
+                for index in range(count):
+                    writer.writerow(self.row(end - (count - 1 - index) * 900))
+            result = score_file(path, 15, NOW)
+            self.assertEqual(result["status"], "PASS")
+            self.assertEqual(result["coverage_pct"], 100.0)
+
+    def test_two_contiguous_bars_are_not_full_coverage(self):
         with tempfile.TemporaryDirectory() as d:
             p = self.make(d, [self.row(LAST-300), self.row(LAST)])
-            self.assertEqual(score_file(p, 5, NOW)["status"], "PASS")
+            result = score_file(p, 5, NOW)
+            self.assertEqual(result["status"], "REVIEW")
+            self.assertLess(result["coverage_pct"], 1.0)
 
     def test_gap_requires_review(self):
         with tempfile.TemporaryDirectory() as d:
