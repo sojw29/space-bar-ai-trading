@@ -13,7 +13,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import urlopen
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "agents"))
 from dashboard_api_v28 import load_candles, make_handler, snapshot  # noqa: E402
 from market_board_v52 import market_board  # noqa: E402
