@@ -119,7 +119,7 @@ def start_dashboard(*, port=8765, clock=None, connect=None, max_attempts=None, f
         journal = PaperJournal(paper_journal_path)
     server = ThreadingHTTPServer(
         ("127.0.0.1", port), make_handler(DEFAULT_HISTORY, live_store=store,
-                                           paper_monitor=paper))
+                                           paper_monitor=paper, paper_journal=journal))
     def on_feed_event(item):
         # Both sinks see feed transitions. Any paper error triggers its own
         # fail-closed halt; it must never prevent clearing the live UI.

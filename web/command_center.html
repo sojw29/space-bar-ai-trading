@@ -119,6 +119,15 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 <div class="paper-metric"><span>가상 이벤트 수</span><strong id="paper-count">—</strong></div>
 </div><p id="paper-warning" class="paper-danger" role="status">실제 시장 손익이 아닙니다.</p>
 </section>
+<section class="panel" id="paper-analytics-panel"><h2>Paper Performance Lab · 연구용 기록 분석</h2>
+<p class="muted">현재 시뮬레이션 세션에 저장된 관측값만 분석합니다. 승률·실계좌 수익이나 실거래 성과가 아닙니다.</p>
+<div class="paper-metrics">
+<div class="paper-metric"><span>관측 기준 최대 낙폭</span><strong id="analytics-drawdown">—</strong></div>
+<div class="paper-metric"><span>가상 실현 손익</span><strong id="analytics-realized">—</strong></div>
+<div class="paper-metric"><span>가상 매매 이벤트 수</span><strong id="analytics-trades">—</strong></div>
+<div class="paper-metric"><span>저장된 기록 수</span><strong id="analytics-count">—</strong></div>
+<div class="paper-metric"><span>중단 이벤트 수(표본)</span><strong id="analytics-halts">—</strong></div>
+</div><p id="analytics-status" class="muted" role="status">기록 저장 기능을 켜면 분석됩니다.</p></section>
 <section class="panel"><h2>Connection &amp; Evidence</h2><p id="status" role="status">서버 연결 대기 중…</p>
 <p class="muted" id="candle">마지막 완료 캔들: —</p><p class="muted">분석 결과는 검증되지 않은 연구용 휴리스틱입니다. 실제 투자 판단이나 주문에 사용하지 마세요.</p></section>
 </main><footer>SPACE BAR AI TRADING · Read-only local dashboard</footer>
@@ -296,6 +305,35 @@ async function refreshPaper(){
     "가상 체결 및 종가 기준 손절·익절: 실제 주문이나 보장된 가격이 아님";
  }catch(error){setPaperUnavailable("연결 오류");}
 }
+async function refreshAnalytics(){
+ const status=document.getElementById("analytics-status");
+ const reset=message=>{
+  for(const id of ["analytics-drawdown","analytics-realized","analytics-trades",
+                   "analytics-count","analytics-halts"])document.getElementById(id).textContent="—";
+  status.textContent=message;
+ };
+ try{
+  const response=await fetch("/api/v1/paper/analytics",{cache:"no-store"});
+  if(response.status===404){reset("가상매매 기록 기능 미활성화");return;}
+  if(!response.ok)throw Error("저장 기록 확인 실패");
+  const report=await response.json();
+  if(report.mode!=="SIMULATED_PAPER_ANALYTICS"||report.paper_only!==true||
+     report.orders_enabled!==false||report.live_trading_approved!==false||
+     report.independent_oos_verified!==false)throw Error("안전 플래그 불일치");
+  const dd=report.observed_equity_max_drawdown_pct;
+  document.getElementById("analytics-drawdown").textContent=
+    typeof dd==="number"&&Number.isFinite(dd)?dd.toFixed(3)+"% (관측)":"측정 불가";
+  const net=report.latest_paper_realized_net;
+  document.getElementById("analytics-realized").textContent=
+    typeof net==="number"&&Number.isFinite(net)?net.toFixed(2)+" (가상)":"—";
+  for(const [id,key] of [["analytics-trades","paper_trade_events"],["analytics-count","journal_entries"],
+                         ["analytics-halts","halt_count_in_sample"]])
+    document.getElementById(id).textContent=Number.isInteger(report[key])?String(report[key]):"—";
+  status.textContent=report.sample_complete?
+    "저장된 가상 기록 기준 · 실제 체결·미래 수익 검증 아님":
+    "최근 최대 500개 기록만 분석 · 전체 기간 성과 아님";
+ }catch(error){reset("기록을 확인할 수 없습니다: "+error.message);}
+}
 async function refresh(){
  try{
   const response=await fetch("/api/v1/agents",{cache:"no-store"});
@@ -361,5 +399,5 @@ async function refresh(){
   renderInspector();
  }
 }
-refresh();refreshPaper();setInterval(refresh,30000);setInterval(refreshPaper,30000);
+refresh();refreshPaper();refreshAnalytics();setInterval(refresh,30000);setInterval(refreshPaper,30000);setInterval(refreshAnalytics,30000);
 </script></body></html>

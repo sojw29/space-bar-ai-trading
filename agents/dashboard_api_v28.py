@@ -51,7 +51,7 @@ def snapshot(history_path):
     }
 
 
-def make_handler(history_path, live_store=None, paper_monitor=None):
+def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
@@ -71,6 +71,16 @@ def make_handler(history_path, live_store=None, paper_monitor=None):
             elif path == "/health":
                 self.reply(200, {"status": "ok", "mode": "local-paper-only",
                                  "orders_enabled": False})
+            elif path == "/api/v1/paper/analytics":
+                if paper_journal is None:
+                    self.reply(404, {"error": "paper_journal_not_enabled", "orders_enabled": False})
+                else:
+                    try:
+                        from paper_analytics_v44 import analyze_session
+                        self.reply(200, analyze_session(paper_journal.path, paper_journal.session_id))
+                    except (OSError, ValueError, KeyError) as exc:
+                        self.reply(503, {"error": "paper_journal_invalid_or_unavailable",
+                                         "orders_enabled": False})
             elif path == "/api/v1/paper":
                 if paper_monitor is None:
                     self.reply(404, {"error": "paper_monitor_not_enabled", "orders_enabled": False})
