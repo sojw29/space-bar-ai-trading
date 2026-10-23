@@ -8,13 +8,22 @@ from datetime import datetime, timezone
 import json
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
+from urllib.parse import urlsplit
 
 SAFE_PATHS = ("/health", "/api/v1/feed", "/api/v1/agents", "/api/v1/market")
 EVENT_LIMIT = 50
 
 
 def _get_local_json(base_url, path, *, timeout=1.5):
-    if not base_url.startswith("http://127.0.0.1:"):
+    target = urlsplit(base_url)
+    try:
+        loopback = (target.scheme == "http" and target.hostname == "127.0.0.1"
+                    and target.port is not None and 1024 <= target.port <= 65535
+                    and target.username is None and target.password is None
+                    and target.path == "" and target.query == "" and target.fragment == "")
+    except ValueError:
+        loopback = False
+    if not loopback:
         raise ValueError("Only loopback research URL allowed")
     if path not in SAFE_PATHS:
         raise ValueError("Unknown read-only operations endpoint")
