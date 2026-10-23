@@ -1,0 +1,43 @@
+name: SPACE BAR V47 Interactive Agent Office
+
+on:
+  push:
+    branches:
+      - feature/v47-interactive-agent-office
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  interface-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check dashboard JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          h = Path('web/command_center.html').read_text(encoding='utf-8')
+          Path('/tmp/v47.js').write_text(h.split('<script>',1)[1].split('</script>',1)[0], encoding='utf-8')
+          PY
+          node --check /tmp/v47.js
+      - name: Existing room, inspector, data and new office contracts
+        run: |
+          python agents/test_v29_dashboard.py
+          python agents/test_v30_room.py
+          python agents/test_v31_activity.py
+          python agents/test_v32_inspector.py
+          python agents/test_v33_consensus.py
+          python agents/test_v39_bridge.py
+          python agents/test_v42_paper_monitor.py
+          python agents/test_v47_office.py
