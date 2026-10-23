@@ -162,8 +162,8 @@ class PaperPortfolio:
                 reason = "DAILY_LOSS_GUARD"
             if reason:
                 self._exit(price, ts, reason)
-                if reason == "DAILY_LOSS_GUARD":
-                    self._halt(reason)
+                if reason == "DAILY_LOSS_GUARD" or self._equity(price) <= self.day_open_equity * (1 - self.max_daily_loss_pct):
+                    self._halt("DAILY_LOSS_GUARD")
                 return self.snapshot(price)
         if self._equity(price) <= self.day_open_equity * (1 - self.max_daily_loss_pct):
             self._halt("DAILY_LOSS_GUARD")
