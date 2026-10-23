@@ -33,6 +33,15 @@ def utc(ts):
     return datetime.fromtimestamp(ts, timezone.utc).isoformat()
 
 
+def forward_window_label(candles):
+    """Do not describe an empty post-cutoff window as a backwards date range."""
+    last = candles[-1]["timestamp"]
+    if last < CUTOFF:
+        return ("V17 FORWARD SNAPSHOT | NO_FORWARD_CANDLES | cutoff "
+                + utc(CUTOFF) + " | data ends " + utc(last))
+    return "V17 FORWARD SNAPSHOT | " + utc(CUTOFF) + " to " + utc(last)
+
+
 def write_csv(filename, rows, fields):
     os.makedirs(REPORT_DIR, exist_ok=True)
     with open(os.path.join(REPORT_DIR, filename), "w", newline="", encoding="utf-8") as handle:
@@ -130,7 +139,7 @@ def run():
     os.makedirs(REPORT_DIR, exist_ok=True)
     with open(os.path.join(REPORT_DIR, "protocol.json"), "wb") as handle:
         handle.write(raw)
-    print("V17 FORWARD SNAPSHOT |", utc(CUTOFF), "to", utc(candles[-1]["timestamp"]))
+    print(forward_window_label(candles))
     print("Protocol SHA256:", hashlib.sha256(raw).hexdigest())
     for row in rows:
         print(row["candidate"], row["scenario"], "trades", row["trades"],
