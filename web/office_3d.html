@@ -16,6 +16,9 @@ main{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px
 .camera-btn:focus-visible{outline:3px solid #93e0ff;outline-offset:2px}
 .camera-btn[aria-pressed="true"]{border-color:#80d6f2;background:#1c4a61}
 #camera-mode{font-size:12px;color:#a3c9e8}
+#agent-activity{font-size:13px;color:#c3deee;line-height:1.5}
+#agent-activity[data-status="OFFLINE"]{color:#ffb6bc}
+#agent-activity[data-status="READY"]{color:#9de6c8}
 #office-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#bad5ec}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
 .dot.LONG{background:#39d8a6}.dot.SHORT{background:#ef637e}.dot.WAIT{background:#dbad68}.dot.OFFLINE{background:#496078}
@@ -47,6 +50,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div class="metric"><small>결정 (주문 신호 아님)</small><strong id="selected-decision" class="WAIT">WAIT</strong></div>
 <div class="metric"><small>분석 근거</small><strong id="selected-reason">데이터 확인 대기</strong></div>
 <div class="metric"><small>완료 캔들 (UTC)</small><strong id="selected-time">—</strong></div>
+<div class="metric"><small>연구 활동 표시</small><strong id="agent-activity" data-status="OFFLINE">확정된 연구 이벤트 대기</strong></div>
 <div class="metric"><small>위험 게이트</small><strong id="selected-risk">확인 대기</strong></div>
 <p class="notice">에이전트는 규칙 기반 연구 모듈입니다. 3D 아바타의 동작은 실제 자율 AI 작업을 뜻하지 않습니다.</p>
 </section>
@@ -80,6 +84,15 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 const names=["ATLAS","ORBIT","ECHO","PULSE","QUANT","APEX","COMMANDER"];
 const roles={ATLAS:"추세 분석",ORBIT:"거래량",ECHO:"돌파 관찰",PULSE:"모멘텀",QUANT:"검증 대기",APEX:"위험 점검",COMMANDER:"합의 판단"};
 const positions={ATLAS:[-4,-2.5],ORBIT:[0,-3.1],ECHO:[4,-2.5],PULSE:[-4,2.6],QUANT:[0,3.2],APEX:[4,2.6],COMMANDER:[0,0]};
+const characterStyles={
+ ATLAS:{body:0x477bbb,head:0x8bb5e2,emblem:"crest"},
+ ORBIT:{body:0x397c86,head:0x79cad4,emblem:"satellite"},
+ ECHO:{body:0x725dac,head:0xb09adc,emblem:"antenna"},
+ PULSE:{body:0xa16776,head:0xdf9caa,emblem:"pulse"},
+ QUANT:{body:0x65748d,head:0xabb8cc,emblem:"cube"},
+ APEX:{body:0xa07b46,head:0xe1bc79,emblem:"shield"},
+ COMMANDER:{body:0x997f46,head:0xe2c987,emblem:"crown"}
+};
 const colors={LONG:0x39d8a6,SHORT:0xef637e,WAIT:0xdbad68,OFFLINE:0x496078};
 const stage=document.getElementById("stage");
 const status=document.getElementById("stage-status");
@@ -123,15 +136,39 @@ for(const name of names){
  const [x,z]=positions[name];const group=new THREE.Group();group.position.set(x,0,z);
  group.userData.agent=name;scene.add(group);
  const isCommander=name==="COMMANDER";
+ const style=characterStyles[name];
  block(group,2.15,.18,1.20,isCommander?0x785d39:0x3a5573,0,.83,0);
  for(const dx of [-.88,.88])for(const dz of [-.43,.43])block(group,.12,.8,.12,0x28384a,dx,.38,dz);
  const monitor=block(group,1,.65,.12,0x0d1827,0,1.34,-.26);
  const screen=block(group,.89,.53,.018,colors.OFFLINE,0,1.34,-.189);
  block(group,.10,.24,.1,0x53657b,0,1.04,-.26);
- const robotBody=new THREE.Mesh(new THREE.CylinderGeometry(.32,.42,.67,12),new THREE.MeshStandardMaterial({color:isCommander?0x947245:0x5b7d9f,metalness:.25,roughness:.6}));
+ const robotBody=new THREE.Mesh(new THREE.CylinderGeometry(.32,.42,.67,12),new THREE.MeshStandardMaterial({color:style.body,metalness:.25,roughness:.6}));
  robotBody.position.set(0,.47,.75);group.add(robotBody);
- const head=new THREE.Mesh(new THREE.SphereGeometry(.32,16,12),new THREE.MeshStandardMaterial({color:isCommander?0xc5a167:0x7aa3bc,roughness:.55}));
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.32,16,12),new THREE.MeshStandardMaterial({color:style.head,roughness:.55}));
  head.position.set(0,1.08,.75);group.add(head);
+ // V51 deterministic, visually distinct role insignia. These aren't autonomous agents.
+ const insignia=new THREE.Group();group.add(insignia);insignia.position.set(0,1.43,.75);
+ const trim=new THREE.MeshStandardMaterial({color:style.head,metalness:.25,roughness:.45});
+ if(style.emblem==="crest"||style.emblem==="shield"){
+  const shape=new THREE.Mesh(new THREE.ConeGeometry(.15,.21,4),trim);
+  shape.rotation.z=style.emblem==="shield"?Math.PI:0;insignia.add(shape);
+ }else if(style.emblem==="satellite"){
+  const sphere=new THREE.Mesh(new THREE.SphereGeometry(.10,10,8),trim);insignia.add(sphere);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(.17,.022,6,24),trim);
+  ring.rotation.x=.7;insignia.add(ring);
+ }else if(style.emblem==="antenna"){
+  insignia.add(new THREE.Mesh(new THREE.ConeGeometry(.09,.25,8),trim));
+  block(insignia,.32,.025,.025,style.head,0,-.03,0);
+ }else if(style.emblem==="pulse"){
+  const shape=new THREE.Mesh(new THREE.OctahedronGeometry(.14),trim);insignia.add(shape);
+ }else if(style.emblem==="cube"){
+  insignia.add(new THREE.Mesh(new THREE.BoxGeometry(.19,.19,.19),trim));
+ }else if(style.emblem==="crown"){
+  for(const offset of [-.13,0,.13]){
+   const tip=new THREE.Mesh(new THREE.ConeGeometry(.055,.20,6),trim);
+   tip.position.x=offset;insignia.add(tip);
+  }
+ }
  const badge=new THREE.Mesh(new THREE.SphereGeometry(.08,10,8),new THREE.MeshBasicMaterial({color:colors.OFFLINE}));
  badge.position.set(0,1.11,1.05);group.add(badge);
  // Workstations have local 3D accessories, not live numerical data.
@@ -141,7 +178,7 @@ for(const name of names){
  pedestal.userData.agent=name;
  const pick=new THREE.Mesh(new THREE.BoxGeometry(2.3,2.2,2.0),new THREE.MeshBasicMaterial({visible:false}));
  pick.position.set(0,1.0,.25);pick.userData.agent=name;group.add(pick);pickables.push(pick);
- keys.set(name,{group,screen,badge,monitor});
+ keys.set(name,{group,screen,badge,monitor,head,insignia,style,signalState:"OFFLINE"});
  const button=document.createElement("button");button.type="button";button.className="agent-btn";
  button.textContent=name;button.addEventListener("click",()=>selectAgent(name));buttons.append(button);
  keys.get(name).button=button;
@@ -163,6 +200,13 @@ function renderInspector(){
  const target=document.getElementById("selected-decision");target.textContent=decision;target.className=decision;
  document.getElementById("selected-reason").textContent=data?String(data.reason||"근거 없음"):"확인된 분석 없음";
  document.getElementById("selected-time").textContent=hasValid?lastObserved:"—";
+ const phase=document.getElementById("agent-activity");
+ phase.dataset.status=data?"READY":"OFFLINE";
+ phase.textContent=data?
+   (selected==="COMMANDER"?"확정 봉 투표 집계 완료":
+     selected==="APEX"?"위험 조건 점검 완료":"확정 봉 연구 결과 확인 완료")+
+   " · "+data.decision+" · 실제 자율 작업 아님":
+   "확정된 연구 이벤트 대기 / 연결 끊김";
  const commander=hasValid?events.get("COMMANDER"):null;
  document.getElementById("selected-risk").textContent=commander?
   (commander.risk_veto?"위험 보류":"위험 게이트 미작동 · 주문 승인 아님"):"확인 대기";
@@ -173,7 +217,9 @@ function resetResearch(reason){
  for(const seat of keys.values()){
   seat.screen.material.color.setHex(colors.OFFLINE);
   seat.badge.material.color.setHex(colors.OFFLINE);
+  seat.signalState="OFFLINE";
  }
+ document.getElementById("agent-activity").dataset.status="OFFLINE";
  document.getElementById("data-mode").textContent="사용 불가";
  document.getElementById("consensus").textContent="WAIT";
  status.textContent="데이터 대기 / 중단 · "+String(reason);
@@ -225,6 +271,7 @@ async function refresh(){
    events.set(id,record);
    keys.get(id).screen.material.color.setHex(colors[record.decision]);
    keys.get(id).badge.material.color.setHex(colors[record.decision]);
+   keys.get(id).signalState=record.decision;
   }
   lastObserved=verified.when;sourceMode=verified.realtime?"public_stream":"historical_csv";
   document.getElementById("data-mode").textContent=verified.realtime?"공개 시장 스트림 / 연구":"과거 CSV / 연구";
@@ -316,6 +363,12 @@ const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
 let frame=0;
 function renderFrame(){
  frame=requestAnimationFrame(renderFrame);
+ // Small static pose difference by observed decision; no fabricated AI work.
+ for(const [id,seat] of keys){
+  if(reduced.matches){seat.head.rotation.y=0;seat.insignia.rotation.y=0;continue;}
+  seat.head.rotation.y=seat.signalState==="OFFLINE"?0:
+   seat.signalState==="LONG"?.12:seat.signalState==="SHORT"?-.12:0;
+ }
  renderer.render(scene,camera);
 }
 document.addEventListener("visibilitychange",()=>{
