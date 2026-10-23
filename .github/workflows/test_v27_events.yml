@@ -1,0 +1,28 @@
+name: SPACE BAR V27 Agent Event Contract
+
+on:
+  push:
+    branches:
+      - feature/v27-agent-events
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  event-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile agents
+        run: python -m compileall -q agents
+      - name: Run V26 and V27 tests
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v27_events.py
