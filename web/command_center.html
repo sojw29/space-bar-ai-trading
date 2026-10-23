@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPACE BAR | Command Center</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#090f1d;color:#e8f0ff}
+*{box-sizing:border-box}body{margin:0}header{padding:24px 5%;background:#101a30;border-bottom:1px solid #283b59}
+h1{font-size:clamp(24px,4vw,40px);margin:0;letter-spacing:2px}small,.muted{color:#9bb0ce}
+.badge{display:inline-block;background:#432e1c;color:#ffce83;padding:6px 10px;border-radius:7px;font-size:12px;font-weight:700}
+main{max-width:1300px;margin:auto;padding:24px;display:grid;gap:20px}
+.panel{background:#131f36;border:1px solid #293d60;border-radius:15px;padding:22px}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.value{font-size:24px;font-weight:800;margin-top:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px}
+.agent{background:#0c172b;border:1px solid #304464;border-radius:12px;padding:17px}
+.agent h3{margin:0 0 8px}.state{font-size:12px;font-weight:800;letter-spacing:1px}
+.LONG{color:#59e0ae}.SHORT{color:#ff808b}.WAIT{color:#ffcc76}
+.reason{min-height:42px;color:#bacbe3;font-size:14px}
+footer{color:#9bb0ce;text-align:center;padding:20px}
+</style></head><body>
+<header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
+<p class="muted">Multi-Agent Research Dashboard · V29 Preview</p>
+<span class="badge">PAPER RESEARCH ONLY · NO LIVE ORDERS</span></header>
+<main><section class="summary">
+<div class="panel"><small>SYMBOL</small><div class="value" id="symbol">BTCUSDT</div></div>
+<div class="panel"><small>TIMEFRAME</small><div class="value" id="timeframe">5m</div></div>
+<div class="panel"><small>COMMANDER</small><div class="value WAIT" id="decision">WAIT</div></div>
+<div class="panel"><small>DATA MODE</small><div class="value" id="mode">HISTORICAL</div></div>
+</section>
+<section class="panel"><h2>AI Research Room</h2><p class="muted">각 에이전트의 분석 상태를 표시합니다. 3D 캐릭터는 향후 버전에서 추가됩니다.</p><div class="grid" id="agents"></div></section>
+<section class="panel"><h2>Connection &amp; Evidence</h2><p id="status" role="status">서버 연결 대기 중…</p>
+<p class="muted" id="candle">마지막 완료 캔들: —</p><p class="muted">분석 결과는 검증되지 않은 연구용 휴리스틱입니다. 실제 투자 판단이나 주문에 사용하지 마세요.</p></section>
+</main><footer>SPACE BAR AI TRADING · Read-only local dashboard</footer>
+<script>
+"use strict";
+const ids=["ATLAS","ORBIT","ECHO","PULSE","QUANT","APEX","COMMANDER"];
+const room=document.getElementById("agents");
+const nodes=new Map();
+for(const id of ids){
+ const card=document.createElement("article");card.className="agent";
+ const title=document.createElement("h3");title.textContent=id;
+ const state=document.createElement("div");state.className="state WAIT";state.textContent="WAIT";
+ const reason=document.createElement("p");reason.className="reason";reason.textContent="분석 대기 중";
+ card.append(title,state,reason);room.append(card);nodes.set(id,{state,reason});
+}
+function updateAgent(event){
+ const node=nodes.get(event.agent_id);if(!node)return;
+ const decision=["LONG","SHORT","WAIT"].includes(event.decision)?event.decision:"WAIT";
+ node.state.textContent=decision;node.state.className="state "+decision;
+ node.reason.textContent=String(event.reason||"판단 근거 없음");
+}
+async function refresh(){
+ try{
+  const response=await fetch("/api/v1/agents",{cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  const data=await response.json();
+  if(data.orders_enabled!==false||data.paper_only!==true||data.realtime!==false)throw Error("안전 플래그 검증 실패");
+  const envelope=data.events;
+  if(!envelope||!Array.isArray(envelope.events))throw Error("이벤트 형식 오류");
+  document.getElementById("symbol").textContent=envelope.symbol||"—";
+  document.getElementById("timeframe").textContent=envelope.timeframe||"—";
+  document.getElementById("candle").textContent="마지막 완료 캔들: "+(envelope.observed_candle_utc||"—");
+  for(const event of envelope.events)updateAgent(event);
+  const commander=envelope.events.find(x=>x.agent_id==="COMMANDER");
+  const decision=commander&&["LONG","SHORT","WAIT"].includes(commander.decision)?commander.decision:"WAIT";
+  const output=document.getElementById("decision");output.textContent=decision;output.className="value "+decision;
+  document.getElementById("status").textContent="로컬 연구 서버 연결됨 · 과거 CSV 스냅샷 · 주문 불가";
+ }catch(error){
+  document.getElementById("status").textContent="데이터를 표시할 수 없습니다: "+error.message;
+  document.getElementById("decision").textContent="WAIT";
+  document.getElementById("decision").className="value WAIT";
+ }
+}
+refresh();setInterval(refresh,30000);
+</script></body></html>

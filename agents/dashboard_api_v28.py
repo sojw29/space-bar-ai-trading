@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 import agent_events_v27 as v27
 
 DEFAULT_HISTORY = Path("data/history/BTC_5m.csv")
+DASHBOARD_HTML = Path(__file__).resolve().parent.parent / "web" / "command_center.html"
 MAX_BYTES = 1_000_000
 
 
@@ -54,7 +55,20 @@ def make_handler(history_path):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
-            if path == "/health":
+            if path in ("/", "/dashboard"):
+                try:
+                    content = DASHBOARD_HTML.read_bytes()
+                except OSError:
+                    self.reply(503, {"error": "dashboard_unavailable"})
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(content)
+            elif path == "/health":
                 self.reply(200, {"status": "ok", "mode": "local-paper-only",
                                  "orders_enabled": False})
             elif path == "/api/v1/agents":
