@@ -5,7 +5,6 @@ exchange account, API keys, trading, or orders. Never persist or serve a stale
 LONG/SHORT decision when disconnected, resetting or overdue.
 """
 import argparse
-import json
 import threading
 import time
 from http.server import ThreadingHTTPServer
@@ -53,6 +52,13 @@ class LiveResearchStore:
                 # checks, UTC timestamp and explicit order-disabled flags.
                 from decision_ledger_v34 import validate_envelope
                 validate_envelope(envelope)
+                from datetime import datetime
+                observed = datetime.fromisoformat(
+                    envelope["observed_candle_utc"].replace("Z", "+00:00")).timestamp()
+                # V27 records the opening instant of the completed bar.
+                event_age = float(self._clock()) - (observed + 300)
+                if not 0 <= event_age <= MAX_AGE_SECONDS:
+                    raise ValueError("Candle event too old or not yet complete")
                 self._payload = envelope
                 self._received_at = float(self._clock())
                 self._state = "RESEARCH_READY"
