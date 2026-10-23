@@ -1,0 +1,33 @@
+name: SPACE BAR V58 Local Desktop Launcher
+
+on:
+  push:
+    branches:
+      - feature/v58-local-launcher
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launcher-read-only-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile launcher and agents
+        run: |
+          python -m py_compile space_bar_launcher.py
+          python -m compileall -q agents
+      - name: Headless launcher lifecycle and no-order tests
+        run: python agents/test_v58_launcher.py
+      - name: Existing localhost API tests
+        run: |
+          python agents/test_v28_api.py
+          python agents/test_v49_3d_office.py
+          python agents/test_v55_webgl_recovery.py
