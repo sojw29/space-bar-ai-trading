@@ -51,7 +51,7 @@ def snapshot(history_path):
     }
 
 
-def make_handler(history_path):
+def make_handler(history_path, live_store=None):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
@@ -71,12 +71,23 @@ def make_handler(history_path):
             elif path == "/health":
                 self.reply(200, {"status": "ok", "mode": "local-paper-only",
                                  "orders_enabled": False})
+            elif path == "/api/v1/feed":
+                if live_store is None:
+                    self.reply(200, {"state": "HISTORICAL", "ready": False, "orders_enabled": False})
+                else:
+                    self.reply(200, live_store.status())
             elif path == "/api/v1/agents":
                 try:
-                    self.reply(200, snapshot(history_path))
-                except (OSError, ValueError, KeyError) as exc:
+                    if live_store is not None:
+                        if not live_store.status()["ready"]:
+                            self.reply(503, {"error": "feed_not_ready", "mode": "public_market_data_research", "orders_enabled": False})
+                            return
+                        self.reply(200, live_store.snapshot())
+                    else:
+                        self.reply(200, snapshot(history_path))
+                except (OSError, ValueError, KeyError, RuntimeError) as exc:
                     self.reply(503, {"error": type(exc).__name__,
-                                     "message": "Historical research data unavailable"})
+                                     "message": "Research data unavailable or stale"})
             else:
                 self.reply(404, {"error": "not_found"})
 
