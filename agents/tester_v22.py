@@ -55,6 +55,18 @@ def inspect_candles(path, cutoff):
     }
 
 
+def previous_evidence_path():
+    """Resolve both supported artifact ZIP layouts, never current-run files."""
+    configured = PREVIOUS / "evidence.json"
+    if configured.exists() or os.environ.get("V22_PREVIOUS_DIR"):
+        return configured
+    for candidate in (PREVIOUS / "v22" / "evidence.json",
+                      PREVIOUS / "reports" / "v22" / "evidence.json"):
+        if candidate.exists():
+            return candidate
+    return configured
+
+
 def run():
     v21.run()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -67,7 +79,7 @@ def run():
     candles = inspect_candles(CANDLE_PATH, v17.CUTOFF)
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
     summaries = rows(summary_path)
-    prior_path = PREVIOUS / "evidence.json"
+    prior_path = previous_evidence_path()
     prior = json.loads(prior_path.read_text(encoding="utf-8")) if prior_path.exists() else None
     issues = []
     warnings = []
@@ -100,6 +112,7 @@ def run():
         "cutoff_utc": protocol.get("cutoff_utc"),
         "candles": candles,
         "prior_evidence_available": bool(prior),
+        "prior_evidence_source": str(prior_path) if prior_path.exists() else None,
         "prior_last_forward_candle_utc": previous_last,
         "input_sha256": {
             "candles": sha(CANDLE_PATH),
