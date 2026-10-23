@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tester_v17 as v17
 import tester_v18 as v18
 import tester_v19 as v19
 import tester_v21 as v21
@@ -14,6 +15,18 @@ import tester_v22 as v22
 
 
 class RegressionTests(unittest.TestCase):
+    def test_v17_empty_forward_window_label(self):
+        before = v17.CUTOFF - 300
+        label = v17.forward_window_label([{"timestamp": before}])
+        self.assertIn("NO_FORWARD_CANDLES", label)
+        self.assertIn(v17.utc(before), label)
+        self.assertIn(v17.utc(v17.CUTOFF), label)
+        after = v17.CUTOFF + 300
+        label = v17.forward_window_label([{"timestamp": after}])
+        self.assertNotIn("NO_FORWARD_CANDLES", label)
+        self.assertIn(v17.utc(after), label)
+
+
     def test_null_profit_factor(self):
         self.assertIsNone(v18.number({"profit_factor": "None"}, "profit_factor"))
         self.assertIsNone(v18.number({"profit_factor": ""}, "profit_factor"))
