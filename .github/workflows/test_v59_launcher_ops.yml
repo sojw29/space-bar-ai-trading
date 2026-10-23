@@ -1,0 +1,35 @@
+name: SPACE BAR V59 Local Launcher Diagnostics
+
+on:
+  push:
+    branches:
+      - feature/v59-launcher-health-diagnostics
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ops-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile research launcher and diagnostics
+        run: |
+          python -m py_compile space_bar_launcher.py agents/launcher_diagnostics_v59.py
+          python -m compileall -q agents
+      - name: V58 launcher read-only contracts
+        run: python agents/test_v58_launcher.py
+      - name: V59 research health and safety tests
+        run: python agents/test_v59_launcher_ops.py
+      - name: Existing API and WebGL fallback contracts
+        run: |
+          python agents/test_v28_api.py
+          python agents/test_v49_3d_office.py
+          python agents/test_v55_webgl_recovery.py
