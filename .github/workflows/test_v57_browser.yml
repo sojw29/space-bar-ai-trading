@@ -1,0 +1,51 @@
+name: SPACE BAR V57 3D Performance and Browser UX
+
+on:
+  push:
+    branches:
+      - feature/v57-browser-perf-ux
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-browser-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SPACEBAR_BROWSER_ARTIFACTS: reports/v57/browser-artifacts
+      PYTHON: python3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser testing dependencies
+        working-directory: web/e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Static UI and safety contracts
+        run: |
+          python -m compileall -q agents
+          python agents/test_v49_3d_office.py
+          python agents/test_v54_operations.py
+          python agents/test_v55_webgl_recovery.py
+          python agents/test_v57_render_performance.py
+      - name: Real Chromium WebGL density and quality test
+        working-directory: web/e2e
+        run: npm test
+      - name: Upload rendered screenshot artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v57-browser-performance-screenshots
+          path: reports/v57/browser-artifacts/*.png
+          if-no-files-found: warn
+          retention-days: 14

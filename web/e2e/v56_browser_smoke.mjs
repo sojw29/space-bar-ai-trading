@@ -66,7 +66,7 @@ async function smoke(){
   args:["--enable-webgl","--use-gl=angle","--use-angle=swiftshader",
         "--disable-gpu-sandbox","--no-sandbox"]
  });
- const context=await browser.newContext({viewport:{width:1360,height:900},deviceScaleFactor:1});
+ const context=await browser.newContext({viewport:{width:1360,height:900},deviceScaleFactor:1.5});
  async function serveThree(page){
   await page.route(moduleURL,route=>route.fulfill({
    status:200,contentType:"text/javascript; charset=utf-8",body:bundledThree
@@ -88,6 +88,15 @@ async function smoke(){
  assert.equal(await page.locator('button[data-view="commander"]').getAttribute("aria-pressed"),"true");
  await page.getByRole("button",{name:"ATLAS",exact:true}).click();
  assert.equal(await page.locator("#selected-name").textContent(),"ATLAS");
+ await page.locator("#perf-fps").getByText(/FPS/).waitFor({timeout:12000});
+ const baselineScale=await page.locator("#perf-resolution").textContent();
+ await page.locator('[data-quality="low"]').click();
+ assert.equal(await page.locator('[data-quality="low"]').getAttribute("aria-pressed"),"true");
+ const lowerScale=await page.locator("#perf-resolution").textContent();
+ assert.notEqual(lowerScale,baselineScale);
+ await page.locator('[data-quality="high"]').click();
+ assert.equal(await page.locator('[data-quality="high"]').getAttribute("aria-pressed"),"true");
+ assert.match(await page.locator("#perf-state").textContent(),/렌더링 중/);
  await page.screenshot({path:path.join(output,"v56-working-3d.png"),fullPage:true});
 
  // Block a research request: the next navigation must not preserve old votes

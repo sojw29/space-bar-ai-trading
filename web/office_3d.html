@@ -15,6 +15,11 @@ main{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:16px
 .camera-btn{background:#1c3550;border:1px solid #527696;color:#d8edff;padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit;font-size:12px}
 .camera-btn:focus-visible{outline:3px solid #93e0ff;outline-offset:2px}
 .camera-btn[aria-pressed="true"]{border-color:#80d6f2;background:#1c4a61}
+#quality-controls{display:flex;gap:7px;flex-wrap:wrap}
+.quality-btn{background:#152e46;border:1px solid #4d6f8c;border-radius:8px;color:#d2e9fa;padding:8px 10px;cursor:pointer;font:inherit;font-size:12px}
+.quality-btn[aria-pressed="true"]{background:#1b5265;border-color:#91ddf2}
+.quality-btn:focus-visible{outline:3px solid #a6ecff;outline-offset:2px}
+#perf-state{font-variant-numeric:tabular-nums}
 #camera-mode{font-size:12px;color:#a3c9e8}
 #market-board-status{font-size:12px;color:#bad4e6}
 #market-board-status[data-status="BLOCKED"]{color:#ffadbb}
@@ -95,6 +100,18 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div class="metric"><small>최종 연구 판단</small><strong id="commander-decision">WAIT · 주문 승인 아님</strong></div>
 <div id="commander-votes" aria-label="각 에이전트의 완료 봉 연구 투표"></div>
 <p class="notice">6개 분석 모듈의 결과를 규칙으로 집계한 연구 화면입니다. 실제 AI 회의나 주문 실행이 아닙니다.</p>
+</section>
+<section class="panel" id="performance-panel"><h2>3D 성능 · DISPLAY ONLY</h2>
+<div class="metric"><small>QUALITY / RESOLUTION CAP</small>
+<div id="quality-controls" role="group" aria-label="3D 화질 설정">
+<button type="button" class="quality-btn" data-quality="low" aria-pressed="false">낮음</button>
+<button type="button" class="quality-btn" data-quality="balanced" aria-pressed="true">균형</button>
+<button type="button" class="quality-btn" data-quality="high" aria-pressed="false">높음</button>
+</div></div>
+<div class="metric"><small>RENDER STATUS</small><strong id="perf-state">화면 준비 중</strong></div>
+<div class="metric"><small>DISPLAY FRAME RATE (rough)</small><strong id="perf-fps">—</strong></div>
+<div class="metric"><small>RENDER SCALE</small><strong id="perf-resolution">—</strong></div>
+<p class="notice">화질 설정은 이 브라우저의 3D 렌더링 부하만 바꾸며, 시장 데이터 수집이나 연구 판단에 영향을 주지 않습니다. FPS는 추정 표시값입니다.</p>
 </section>
 <section class="panel"><h2>카메라 컨트롤</h2>
 <div id="camera-toolbar" role="group" aria-label="3D 카메라">
@@ -186,7 +203,10 @@ const scene=new THREE.Scene();scene.background=new THREE.Color(0x0c1627);
 scene.fog=new THREE.Fog(0x0c1627,17,45);
 const camera=new THREE.PerspectiveCamera(43,1,.1,100);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:"low-power"});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+const qualityCaps={low:1,balanced:1.5,high:2};
+let qualityMode="balanced";
+function activePixelRatio(){return Math.min(window.devicePixelRatio||1,qualityCaps[qualityMode]);}
+renderer.setPixelRatio(activePixelRatio());
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.shadowMap.enabled=false;
 stage.prepend(renderer.domElement);
@@ -683,8 +703,20 @@ function updateCamera(){
 updateCamera();
 function resize(){
  const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight);
+ renderer.setPixelRatio(activePixelRatio());
  renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
+ document.getElementById("perf-resolution").textContent=
+  Math.round(width*activePixelRatio())+" × "+Math.round(height*activePixelRatio())+
+  " (DPR "+activePixelRatio().toFixed(2)+")";
 }
+document.querySelectorAll("[data-quality]").forEach(button=>{
+ button.addEventListener("click",()=>{
+  qualityMode=button.dataset.quality;
+  document.querySelectorAll("[data-quality]").forEach(node=>
+   node.setAttribute("aria-pressed",String(node.dataset.quality===qualityMode)));
+  resize();
+ });
+});
 window.addEventListener("resize",resize);
 resize();
 let downX=0,downY=0,active=false;
@@ -724,9 +756,19 @@ renderer.domElement.addEventListener("wheel",e=>{
 },{passive:false});
 const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
 let frame=0;
-function stopRendering(){if(frame){cancelAnimationFrame(frame);frame=0;}}
+let performanceSampleStart=0,performanceFrameCount=0;
+function resetPerformanceSample(){
+ performanceSampleStart=0;performanceFrameCount=0;
+ document.getElementById("perf-fps").textContent="—";
+}
+function setRenderState(message){document.getElementById("perf-state").textContent=message;}
+function stopRendering(){
+ if(frame){cancelAnimationFrame(frame);frame=0;}
+ resetPerformanceSample();
+}
 function reportRendererFailure(reason){
  stopRendering();
+ setRenderState("중단 · "+reason);
  resetResearch(reason);
  document.getElementById("renderer-error").textContent=reason+" · 2.5D 화면 사용 가능";
  document.getElementById("webgl-fallback").dataset.visible="true";
@@ -734,6 +776,7 @@ function reportRendererFailure(reason){
 renderer.domElement.addEventListener("webglcontextlost",event=>{
  event.preventDefault();
  webglContextLost=true;
+ setRenderState("WebGL 오류");
  reportRendererFailure("WebGL 그래픽 컨텍스트 손실");
 });
 renderer.domElement.addEventListener("webglcontextrestored",()=>{
@@ -741,6 +784,8 @@ renderer.domElement.addEventListener("webglcontextrestored",()=>{
  document.getElementById("webgl-fallback").dataset.visible="false";
  document.getElementById("renderer-error").textContent="";
  resetResearch("WebGL 복구 후 새 연구 결과 확인 중");
+ setRenderState("컨텍스트 복구 · 재검증 중");
+ resetPerformanceSample();
  resize();
  refresh();
  if(!document.hidden)renderFrame();
@@ -756,6 +801,16 @@ function renderFrame(){
  try{
   renderer.render(scene,camera);
   if(stage.dataset.renderReady!=="true")window.spacebar3DReady();
+  const now=performance.now();
+  if(!performanceSampleStart)performanceSampleStart=now;
+  performanceFrameCount++;
+  const elapsed=now-performanceSampleStart;
+  if(elapsed>=1000){
+   const fps=Math.round(performanceFrameCount*1000/elapsed);
+   document.getElementById("perf-fps").textContent=fps+" FPS (대략)";
+   performanceSampleStart=now;performanceFrameCount=0;
+  }
+  setRenderState("렌더링 중 · "+qualityMode);
   frame=requestAnimationFrame(renderFrame);
  }catch(error){
   webglContextLost=true;
@@ -764,6 +819,7 @@ function renderFrame(){
 }
 document.addEventListener("visibilitychange",()=>{
  if(document.hidden)stopRendering();
+ if(document.hidden){setRenderState("다른 탭 · 렌더링 정지");}
  else if(!frame&&!webglContextLost){
   resetResearch("화면 복귀 · 신규 데이터 검증 중");
   refresh();
