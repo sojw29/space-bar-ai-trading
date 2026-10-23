@@ -68,9 +68,37 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 .paper-metric span{display:block;color:#98b7ce;font-size:12px}
 .paper-metric strong{display:block;font-size:19px;margin-top:5px;overflow-wrap:anywhere}
 .paper-danger{color:#ff9099}.paper-simulated{color:#8acbe6}
+
+/* V47: lightweight office diorama — CSS illustration, not a 3D renderer. */
+.office-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+.office-legend{display:flex;gap:8px;flex-wrap:wrap}
+.office-legend span{font-size:11px;padding:5px 9px;border-radius:30px;border:1px solid #415a7c;background:#10243d}
+.office-legend .bull{color:#68e7b5}.office-legend .bear{color:#ff9bab}.office-legend .idle{color:#ffd58c}
+.room{isolation:isolate;background:radial-gradient(ellipse at 45% 22%,#224970 0%,#11253f 42%,#091323 78%);min-height:455px}
+.room::before{content:"SPACE BAR / RESEARCH FLOOR";position:absolute;left:20px;top:13px;letter-spacing:.2em;font-size:10px;color:#99bddb;z-index:4}
+.room::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,#ffffff08,transparent 40%,#85c9ff05);z-index:3}
+.room-floor{border-radius:16px;transform:rotateX(50deg) rotateZ(-7deg);background:repeating-linear-gradient(0deg,transparent 0 48px,#3a61835a 49px 50px),repeating-linear-gradient(90deg,#152e4a 0 48px,#3a61835a 49px 50px);box-shadow:0 30px 42px #0009}
+.room-desk{background:linear-gradient(155deg,#2b4765,#162941 80%);box-shadow:7px 12px 0 #0b1526,12px 18px 25px #000a;min-height:97px}
+.room-desk .monitor{margin:8px auto 0;position:relative}
+.room-desk .monitor::after{content:"";position:absolute;left:40%;bottom:-11px;height:7px;width:8px;background:#607998}
+.room-desk .avatar{position:absolute;top:29px;left:8px;width:31px;height:31px;border:2px solid #6987a7;border-radius:50%;background:linear-gradient(145deg,#4c7293,#182943);display:grid;place-items:center;font-size:14px;box-shadow:0 2px 9px #000b;transform:skewY(6deg)}
+.room-desk .avatar::after{content:"";width:24px;height:7px;position:absolute;top:27px;border-radius:5px 5px 2px 2px;background:#467295;opacity:.88}
+.room-desk .label{margin-top:8px}
+.room-desk .role-label{display:block;text-align:center;font-size:9px;color:#a3bedc;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room-desk[data-agent="COMMANDER"]{background:linear-gradient(160deg,#6c5632,#283449 85%);border-color:#e7c87d}
+.room-desk[data-agent="COMMANDER"] .avatar{border-color:#f4ce77;background:#7b6036}
+.room-desk[data-agent="APEX"] .avatar{border-color:#eab789}
+.room-desk.offline-station{opacity:.68;filter:saturate(.55)}
+.room-desk.selected{z-index:5;outline:2px solid #8cdef8;outline-offset:5px}
+.room-desk .activity{z-index:2}
+.office-spotlight{font-size:13px;color:#bedaf2;border-left:3px solid #70c9f5;padding:9px 12px;background:#10243a;border-radius:4px}
+.office-spotlight strong{color:#ecf8ff}
+.office-jump{display:inline-block;color:#90e6ff;text-decoration:underline;text-underline-offset:4px}
+@media(max-width:650px){.room{min-height:560px}.room-desk{width:110px;height:90px;min-height:90px}.room-desk .label{font-size:11px}.room-desk .role-label{font-size:8px}.room-desk .avatar{left:2px;top:33px;width:25px;height:25px;font-size:11px}.room-desk .monitor{width:43px;height:25px}.room-desk[data-agent="COMMANDER"]{top:81%}}
+@media(prefers-reduced-motion:reduce){.room-desk,.monitor{animation:none!important;transition:none!important}}
 </style></head><body>
 <header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
-<p class="muted">Multi-Agent Research Dashboard · V32 Inspector Preview</p>
+<p class="muted">Multi-Agent Research Dashboard · V47 Interactive Office</p>
 <span class="badge">PAPER RESEARCH ONLY · NO LIVE ORDERS</span></header>
 <main><section class="summary">
 <div class="panel"><small>SYMBOL</small><div class="value" id="symbol">BTCUSDT</div></div>
@@ -78,10 +106,12 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 <div class="panel"><small>COMMANDER</small><div class="value WAIT" id="decision">WAIT</div></div>
 <div class="panel"><small>DATA MODE</small><div class="value" id="mode">HISTORICAL</div></div>
 </section>
-<section class="panel"><h2>Agent Trading Room · Isometric Preview</h2>
-<p class="muted">CSS 기반 아이소메트릭 시제품입니다. 캐릭터는 애니메이션이 아닌 상태 표시용입니다.</p>
+<section class="panel"><h2>Agent Trading Room · Interactive Office Preview</h2>
+<p class="muted">CSS 기반 2.5D 연구 사무실입니다. 실제 3D 엔진이나 자율 AI 캐릭터가 아닙니다. 책상을 선택하면 연구 판단 근거를 볼 수 있습니다.</p>
+<div class="office-topbar"><div class="office-legend" aria-label="신호 범례"><span class="bull">● LONG · 상승 판단</span><span class="bear">● SHORT · 하락 판단</span><span class="idle">● WAIT · 관망</span></div><a class="office-jump" href="#inspector-panel">선택 에이전트 상세 보기 ↓</a></div>
 <div class="activity-line" aria-live="polite"><span class="activity-pill" id="feed-state">기록 데이터</span><span class="activity-pill" id="risk-state">위험 검토 대기</span><span class="activity-pill" id="observation-age">데이터 시각 확인 대기</span></div>
-<div class="room" id="trading-room" aria-label="에이전트 트레이딩룸"><div class="room-floor" aria-hidden="true"></div></div>
+<div class="room" id="trading-room" aria-label="일곱 개의 연구 에이전트가 배치된 2.5D 사무실"><div class="room-floor" aria-hidden="true"></div></div>
+<p class="office-spotlight" id="office-spotlight" aria-live="polite"><strong>COMMANDER</strong> · 데이터 확인 대기 · 실제 주문 불가</p>
 </section>
 <section class="panel"><h2>AI Research Room</h2><p class="muted">각 에이전트의 분석 상태를 표시합니다. 3D 캐릭터는 향후 버전에서 추가됩니다.</p><div class="grid" id="agents"></div></section>
 <section class="panel" id="consensus-panel"><h2>Consensus Flow · 협업 판단 흐름</h2>
@@ -142,6 +172,8 @@ let latestEvents=new Map();
 let latestCandle="—";
 let lastFailure=true;
 let selectedAgent="COMMANDER";
+let isLiveTransport=false;
+const roleLabels={ATLAS:"추세 분석",ORBIT:"거래량",ECHO:"돌파 관찰",PULSE:"모멘텀",QUANT:"검증 대기",APEX:"위험 점검",COMMANDER:"합의 판단"};
 const consensusTiles=new Map();
 const voteGrid=document.getElementById("consensus-votes");
 for(const name of ids.filter(x=>x!=="COMMANDER")){
@@ -196,7 +228,7 @@ function renderConsensus(envelope){
  document.getElementById("consensus-veto").textContent=
   veto?"APEX 위험 게이트: 판단 강제 보류":"위험 게이트 비활성 · 거래 승인 아님";
  document.getElementById("consensus-evidence").textContent=
-  "판단 추적: "+String(envelope.observed_candle_utc||"시각 없음")+" · 과거 데이터";
+  "판단 추적: "+String(envelope.observed_candle_utc||"시각 없음")+" · "+(isLiveTransport?"공개 스트림":"과거 CSV");
 }
 function selectAgent(id){
  if(!ids.includes(id))return;
@@ -207,6 +239,13 @@ function selectAgent(id){
  }
  for(const [name,node] of nodes)node.card.classList.toggle("selected",name===id);
  renderInspector();
+ renderSpotlight();
+}
+function renderSpotlight(){
+ const event=lastFailure?null:latestEvents.get(selectedAgent);
+ const box=document.getElementById("office-spotlight");
+ const role=roleLabels[selectedAgent]||"연구";
+ box.textContent=selectedAgent+" / "+role+" · "+(event?event.decision+" · "+String(event.reason||"근거 없음"):"연구 데이터 대기") +" · 실제 주문 불가";
 }
 function renderInspector(){
  const event=lastFailure?null:latestEvents.get(selectedAgent);
@@ -216,7 +255,7 @@ function renderInspector(){
   event&&typeof event.confidence==="number"&&Number.isFinite(event.confidence)?
   String(Math.round(event.confidence*100))+" / 100 (주관적 점수)":"제공되지 않음";
  document.getElementById("inspector-time").textContent=event?latestCandle:"—";
- document.getElementById("inspector-connection").textContent=event?"과거 데이터":"연결 끊김 / 대기";
+ document.getElementById("inspector-connection").textContent=event?(isLiveTransport?"공개 시장 스트림":"과거 CSV 데이터"):"연결 끊김 / 대기";
  document.getElementById("inspector-reason").textContent=event?String(event.reason||"판단 근거 없음"):"분석 결과를 표시할 수 없습니다.";
  document.getElementById("inspector-votes").textContent=
   event&&selectedAgent==="COMMANDER"?
@@ -228,14 +267,15 @@ function renderInspector(){
 for(const id of ids){
  const desk=document.createElement("div");desk.className="room-desk WAIT";desk.dataset.agent=id;
  const monitor=document.createElement("div");monitor.className="monitor";
- const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=id==="COMMANDER"?"♛":"♟";
+ const avatar=document.createElement("div");avatar.className="avatar";avatar.setAttribute("aria-hidden","true");avatar.textContent=id==="COMMANDER"?"★":id==="APEX"?"◆":"●";
  const label=document.createElement("div");label.className="label";label.textContent=id;
+ const role=document.createElement("span");role.className="role-label";role.textContent=roleLabels[id];
  const signal=document.createElement("span");signal.className="signal WAIT";signal.textContent="WAIT";
  const activity=document.createElement("span");activity.className="activity";activity.textContent="대기";
  desk.setAttribute("role","button");desk.setAttribute("tabindex","0");desk.setAttribute("aria-label",id+" 분석 보기");
  desk.addEventListener("click",()=>selectAgent(id));
  desk.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();selectAgent(id);}});
- desk.append(monitor,avatar,label,signal,activity);room3d.append(desk);roomNodes.set(id,{desk,signal,activity});
+ desk.append(monitor,avatar,label,role,signal,activity);room3d.append(desk);roomNodes.set(id,{desk,signal,activity});
 }
 for(const id of ids){
  const card=document.createElement("article");card.className="agent";
@@ -252,7 +292,7 @@ function resetRoom(message){
  for(const id of ids){
   const node=nodes.get(id),station=roomNodes.get(id);
   node.state.textContent="WAIT";node.state.className="state WAIT";node.reason.textContent=message;
-  station.desk.className="room-desk WAIT";station.signal.textContent="WAIT";station.signal.className="signal WAIT";
+  station.desk.className="room-desk WAIT offline-station";station.signal.textContent="WAIT";station.signal.className="signal WAIT";
   station.activity.textContent="연결 대기";station.activity.className="activity offline";station.desk.removeAttribute("title");
  }
 }
@@ -369,7 +409,9 @@ async function refresh(){
   latestEvents=new Map(envelope.events.map(event=>[event.agent_id,event]));
   latestCandle=envelope.observed_candle_utc;
   lastFailure=false;
+  isLiveTransport=data.realtime;
   renderInspector();
+  renderSpotlight();
   const commander=envelope.events.find(x=>x.agent_id==="COMMANDER");
   const decision=commander&&["LONG","SHORT","WAIT"].includes(commander.decision)?commander.decision:"WAIT";
   const output=document.getElementById("decision");output.textContent=decision;output.className="value "+decision;
@@ -396,7 +438,9 @@ async function refresh(){
   latestCandle="—";
   resetRoom("데이터 수신 실패");
   resetConsensus();
+  isLiveTransport=false;
   renderInspector();
+  renderSpotlight();
  }
 }
 refresh();refreshPaper();refreshAnalytics();setInterval(refresh,30000);setInterval(refreshPaper,30000);setInterval(refreshAnalytics,30000);
