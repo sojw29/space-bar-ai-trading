@@ -1,0 +1,26 @@
+name: SPACE BAR V26 Multi-Agent Offline Tests
+
+on:
+  push:
+    branches:
+      - feature/v26-multi-agent-core
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-agent-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile agents
+        run: python -m compileall -q agents
+      - name: Run V26 tests
+        run: python agents/test_v26_agents.py
