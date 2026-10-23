@@ -29,6 +29,6 @@ jobs:
           python agents/test_v60_historical_paper.py
       - name: Existing paper financial accounting safety
         run: |
-          python agents/test_v41_paper_portfolio.py
+          python agents/test_v41_portfolio.py
           python agents/test_v42_paper_monitor.py
           python agents/test_v28_api.py
