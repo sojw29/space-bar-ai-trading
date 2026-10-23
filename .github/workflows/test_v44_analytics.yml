@@ -1,0 +1,41 @@
+name: SPACE BAR V44 Paper Performance Lab
+
+on:
+  push:
+    branches:
+      - feature/v44-paper-performance-analytics
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-analytics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile all Python
+        run: python -m compileall -q agents
+      - name: Verify dashboard JS syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          h=Path('web/command_center.html').read_text(encoding='utf-8')
+          Path('/tmp/v44.js').write_text(h.split('<script>',1)[1].split('</script>',1)[0],encoding='utf-8')
+          PY
+          node --check /tmp/v44.js
+      - name: Simulated paper and analytics regression
+        run: |
+          python agents/test_v41_portfolio.py
+          python agents/test_v42_paper_monitor.py
+          python agents/test_v43_journal.py
+          python agents/test_v44_analytics.py
