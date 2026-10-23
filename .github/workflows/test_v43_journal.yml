@@ -1,0 +1,32 @@
+name: SPACE BAR V43 Paper Journal Integrity
+
+on:
+  push:
+    branches:
+      - feature/v43-append-only-paper-journal
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper-journal-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile
+        run: python -m compileall -q agents
+      - name: Offline journal and paper tests
+        run: |
+          python agents/test_v26_agents.py
+          python agents/test_v34_ledger.py
+          python agents/test_v40_warmup.py
+          python agents/test_v41_portfolio.py
+          python agents/test_v42_paper_monitor.py
+          python agents/test_v43_journal.py
