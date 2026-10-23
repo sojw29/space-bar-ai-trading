@@ -72,6 +72,22 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
             elif path == "/health":
                 self.reply(200, {"status": "ok", "mode": "local-paper-only",
                                  "orders_enabled": False})
+            elif path == "/api/v1/market":
+                try:
+                    if live_store is not None:
+                        if not live_store.status()["ready"]:
+                            self.reply(503, {"error": "market_feed_not_ready",
+                                             "orders_enabled": False})
+                            return
+                        self.reply(200, live_store.market_snapshot())
+                    else:
+                        from market_board_v52 import market_board
+                        self.reply(200, market_board(
+                            load_candles(history_path, limit=60), realtime=False,
+                            source="historical_csv_snapshot"))
+                except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                    self.reply(503, {"error": "market_chart_unavailable",
+                                     "orders_enabled": False})
             elif path == "/api/v1/paper/analytics":
                 if paper_journal is None:
                     self.reply(404, {"error": "paper_journal_not_enabled", "orders_enabled": False})
