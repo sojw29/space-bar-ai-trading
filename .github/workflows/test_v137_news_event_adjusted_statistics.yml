@@ -1,0 +1,26 @@
+name: SPACE BAR V137 Event-Adjusted News Statistics
+on:
+  push:
+    paths:
+      - 'agents/news_event_adjusted_statistics_v137.py'
+      - 'agents/test_v137_news_event_adjusted_statistics.py'
+      - '.github/workflows/test_v137_news_event_adjusted_statistics.yml'
+  pull_request:
+    paths:
+      - 'agents/news_event_adjusted_statistics_v137.py'
+      - 'agents/test_v137_news_event_adjusted_statistics.py'
+      - '.github/workflows/test_v137_news_event_adjusted_statistics.yml'
+  workflow_dispatch:
+jobs:
+  offline-adjusted-news-statistics:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v137_news_event_adjusted_statistics.py' -v
