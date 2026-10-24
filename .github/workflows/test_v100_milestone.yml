@@ -1,0 +1,29 @@
+name: SPACE BAR V100 Offline Milestone
+on:
+  push:
+    paths:
+      - 'agents/milestone_gate_v100.py'
+      - 'agents/test_v100_milestone_gate.py'
+      - 'docs/V100_OFFLINE_MILESTONE.md'
+      - '.github/workflows/test_v100_milestone.yml'
+  pull_request:
+    paths:
+      - 'agents/milestone_gate_v100.py'
+      - 'agents/test_v100_milestone_gate.py'
+      - 'docs/V100_OFFLINE_MILESTONE.md'
+      - '.github/workflows/test_v100_milestone.yml'
+  workflow_dispatch:
+jobs:
+  offline-milestone:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v100_milestone_gate.py' -v
+      - run: python agents/milestone_gate_v100.py
