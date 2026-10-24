@@ -38,6 +38,24 @@ def render(data):
         raise ValueError("INVALID_DASHBOARD_METADATA")
     if data.get("data_freshness")!="STATIC_OFFLINE_SNAPSHOT":
         raise ValueError("UNSUPPORTED_DATA_FRESHNESS")
+    # Fail closed if a supplied JSON file contradicts V143's research-only
+    # safety contract. A renderer must not label live/order-capable data offline.
+    expected_safety={
+        "status":"OFFLINE_NEWS_DASHBOARD_VIEW_MODEL",
+        "research_only":True,
+        "simulation_only":True,
+        "exchange_connected":False,
+        "orders_submitted_to_exchange":0,
+        "live_trading_approved":False,
+        "validated_edge":False,
+        "causal_effect_established":False,
+        "event_identity_verified":False,
+        "first_tradable_news_availability_verified":False,
+    }
+    for key,expected in expected_safety.items():
+        actual=data.get(key)
+        if type(actual) is not type(expected) or actual!=expected:
+            raise ValueError("UNSAFE_DASHBOARD_CONTRACT: "+key)
     cards_html=[]
     for card in cards:
         if not isinstance(card,dict) or not isinstance(card.get("label"),str):
