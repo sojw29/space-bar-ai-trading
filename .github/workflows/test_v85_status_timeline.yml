@@ -1,0 +1,26 @@
+name: SPACE BAR V85 Status Timeline
+on:
+  push:
+    paths:
+      - 'agents/status_timeline_v85.py'
+      - 'agents/test_v85_status_timeline.py'
+      - '.github/workflows/test_v85_status_timeline.yml'
+  pull_request:
+    paths:
+      - 'agents/status_timeline_v85.py'
+      - 'agents/test_v85_status_timeline.py'
+      - '.github/workflows/test_v85_status_timeline.yml'
+  workflow_dispatch:
+jobs:
+  timeline:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v85_status_timeline.py' -v
