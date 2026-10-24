@@ -1,0 +1,28 @@
+name: SPACE BAR V98 Offline Integration
+on:
+  push:
+    paths:
+      - 'agents/integration_verifier_v98.py'
+      - 'agents/test_v98_integration_verifier.py'
+      - '.github/workflows/test_v98_integration_verifier.yml'
+  pull_request:
+    paths:
+      - 'agents/integration_verifier_v98.py'
+      - 'agents/test_v98_integration_verifier.py'
+      - '.github/workflows/test_v98_integration_verifier.yml'
+  workflow_dispatch:
+jobs:
+  offline-integration:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v98_integration_verifier.py' -v
+      - name: Full isolated offline integration CLI
+        run: python agents/integration_verifier_v98.py
