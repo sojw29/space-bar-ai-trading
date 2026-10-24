@@ -1,0 +1,22 @@
+name: SPACE BAR V70 Read-only Recovery
+on:
+  push:
+    paths:
+      - 'agents/research_recovery_v70.py'
+      - 'agents/test_v70_recovery.py'
+      - '.github/workflows/test_v70_recovery.yml'
+  pull_request:
+    paths:
+      - 'agents/research_recovery_v70.py'
+      - 'agents/test_v70_recovery.py'
+      - '.github/workflows/test_v70_recovery.yml'
+  workflow_dispatch:
+jobs:
+  offline-recovery:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v70_recovery.py' -v
