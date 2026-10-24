@@ -1,0 +1,26 @@
+name: SPACE BAR V140 Verified News Statistics Comparison
+on:
+  push:
+    paths:
+      - 'agents/news_verified_statistics_comparison_v140.py'
+      - 'agents/test_v140_news_verified_statistics_comparison.py'
+      - '.github/workflows/test_v140_news_verified_statistics_comparison.yml'
+  pull_request:
+    paths:
+      - 'agents/news_verified_statistics_comparison_v140.py'
+      - 'agents/test_v140_news_verified_statistics_comparison.py'
+      - '.github/workflows/test_v140_news_verified_statistics_comparison.yml'
+  workflow_dispatch:
+jobs:
+  offline-verified-news-comparison:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v140_news_verified_statistics_comparison.py' -v
