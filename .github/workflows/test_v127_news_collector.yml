@@ -1,0 +1,26 @@
+name: SPACE BAR V127 News Collector
+on:
+  push:
+    paths:
+      - 'agents/news_collector_v127.py'
+      - 'agents/test_v127_news_collector.py'
+      - '.github/workflows/test_v127_news_collector.yml'
+  pull_request:
+    paths:
+      - 'agents/news_collector_v127.py'
+      - 'agents/test_v127_news_collector.py'
+      - '.github/workflows/test_v127_news_collector.yml'
+  workflow_dispatch:
+jobs:
+  offline-news-tests:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v127_news_collector.py' -v
