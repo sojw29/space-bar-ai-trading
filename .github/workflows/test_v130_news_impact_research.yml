@@ -1,0 +1,26 @@
+name: SPACE BAR V130 News Impact Research
+on:
+  push:
+    paths:
+      - 'agents/news_impact_research_v130.py'
+      - 'agents/test_v130_news_impact_research.py'
+      - '.github/workflows/test_v130_news_impact_research.yml'
+  pull_request:
+    paths:
+      - 'agents/news_impact_research_v130.py'
+      - 'agents/test_v130_news_impact_research.py'
+      - '.github/workflows/test_v130_news_impact_research.yml'
+  workflow_dispatch:
+jobs:
+  offline-news-impact:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v130_news_impact_research.py' -v
