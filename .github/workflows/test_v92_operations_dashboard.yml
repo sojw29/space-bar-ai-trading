@@ -1,0 +1,35 @@
+name: SPACE BAR V92 Operations Dashboard
+on:
+  push:
+    paths:
+      - 'agents/operations_dashboard_v92.py'
+      - 'agents/test_v92_operations_dashboard.py'
+      - '.github/workflows/test_v92_operations_dashboard.yml'
+  pull_request:
+    paths:
+      - 'agents/operations_dashboard_v92.py'
+      - 'agents/test_v92_operations_dashboard.py'
+      - '.github/workflows/test_v92_operations_dashboard.yml'
+  workflow_dispatch:
+jobs:
+  operations-dashboard:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v92_operations_dashboard.py' -v
+      - name: Headless combined dashboard smoke test
+        shell: python
+        run: |
+          import json, subprocess, sys
+          run = subprocess.run([sys.executable, "agents/operations_dashboard_v92.py", "--headless"], capture_output=True, text=True)
+          assert run.returncode in (0, 1), run.stderr
+          data = json.loads(run.stdout)
+          assert data["live_trading_approved"] is False
+          assert data["operations"]["live_trading_approved"] is False
