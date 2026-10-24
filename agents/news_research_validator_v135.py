@@ -53,7 +53,9 @@ def validate(pipeline,overlap_minutes=60):
             raise ValueError("INVALID_ARTICLE_URL")
         seen=_utc(article.get("gdelt_seen_at_utc"))
         by_id[aid]=seen
-        url_keys[url.lower().rstrip("/")].append(aid)
+        # V127 canonicalizes scheme/host but deliberately preserves
+        # case-sensitive paths, queries and trailing slashes.
+        url_keys[url].append(aid)
         headline_keys[" ".join(title.casefold().split())].append(aid)
     event_ids=[]
     for event in events:
