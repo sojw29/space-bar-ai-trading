@@ -1,0 +1,26 @@
+name: SPACE BAR V126 Drift Diagnostics
+on:
+  push:
+    paths:
+      - 'agents/drift_diagnostics_v126.py'
+      - 'agents/test_v126_drift_diagnostics.py'
+      - '.github/workflows/test_v126_drift_diagnostics.yml'
+  pull_request:
+    paths:
+      - 'agents/drift_diagnostics_v126.py'
+      - 'agents/test_v126_drift_diagnostics.py'
+      - '.github/workflows/test_v126_drift_diagnostics.yml'
+  workflow_dispatch:
+jobs:
+  drift-diagnostics:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v126_drift_diagnostics.py' -v
