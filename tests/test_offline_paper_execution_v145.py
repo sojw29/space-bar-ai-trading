@@ -46,6 +46,11 @@ class OfflinePaperExecutionTests(unittest.TestCase):
                           reference_price=1e308, available_volume=1e308,
                           max_participation=1.0)
 
+    def test_oversized_integer_rejected_as_value_error(self):
+        with self.assertRaises(ValueError):
+            simulate_fill(side="BUY", quantity=10 ** 1000,
+                          reference_price=100, available_volume=1000)
+
     def test_invalid_inputs_fail_closed(self):
         cases = [
             dict(side="HOLD"), dict(quantity=0), dict(reference_price=0),
