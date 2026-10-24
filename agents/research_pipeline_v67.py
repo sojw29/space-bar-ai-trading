@@ -54,7 +54,6 @@ def run(data_dir, reports_dir, now=None):
         v66 = dict(v66)
         v66["status"] = "BLOCKED"
         v66["blockers"] = sorted(set(v66["blockers"] + ["V68_INCONSISTENT_REPORT_BUNDLE"]))
-        atomic_json(r / "v66" / "health.json", v66)
     return v66
 
 def main():
