@@ -10,6 +10,7 @@ class PaperFill:
     reference_price: float
     fill_price: float
     fee: float
+    spread_cost: float
     slippage_cost: float
     notional: float
 
@@ -21,7 +22,7 @@ def simulate_fill(*, side: str, quantity: float, reference_price: float,
     """Simulate a fill against a completed candle's volume (base units).
 
     Returns None if the order cannot fit within the configured participation
-    cap. Never submits, queues or routes an order.
+    cap. Spread cost and slippage cost are reported separately. Never\n    submits, queues or routes an order.
     """
     if side not in ("BUY", "SELL"):
         raise ValueError("side must be BUY or SELL")
@@ -42,13 +43,14 @@ def simulate_fill(*, side: str, quantity: float, reference_price: float,
     fill_price = reference_price * (1 + impact if side == "BUY" else 1 - impact)
     notional = quantity * fill_price
     fee = notional * fee_bps / 10000
-    slippage_cost = quantity * reference_price * impact
+    spread_cost = quantity * reference_price * (spread_bps / 2) / 10000
+    slippage_cost = quantity * reference_price * slippage_bps / 10000
     if any(not isfinite(x) or x < 0 for x in
-           (fill_price, notional, fee, slippage_cost)) or fill_price <= 0:
+           (fill_price, notional, fee, spread_cost, slippage_cost)) or fill_price <= 0:
         raise ValueError("nonfinite or invalid simulated fill")
     return PaperFill(
         side=side, quantity=quantity, reference_price=reference_price,
         fill_price=fill_price, fee=fee,
-        slippage_cost=slippage_cost,
+        spread_cost=spread_cost, slippage_cost=slippage_cost,
         notional=notional,
     )
