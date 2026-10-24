@@ -1,0 +1,26 @@
+name: SPACE BAR V135 News Research Validator
+on:
+  push:
+    paths:
+      - 'agents/news_research_validator_v135.py'
+      - 'agents/test_v135_news_research_validator.py'
+      - '.github/workflows/test_v135_news_research_validator.yml'
+  pull_request:
+    paths:
+      - 'agents/news_research_validator_v135.py'
+      - 'agents/test_v135_news_research_validator.py'
+      - '.github/workflows/test_v135_news_research_validator.yml'
+  workflow_dispatch:
+jobs:
+  offline-news-validation:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v135_news_research_validator.py' -v
