@@ -1,0 +1,25 @@
+name: SPACE BAR V77 Diagnostic Trends
+on:
+  push:
+    paths:
+      - 'agents/diagnostic_trends_v77.py'
+      - 'agents/test_v77_trends.py'
+      - '.github/workflows/test_v77_trends.yml'
+  pull_request:
+    paths:
+      - 'agents/diagnostic_trends_v77.py'
+      - 'agents/test_v77_trends.py'
+      - '.github/workflows/test_v77_trends.yml'
+  workflow_dispatch:
+jobs:
+  offline-trends:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v77_trends.py' -v
