@@ -1,0 +1,26 @@
+name: SPACE BAR V111 Research Gate
+on:
+  push:
+    paths:
+      - 'agents/research_gate_v111.py'
+      - 'agents/test_v111_research_gate.py'
+      - '.github/workflows/test_v111_research_gate.yml'
+  pull_request:
+    paths:
+      - 'agents/research_gate_v111.py'
+      - 'agents/test_v111_research_gate.py'
+      - '.github/workflows/test_v111_research_gate.yml'
+  workflow_dispatch:
+jobs:
+  research-gate:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v111_research_gate.py' -v
