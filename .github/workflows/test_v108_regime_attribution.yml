@@ -1,0 +1,26 @@
+name: SPACE BAR V108 Regime Attribution
+on:
+  push:
+    paths:
+      - 'agents/regime_attribution_v108.py'
+      - 'agents/test_v108_regime_attribution.py'
+      - '.github/workflows/test_v108_regime_attribution.yml'
+  pull_request:
+    paths:
+      - 'agents/regime_attribution_v108.py'
+      - 'agents/test_v108_regime_attribution.py'
+      - '.github/workflows/test_v108_regime_attribution.yml'
+  workflow_dispatch:
+jobs:
+  regime-attribution:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v108_regime_attribution.py' -v
