@@ -1,0 +1,26 @@
+name: SPACE BAR V105 Multi Strategy Holdout
+on:
+  push:
+    paths:
+      - 'agents/multi_strategy_holdout_v105.py'
+      - 'agents/test_v105_multi_strategy_holdout.py'
+      - '.github/workflows/test_v105_multi_strategy_holdout.yml'
+  pull_request:
+    paths:
+      - 'agents/multi_strategy_holdout_v105.py'
+      - 'agents/test_v105_multi_strategy_holdout.py'
+      - '.github/workflows/test_v105_multi_strategy_holdout.yml'
+  workflow_dispatch:
+jobs:
+  multi-strategy:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v105_multi_strategy_holdout.py' -v
