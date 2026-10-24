@@ -108,7 +108,8 @@ def main():
         if path.exists() and path.stat().st_size>MAX_INPUT_BYTES:
             raise ValueError("INPUT_TOO_LARGE")
     report=json.loads(args.v132_report_json.read_text(encoding="utf-8"))
-    history=json.loads(args.history_json.read_text(encoding="utf-8")) if args.history_json.exists() else []
+    stored=json.loads(args.history_json.read_text(encoding="utf-8")) if args.history_json.exists() else []
+    history=stored.get("history") if isinstance(stored,dict) and stored.get("version")=="V134.0" else stored
     result=record(report,history,args.recorded_at,args.label)
     encoded=json.dumps(result,indent=2,ensure_ascii=False)+"\n"
     destination=args.output or args.history_json
