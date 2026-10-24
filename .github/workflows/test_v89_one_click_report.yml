@@ -1,0 +1,37 @@
+name: SPACE BAR V89 One-Click Report
+on:
+  push:
+    paths:
+      - 'agents/one_click_report_v89.py'
+      - 'agents/test_v89_one_click_report.py'
+      - '.github/workflows/test_v89_one_click_report.yml'
+  pull_request:
+    paths:
+      - 'agents/one_click_report_v89.py'
+      - 'agents/test_v89_one_click_report.py'
+      - '.github/workflows/test_v89_one_click_report.yml'
+  workflow_dispatch:
+jobs:
+  one-click:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v89_one_click_report.py' -v
+      - name: Headless report builder smoke test
+        shell: python
+        run: |
+          import json, subprocess, sys, tempfile
+          from pathlib import Path
+          with tempfile.TemporaryDirectory() as d:
+              run = subprocess.run([sys.executable, "agents/one_click_report_v89.py", "--headless", "--output-dir", d], capture_output=True, text=True)
+              assert run.returncode in (0, 1), run.stderr
+              result = json.loads(run.stdout)
+              assert result["live_trading_approved"] is False
+              assert Path(result["html_path"]).exists()
