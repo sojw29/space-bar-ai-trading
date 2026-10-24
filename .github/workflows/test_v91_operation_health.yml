@@ -1,0 +1,26 @@
+name: SPACE BAR V91 Operation Health
+on:
+  push:
+    paths:
+      - 'agents/operation_health_v91.py'
+      - 'agents/test_v91_operation_health.py'
+      - '.github/workflows/test_v91_operation_health.yml'
+  pull_request:
+    paths:
+      - 'agents/operation_health_v91.py'
+      - 'agents/test_v91_operation_health.py'
+      - '.github/workflows/test_v91_operation_health.yml'
+  workflow_dispatch:
+jobs:
+  operation-health:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v91_operation_health.py' -v
