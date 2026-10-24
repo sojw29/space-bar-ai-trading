@@ -1,0 +1,26 @@
+name: SPACE BAR V121 Walkforward Scorecard
+on:
+  push:
+    paths:
+      - 'agents/walkforward_scorecard_v121.py'
+      - 'agents/test_v121_walkforward_scorecard.py'
+      - '.github/workflows/test_v121_walkforward_scorecard.yml'
+  pull_request:
+    paths:
+      - 'agents/walkforward_scorecard_v121.py'
+      - 'agents/test_v121_walkforward_scorecard.py'
+      - '.github/workflows/test_v121_walkforward_scorecard.yml'
+  workflow_dispatch:
+jobs:
+  walkforward-scorecard:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v121_walkforward_scorecard.py' -v
