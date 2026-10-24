@@ -1,0 +1,38 @@
+name: SPACE BAR V90 Operation Journal
+on:
+  push:
+    paths:
+      - 'agents/operation_journal_v90.py'
+      - 'agents/test_v90_operation_journal.py'
+      - '.github/workflows/test_v90_operation_journal.yml'
+  pull_request:
+    paths:
+      - 'agents/operation_journal_v90.py'
+      - 'agents/test_v90_operation_journal.py'
+      - '.github/workflows/test_v90_operation_journal.yml'
+  workflow_dispatch:
+jobs:
+  operation-journal:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v90_operation_journal.py' -v
+      - name: Journal CLI smoke test
+        shell: python
+        run: |
+          import json, subprocess, sys, tempfile
+          from pathlib import Path
+          with tempfile.TemporaryDirectory() as d:
+              journal = Path(d) / "ops.jsonl"
+              run = subprocess.run([sys.executable, "agents/operation_journal_v90.py", "--journal", str(journal), "--output-dir", str(Path(d) / "out")], capture_output=True, text=True)
+              assert run.returncode in (0, 1), run.stderr
+              event = json.loads(run.stdout)
+              assert event["live_trading_approved"] is False
+              assert journal.exists()
