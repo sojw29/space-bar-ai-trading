@@ -37,9 +37,9 @@ def simulate_fill(*, side: str, quantity: float, reference_price: float,
     if quantity > available_volume * max_participation:
         return None
     impact = (spread_bps / 2 + slippage_bps) / 10000
+    if impact >= 1:
+        raise ValueError("execution assumptions imply 100% or greater price impact")
     fill_price = reference_price * (1 + impact if side == "BUY" else 1 - impact)
-    if fill_price <= 0:
-        raise ValueError("execution assumptions produce nonpositive price")
     notional = quantity * fill_price
     return PaperFill(
         side=side, quantity=quantity, reference_price=reference_price,
