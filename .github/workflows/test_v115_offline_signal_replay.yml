@@ -1,0 +1,26 @@
+name: SPACE BAR V115 Offline Signal Replay
+on:
+  push:
+    paths:
+      - 'agents/offline_signal_replay_v115.py'
+      - 'agents/test_v115_offline_signal_replay.py'
+      - '.github/workflows/test_v115_offline_signal_replay.yml'
+  pull_request:
+    paths:
+      - 'agents/offline_signal_replay_v115.py'
+      - 'agents/test_v115_offline_signal_replay.py'
+      - '.github/workflows/test_v115_offline_signal_replay.yml'
+  workflow_dispatch:
+jobs:
+  signal-replay:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v115_offline_signal_replay.py' -v
