@@ -1,0 +1,26 @@
+name: SPACE BAR V102 Chronological Holdout
+on:
+  push:
+    paths:
+      - 'agents/chronological_holdout_v102.py'
+      - 'agents/test_v102_chronological_holdout.py'
+      - '.github/workflows/test_v102_chronological_holdout.yml'
+  pull_request:
+    paths:
+      - 'agents/chronological_holdout_v102.py'
+      - 'agents/test_v102_chronological_holdout.py'
+      - '.github/workflows/test_v102_chronological_holdout.yml'
+  workflow_dispatch:
+jobs:
+  holdout:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v102_chronological_holdout.py' -v
