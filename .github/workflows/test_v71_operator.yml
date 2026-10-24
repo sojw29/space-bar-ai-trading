@@ -1,0 +1,22 @@
+name: SPACE BAR V71 Operator Status
+on:
+  push:
+    paths:
+      - 'agents/research_operator_v71.py'
+      - 'agents/test_v71_operator.py'
+      - '.github/workflows/test_v71_operator.yml'
+  pull_request:
+    paths:
+      - 'agents/research_operator_v71.py'
+      - 'agents/test_v71_operator.py'
+      - '.github/workflows/test_v71_operator.yml'
+  workflow_dispatch:
+jobs:
+  offline-operator:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v71_operator.py' -v
