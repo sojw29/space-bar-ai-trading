@@ -1,0 +1,26 @@
+name: SPACE BAR V101 Research Evidence Gate
+on:
+  push:
+    paths:
+      - 'agents/evidence_quality_gate_v101.py'
+      - 'agents/test_v101_evidence_quality_gate.py'
+      - '.github/workflows/test_v101_evidence_quality_gate.yml'
+  pull_request:
+    paths:
+      - 'agents/evidence_quality_gate_v101.py'
+      - 'agents/test_v101_evidence_quality_gate.py'
+      - '.github/workflows/test_v101_evidence_quality_gate.yml'
+  workflow_dispatch:
+jobs:
+  evidence-gate:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v101_evidence_quality_gate.py' -v
