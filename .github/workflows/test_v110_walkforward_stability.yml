@@ -1,0 +1,26 @@
+name: SPACE BAR V110 Walkforward Stability
+on:
+  push:
+    paths:
+      - 'agents/walkforward_stability_v110.py'
+      - 'agents/test_v110_walkforward_stability.py'
+      - '.github/workflows/test_v110_walkforward_stability.yml'
+  pull_request:
+    paths:
+      - 'agents/walkforward_stability_v110.py'
+      - 'agents/test_v110_walkforward_stability.py'
+      - '.github/workflows/test_v110_walkforward_stability.yml'
+  workflow_dispatch:
+jobs:
+  stability:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v110_walkforward_stability.py' -v
