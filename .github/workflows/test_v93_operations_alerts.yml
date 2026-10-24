@@ -1,0 +1,36 @@
+name: SPACE BAR V93 Operations Alerts
+on:
+  push:
+    paths:
+      - 'agents/operations_alerts_v93.py'
+      - 'agents/test_v93_operations_alerts.py'
+      - '.github/workflows/test_v93_operations_alerts.yml'
+  pull_request:
+    paths:
+      - 'agents/operations_alerts_v93.py'
+      - 'agents/test_v93_operations_alerts.py'
+      - '.github/workflows/test_v93_operations_alerts.yml'
+  workflow_dispatch:
+jobs:
+  operations-alerts:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v93_operations_alerts.py' -v
+      - name: Offline alert CLI smoke test
+        shell: python
+        run: |
+          import json, subprocess, sys, tempfile
+          with tempfile.TemporaryDirectory() as d:
+              run = subprocess.run([sys.executable, "agents/operations_alerts_v93.py", "--repo", d], capture_output=True, text=True)
+              assert run.returncode == 1, run.stderr
+              result = json.loads(run.stdout)
+              assert result["severity"] == "CRITICAL"
+              assert result["live_trading_approved"] is False
