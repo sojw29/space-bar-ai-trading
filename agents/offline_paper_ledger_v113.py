@@ -97,8 +97,8 @@ class PaperLedger:
         price = _positive(price, "PRICE")
         units = _positive(units, "UNITS")
         self.mark(price, day)
-        if self.kill_switch:
-            raise ValueError("KILL_SWITCH_ACTIVE")
+        # A loss-limit halt must block exposure increases, not trap existing
+        # hypothetical positions. SELL is strictly reduction-only: no shorts.
         if units > self.units:
             raise ValueError("INSUFFICIENT_UNITS")
         gross = units*price
