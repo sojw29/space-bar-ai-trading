@@ -1,0 +1,27 @@
+name: SPACE BAR V83 Desktop GUI
+on:
+  push:
+    paths:
+      - 'agents/desktop_gui_v83.py'
+      - 'agents/test_v83_desktop_gui.py'
+      - '.github/workflows/test_v83_desktop_gui.yml'
+  pull_request:
+    paths:
+      - 'agents/desktop_gui_v83.py'
+      - 'agents/test_v83_desktop_gui.py'
+      - '.github/workflows/test_v83_desktop_gui.yml'
+  workflow_dispatch:
+jobs:
+  desktop-gui-headless:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v83_desktop_gui.py' -v
+      - run: python agents/desktop_gui_v83.py --headless self-test
