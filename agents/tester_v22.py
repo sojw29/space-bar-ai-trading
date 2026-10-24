@@ -55,6 +55,17 @@ def inspect_candles(path, cutoff):
     }
 
 
+def forward_evidence_status(candles, issues):
+    """Distinguish intact archives from actual post-cutoff observations."""
+    if issues:
+        return "INTEGRITY_FAILURE"
+    if candles["forward_candle_count"] == 0:
+        return "NO_FORWARD_CANDLES"
+    if candles["nonconsecutive_intervals"]:
+        return "CANDLE_GAPS_REQUIRE_REVIEW"
+    return "FORWARD_CANDLES_PRESENT_UNVERIFIED"
+
+
 def previous_evidence_path():
     """Resolve both supported artifact ZIP layouts, never current-run files."""
     configured = PREVIOUS / "evidence.json"
@@ -123,6 +134,9 @@ def run():
         "errors": sorted(set(issues)),
         "warnings": sorted(set(warnings)),
         "integrity_pass": not issues,
+        "forward_evidence_status": forward_evidence_status(candles, issues),
+        "forward_evidence_available": candles["forward_candle_count"] > 0,
+        "forward_evidence_usable_for_research": forward_evidence_status(candles, issues) == "FORWARD_CANDLES_PRESENT_UNVERIFIED",
         "independent_oos_verified": False,
         "live_trading_approved": False,
         "limitations": [
@@ -132,7 +146,8 @@ def run():
         ],
     }
     (OUT / "evidence.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print("V22 evidence gate:", "PASS" if not issues else "FAIL")
+    print("V22 data integrity:", "PASS" if not issues else "FAIL")
+    print("V22 forward evidence:", report["forward_evidence_status"])
     print("Forward candles:", candles["forward_candle_count"], "prior:", bool(prior))
     for item in issues:
         print("ERROR:", item)

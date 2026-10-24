@@ -105,6 +105,16 @@ class RegressionTests(unittest.TestCase):
         counts = v21.finalized_by_scenario(v21.closed(rows)[0])
         self.assertEqual(counts, {"A": {"BASE": 1, "STRESS": 1}})
 
+    def test_v22_integrity_pass_without_forward_data_is_not_evidence(self):
+        candles = {"forward_candle_count": 0, "nonconsecutive_intervals": 0}
+        self.assertEqual(v22.forward_evidence_status(candles, []), "NO_FORWARD_CANDLES")
+        self.assertEqual(v22.forward_evidence_status(candles, ["CUTOFF_DRIFT"]), "INTEGRITY_FAILURE")
+        candles["forward_candle_count"] = 10
+        candles["nonconsecutive_intervals"] = 1
+        self.assertEqual(v22.forward_evidence_status(candles, []), "CANDLE_GAPS_REQUIRE_REVIEW")
+        candles["nonconsecutive_intervals"] = 0
+        self.assertEqual(v22.forward_evidence_status(candles, []), "FORWARD_CANDLES_PRESENT_UNVERIFIED")
+
     def test_v22_candle_integrity(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "candles.csv"
