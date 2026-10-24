@@ -10,6 +10,7 @@ from observation_diagnostics_v63 import diagnose, read_json
 from archive_lag_v64 import SYMBOLS, TIMEFRAMES, diagnose_file
 from data_quality_v65 import score_file
 from research_health_v66 import aggregate
+from research_manifest_v68 import inspect_bundle
 
 def atomic_json(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -47,6 +48,12 @@ def run(data_dir, reports_dir, now=None):
                                    ("v65", "quality.json", v65),
                                    ("v66", "health.json", v66)):
         atomic_json(r / version / name, payload)
+    manifest = inspect_bundle(r)
+    atomic_json(r / "v68" / "manifest.json", manifest)
+    if manifest["status"] != "CONSISTENT_BUNDLE":
+        v66 = dict(v66)
+        v66["status"] = "BLOCKED"
+        v66["blockers"] = sorted(set(v66["blockers"] + ["V68_INCONSISTENT_REPORT_BUNDLE"]))
     return v66
 
 def main():

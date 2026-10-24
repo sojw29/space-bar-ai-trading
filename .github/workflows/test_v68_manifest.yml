@@ -1,0 +1,25 @@
+name: SPACE BAR V68 Research Manifest
+on:
+  push:
+    paths:
+      - 'agents/research_manifest_v68.py'
+      - 'agents/research_pipeline_v67.py'
+      - 'agents/test_v68_manifest.py'
+      - '.github/workflows/test_v68_manifest.yml'
+  pull_request:
+    paths:
+      - 'agents/research_manifest_v68.py'
+      - 'agents/research_pipeline_v67.py'
+      - 'agents/test_v68_manifest.py'
+      - '.github/workflows/test_v68_manifest.yml'
+  workflow_dispatch:
+jobs:
+  offline-manifest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v68_manifest.py' -v
+      - run: python -m unittest discover -s agents -p 'test_v67_pipeline.py' -v
