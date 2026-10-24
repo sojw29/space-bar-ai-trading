@@ -1,0 +1,33 @@
+name: SPACE BAR V86 Timeline Dashboard
+on:
+  push:
+    paths:
+      - 'agents/timeline_dashboard_v86.py'
+      - 'agents/test_v86_timeline_dashboard.py'
+      - '.github/workflows/test_v86_timeline_dashboard.yml'
+  pull_request:
+    paths:
+      - 'agents/timeline_dashboard_v86.py'
+      - 'agents/test_v86_timeline_dashboard.py'
+      - '.github/workflows/test_v86_timeline_dashboard.yml'
+  workflow_dispatch:
+jobs:
+  timeline-dashboard:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v86_timeline_dashboard.py' -v
+      - name: Headless dashboard smoke test
+        shell: python
+        run: |
+          import subprocess, sys
+          p = subprocess.run([sys.executable, "agents/timeline_dashboard_v86.py", "--headless"], capture_output=True, text=True)
+          assert p.returncode in (0, 1), p.stderr
+          assert '"live_trading_approved": false' in p.stdout.lower()
