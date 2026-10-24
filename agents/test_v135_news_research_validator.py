@@ -22,6 +22,12 @@ class ResearchValidatorTests(unittest.TestCase):
         self.assertEqual(validate(report(titles=("A","B")))["repeated_title_groups"],[])
     def test_repeated_url(self):
         self.assertEqual(validate(report(urls=["https://a.org/x","https://a.org/x"]))["repeated_url_groups"],[["0","1"]])
+    def test_case_sensitive_paths_are_distinct(self):
+        data=report(urls=["https://a.org/Case","https://a.org/case"])
+        self.assertEqual(validate(data)["repeated_url_groups"],[])
+    def test_trailing_slash_paths_are_distinct(self):
+        data=report(urls=["https://a.org/x","https://a.org/x/"])
+        self.assertEqual(validate(data)["repeated_url_groups"],[])
     def test_no_trading(self):
         r=validate(report())
         self.assertEqual(r["orders_submitted_to_exchange"],0)
