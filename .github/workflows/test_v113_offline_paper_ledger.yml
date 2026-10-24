@@ -1,0 +1,26 @@
+name: SPACE BAR V113 Offline Paper Ledger
+on:
+  push:
+    paths:
+      - 'agents/offline_paper_ledger_v113.py'
+      - 'agents/test_v113_offline_paper_ledger.py'
+      - '.github/workflows/test_v113_offline_paper_ledger.yml'
+  pull_request:
+    paths:
+      - 'agents/offline_paper_ledger_v113.py'
+      - 'agents/test_v113_offline_paper_ledger.py'
+      - '.github/workflows/test_v113_offline_paper_ledger.yml'
+  workflow_dispatch:
+jobs:
+  paper-ledger:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v113_offline_paper_ledger.py' -v
