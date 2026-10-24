@@ -1,0 +1,39 @@
+name: SPACE BAR V88 Mobile HTML Report
+on:
+  push:
+    paths:
+      - 'agents/mobile_html_report_v88.py'
+      - 'agents/test_v88_mobile_html_report.py'
+      - '.github/workflows/test_v88_mobile_html_report.yml'
+  pull_request:
+    paths:
+      - 'agents/mobile_html_report_v88.py'
+      - 'agents/test_v88_mobile_html_report.py'
+      - '.github/workflows/test_v88_mobile_html_report.yml'
+  workflow_dispatch:
+jobs:
+  mobile-html:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v88_mobile_html_report.py' -v
+      - name: Full offline V87 to V88 smoke test
+        shell: python
+        run: |
+          import subprocess, sys, tempfile
+          from pathlib import Path
+          with tempfile.TemporaryDirectory() as d:
+              j = Path(d) / "status.json"
+              h = Path(d) / "status.html"
+              first = subprocess.run([sys.executable, "agents/mobile_status_export_v87.py", "--output", str(j)], capture_output=True, text=True)
+              assert first.returncode in (0, 1), first.stderr
+              second = subprocess.run([sys.executable, "agents/mobile_html_report_v88.py", "--input", str(j), "--output", str(h)], capture_output=True, text=True)
+              assert second.returncode == 0, second.stderr
+              assert "LIVE TRADING DISABLED" in h.read_text(encoding="utf-8")
