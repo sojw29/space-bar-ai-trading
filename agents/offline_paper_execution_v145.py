@@ -22,7 +22,8 @@ def simulate_fill(*, side: str, quantity: float, reference_price: float,
     """Simulate a fill against a completed candle's volume (base units).
 
     Returns None if the order cannot fit within the configured participation
-    cap. Spread cost and slippage cost are reported separately. Never\n    submits, queues or routes an order.
+    cap. Spread cost and slippage cost are reported separately. Never
+    submits, queues or routes an order.
     """
     if side not in ("BUY", "SELL"):
         raise ValueError("side must be BUY or SELL")
