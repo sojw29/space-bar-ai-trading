@@ -1,0 +1,26 @@
+name: SPACE BAR V123 Offline Research Report
+on:
+  push:
+    paths:
+      - 'agents/offline_research_report_v123.py'
+      - 'agents/test_v123_offline_research_report.py'
+      - '.github/workflows/test_v123_offline_research_report.yml'
+  pull_request:
+    paths:
+      - 'agents/offline_research_report_v123.py'
+      - 'agents/test_v123_offline_research_report.py'
+      - '.github/workflows/test_v123_offline_research_report.yml'
+  workflow_dispatch:
+jobs:
+  research-report:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v123_offline_research_report.py' -v
