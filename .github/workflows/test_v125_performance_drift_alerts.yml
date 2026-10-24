@@ -1,0 +1,26 @@
+name: SPACE BAR V125 Performance Drift Alerts
+on:
+  push:
+    paths:
+      - 'agents/performance_drift_alerts_v125.py'
+      - 'agents/test_v125_performance_drift_alerts.py'
+      - '.github/workflows/test_v125_performance_drift_alerts.yml'
+  pull_request:
+    paths:
+      - 'agents/performance_drift_alerts_v125.py'
+      - 'agents/test_v125_performance_drift_alerts.py'
+      - '.github/workflows/test_v125_performance_drift_alerts.yml'
+  workflow_dispatch:
+jobs:
+  performance-drift:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v125_performance_drift_alerts.py' -v
