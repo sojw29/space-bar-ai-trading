@@ -1,0 +1,25 @@
+name: SPACE BAR V78 Diagnostic Triage
+on:
+  push:
+    paths:
+      - 'agents/diagnostic_triage_v78.py'
+      - 'agents/test_v78_triage.py'
+      - '.github/workflows/test_v78_triage.yml'
+  pull_request:
+    paths:
+      - 'agents/diagnostic_triage_v78.py'
+      - 'agents/test_v78_triage.py'
+      - '.github/workflows/test_v78_triage.yml'
+  workflow_dispatch:
+jobs:
+  offline-triage:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v78_triage.py' -v
