@@ -29,8 +29,15 @@ def simulate_fill(*, side: str, quantity: float, reference_price: float,
         raise ValueError("side must be BUY or SELL")
     fields = (quantity, reference_price, available_volume, spread_bps,
               slippage_bps, fee_bps, max_participation)
-    if any(not isinstance(x, (int, float)) or isinstance(x, bool)
-           or not isfinite(x) for x in fields):
+    def finite_real(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        try:
+            return isfinite(value)
+        except (OverflowError, TypeError, ValueError):
+            return False
+
+    if not all(finite_real(x) for x in fields):
         raise ValueError("all numeric inputs must be finite real numbers")
     if quantity <= 0 or reference_price <= 0 or available_volume < 0:
         raise ValueError("invalid quantity, price or volume")
