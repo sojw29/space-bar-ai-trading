@@ -1,0 +1,33 @@
+name: SPACE BAR V79 Integrated Local Audit
+on:
+  push:
+    paths:
+      - 'agents/integrated_local_audit_v79.py'
+      - 'agents/test_v79_integrated_audit.py'
+      - '.github/workflows/test_v79_integrated_audit.yml'
+  pull_request:
+    paths:
+      - 'agents/integrated_local_audit_v79.py'
+      - 'agents/test_v79_integrated_audit.py'
+      - '.github/workflows/test_v79_integrated_audit.yml'
+  workflow_dispatch:
+jobs:
+  integrated-audit:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v79_integrated_audit.py' -v
+      - name: Fail closed when reports absent
+        shell: python
+        run: |
+          import subprocess, sys
+          p = subprocess.run([sys.executable, "agents/integrated_local_audit_v79.py", "--json"], capture_output=True, text=True)
+          assert p.returncode == 1, p.stdout + p.stderr
+          assert '"live_trading_approved": false' in p.stdout.lower()
