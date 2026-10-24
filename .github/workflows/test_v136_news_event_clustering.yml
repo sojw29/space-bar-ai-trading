@@ -1,0 +1,26 @@
+name: SPACE BAR V136 News Event Clustering
+on:
+  push:
+    paths:
+      - 'agents/news_event_clustering_v136.py'
+      - 'agents/test_v136_news_event_clustering.py'
+      - '.github/workflows/test_v136_news_event_clustering.yml'
+  pull_request:
+    paths:
+      - 'agents/news_event_clustering_v136.py'
+      - 'agents/test_v136_news_event_clustering.py'
+      - '.github/workflows/test_v136_news_event_clustering.yml'
+  workflow_dispatch:
+jobs:
+  offline-event-clustering:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v136_news_event_clustering.py' -v
