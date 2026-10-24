@@ -1,0 +1,32 @@
+name: SPACE BAR V75 PC Readiness
+on:
+  push:
+    paths:
+      - 'agents/pc_readiness_v75.py'
+      - 'agents/test_v75_pc_readiness.py'
+      - '.github/workflows/test_v75_pc_readiness.yml'
+  pull_request:
+    paths:
+      - 'agents/pc_readiness_v75.py'
+      - 'agents/test_v75_pc_readiness.py'
+      - '.github/workflows/test_v75_pc_readiness.yml'
+  workflow_dispatch:
+jobs:
+  pc-readiness:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v75_pc_readiness.py' -v
+      - name: Missing reports remain blocked
+        shell: python
+        run: |
+          import subprocess, sys
+          p = subprocess.run([sys.executable, "agents/pc_readiness_v75.py", "--json"], capture_output=True, text=True)
+          assert p.returncode == 1, p.stdout + p.stderr
+          assert '"live_trading_approved": false' in p.stdout.lower()
