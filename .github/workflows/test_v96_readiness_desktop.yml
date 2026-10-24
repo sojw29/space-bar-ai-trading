@@ -1,0 +1,37 @@
+name: SPACE BAR V96 Readiness Desktop
+on:
+  push:
+    paths:
+      - 'agents/readiness_desktop_v96.py'
+      - 'agents/test_v96_readiness_desktop.py'
+      - '.github/workflows/test_v96_readiness_desktop.yml'
+  pull_request:
+    paths:
+      - 'agents/readiness_desktop_v96.py'
+      - 'agents/test_v96_readiness_desktop.py'
+      - '.github/workflows/test_v96_readiness_desktop.yml'
+  workflow_dispatch:
+jobs:
+  readiness-desktop:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v96_readiness_desktop.py' -v
+      - name: Headless readiness dashboard smoke
+        shell: python
+        run: |
+          import json, subprocess, sys, tempfile
+          with tempfile.TemporaryDirectory() as d:
+              run = subprocess.run([sys.executable, "agents/readiness_desktop_v96.py", "--headless", "--repo", d], capture_output=True, text=True)
+              assert run.returncode == 1, run.stderr
+              data = json.loads(run.stdout)
+              assert data["status"] == "BLOCKED"
+              assert len(data["checks"]) == 5
+              assert data["live_trading_approved"] is False
