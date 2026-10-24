@@ -1,0 +1,36 @@
+name: SPACE BAR V95 Local Readiness
+on:
+  push:
+    paths:
+      - 'agents/local_readiness_v95.py'
+      - 'agents/test_v95_local_readiness.py'
+      - '.github/workflows/test_v95_local_readiness.yml'
+  pull_request:
+    paths:
+      - 'agents/local_readiness_v95.py'
+      - 'agents/test_v95_local_readiness.py'
+      - '.github/workflows/test_v95_local_readiness.yml'
+  workflow_dispatch:
+jobs:
+  local-readiness:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v95_local_readiness.py' -v
+      - name: Fail-closed readiness smoke test
+        shell: python
+        run: |
+          import json, subprocess, sys, tempfile
+          with tempfile.TemporaryDirectory() as d:
+              run = subprocess.run([sys.executable, "agents/local_readiness_v95.py", "--repo", d], capture_output=True, text=True)
+              assert run.returncode == 1, run.stderr
+              result = json.loads(run.stdout)
+              assert result["status"] == "BLOCKED"
+              assert result["live_trading_approved"] is False
