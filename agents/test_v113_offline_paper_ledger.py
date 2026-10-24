@@ -32,6 +32,19 @@ class PaperLedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "KILL_SWITCH_ACTIVE"):
             ledger.buy("1", "10", "2026-10-24")
 
+    def test_kill_switch_allows_reduction_only_exit(self):
+        ledger = PaperLedger()
+        ledger.buy("100", "1000", "2026-10-24")
+        ledger.mark("1", "2026-10-24")
+        self.assertTrue(ledger.kill_switch)
+        held = ledger.units
+        ledger.sell("1", held, "2026-10-24")
+        self.assertEqual(ledger.units, Decimal("0"))
+        self.assertTrue(ledger.kill_switch)
+        self.assertEqual(ledger.snapshot()["orders_submitted_to_exchange"], 0)
+        with self.assertRaisesRegex(ValueError, "KILL_SWITCH_ACTIVE"):
+            ledger.buy("1", "1", "2026-10-24")
+
     def test_invalid_values(self):
         ledger = PaperLedger()
         for value in ("nan", "-1", "0", "Infinity"):
