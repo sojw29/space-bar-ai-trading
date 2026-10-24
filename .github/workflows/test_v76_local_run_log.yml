@@ -1,0 +1,25 @@
+name: SPACE BAR V76 Local Run Log
+on:
+  push:
+    paths:
+      - 'agents/local_run_log_v76.py'
+      - 'agents/test_v76_local_run_log.py'
+      - '.github/workflows/test_v76_local_run_log.yml'
+  pull_request:
+    paths:
+      - 'agents/local_run_log_v76.py'
+      - 'agents/test_v76_local_run_log.py'
+      - '.github/workflows/test_v76_local_run_log.yml'
+  workflow_dispatch:
+jobs:
+  offline-run-log:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v76_local_run_log.py' -v
