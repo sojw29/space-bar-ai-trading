@@ -34,16 +34,21 @@ def simulate_fill(*, side: str, quantity: float, reference_price: float,
         raise ValueError("invalid quantity, price or volume")
     if min(spread_bps, slippage_bps, fee_bps) < 0 or not 0 < max_participation <= 1:
         raise ValueError("invalid execution assumptions")
+    impact = (spread_bps / 2 + slippage_bps) / 10000
+    if not isfinite(impact) or impact >= 1:
+        raise ValueError("invalid modeled price impact")
     if quantity > available_volume * max_participation:
         return None
-    impact = (spread_bps / 2 + slippage_bps) / 10000
-    if impact >= 1:
-        raise ValueError("execution assumptions imply 100% or greater price impact")
     fill_price = reference_price * (1 + impact if side == "BUY" else 1 - impact)
     notional = quantity * fill_price
+    fee = notional * fee_bps / 10000
+    slippage_cost = quantity * reference_price * impact
+    if any(not isfinite(x) or x < 0 for x in
+           (fill_price, notional, fee, slippage_cost)) or fill_price <= 0:
+        raise ValueError("nonfinite or invalid simulated fill")
     return PaperFill(
         side=side, quantity=quantity, reference_price=reference_price,
-        fill_price=fill_price, fee=notional * fee_bps / 10000,
-        slippage_cost=quantity * reference_price * impact,
+        fill_price=fill_price, fee=fee,
+        slippage_cost=slippage_cost,
         notional=notional,
     )
