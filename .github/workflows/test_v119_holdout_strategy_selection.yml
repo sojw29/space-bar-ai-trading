@@ -1,0 +1,26 @@
+name: SPACE BAR V119 Holdout Strategy Selection
+on:
+  push:
+    paths:
+      - 'agents/holdout_strategy_selection_v119.py'
+      - 'agents/test_v119_holdout_strategy_selection.py'
+      - '.github/workflows/test_v119_holdout_strategy_selection.yml'
+  pull_request:
+    paths:
+      - 'agents/holdout_strategy_selection_v119.py'
+      - 'agents/test_v119_holdout_strategy_selection.py'
+      - '.github/workflows/test_v119_holdout_strategy_selection.yml'
+  workflow_dispatch:
+jobs:
+  holdout-selection:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v119_holdout_strategy_selection.py' -v
