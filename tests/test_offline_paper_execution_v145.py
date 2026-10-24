@@ -18,6 +18,17 @@ class OfflinePaperExecutionTests(unittest.TestCase):
         self.assertIsNone(simulate_fill(side="BUY", quantity=2,
                                        reference_price=100, available_volume=100))
 
+    def test_invalid_assumptions_rejected_even_if_illiquid(self):
+        with self.assertRaises(ValueError):
+            simulate_fill(side="BUY", quantity=2, reference_price=100,
+                          available_volume=100, spread_bps=300000)
+
+    def test_arithmetic_overflow_rejected(self):
+        with self.assertRaises(ValueError):
+            simulate_fill(side="BUY", quantity=1e308,
+                          reference_price=1e308, available_volume=1e308,
+                          max_participation=1.0)
+
     def test_invalid_inputs_fail_closed(self):
         cases = [
             dict(side="HOLD"), dict(quantity=0), dict(reference_price=0),
