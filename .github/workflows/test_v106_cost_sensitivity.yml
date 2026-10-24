@@ -1,0 +1,26 @@
+name: SPACE BAR V106 Cost Sensitivity
+on:
+  push:
+    paths:
+      - 'agents/cost_sensitivity_v106.py'
+      - 'agents/test_v106_cost_sensitivity.py'
+      - '.github/workflows/test_v106_cost_sensitivity.yml'
+  pull_request:
+    paths:
+      - 'agents/cost_sensitivity_v106.py'
+      - 'agents/test_v106_cost_sensitivity.py'
+      - '.github/workflows/test_v106_cost_sensitivity.yml'
+  workflow_dispatch:
+jobs:
+  cost-sensitivity:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v106_cost_sensitivity.py' -v
