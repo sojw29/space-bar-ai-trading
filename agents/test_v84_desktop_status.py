@@ -9,7 +9,7 @@ NOW = datetime(2026, 10, 24, tzinfo=timezone.utc)
 
 class DashboardTests(unittest.TestCase):
     @patch("desktop_status_v84.analyze", return_value={"status": "ANALYZED"})
-    @patch("desktop_status_v84.launch", side_effect=[{"status": "PC_READY"}, {"status": "LOCAL_AUDIT_PASS"}])
+    @patch("desktop_status_v84.launch", side_effect=[{"status": "LOCAL_DIAGNOSTICS_PASS"}, {"status": "LOCAL_AUDIT_PASS"}])
     def test_ready_snapshot(self, launcher, trends):
         result = build_snapshot(now=NOW)
         self.assertEqual(result["status"], "LOCAL_STATUS_PASS")
