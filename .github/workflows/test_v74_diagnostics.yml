@@ -1,0 +1,32 @@
+name: SPACE BAR V74 One-command Diagnostics
+on:
+  push:
+    paths:
+      - 'agents/one_command_diagnostics_v74.py'
+      - 'agents/test_v74_diagnostics.py'
+      - '.github/workflows/test_v74_diagnostics.yml'
+  pull_request:
+    paths:
+      - 'agents/one_command_diagnostics_v74.py'
+      - 'agents/test_v74_diagnostics.py'
+      - '.github/workflows/test_v74_diagnostics.yml'
+  workflow_dispatch:
+jobs:
+  one-command:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v74_diagnostics.py' -v
+      - name: Verify empty-reports run fails closed
+        shell: python
+        run: |
+          import subprocess, sys
+          result = subprocess.run([sys.executable, "agents/one_command_diagnostics_v74.py", "--json"], capture_output=True, text=True)
+          assert result.returncode == 1, result.stdout + result.stderr
+          assert '"live_trading_approved": false' in result.stdout.lower()
