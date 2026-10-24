@@ -1,0 +1,26 @@
+name: SPACE BAR V72 Local Status
+on:
+  push:
+    paths:
+      - 'agents/local_status_v72.py'
+      - 'agents/test_v72_local_status.py'
+      - '.github/workflows/test_v72_local_status.yml'
+  pull_request:
+    paths:
+      - 'agents/local_status_v72.py'
+      - 'agents/test_v72_local_status.py'
+      - '.github/workflows/test_v72_local_status.yml'
+  workflow_dispatch:
+jobs:
+  offline-local-status:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v72_local_status.py' -v
+      - run: python agents/local_status_v72.py --json || test $? -eq 1
