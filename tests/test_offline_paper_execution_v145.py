@@ -14,6 +14,23 @@ class OfflinePaperExecutionTests(unittest.TestCase):
         self.assertGreater(buy.fee, 0)
         self.assertGreater(sell.slippage_cost, 0)
 
+    def test_spread_and_slippage_are_accounted_separately(self):
+        fill = simulate_fill(side="BUY", quantity=1, reference_price=100,
+                             available_volume=1000, spread_bps=2,
+                             slippage_bps=3, fee_bps=0)
+        self.assertAlmostEqual(fill.spread_cost, 0.01)
+        self.assertAlmostEqual(fill.slippage_cost, 0.03)
+        self.assertAlmostEqual(fill.fill_price - fill.reference_price,
+                               fill.spread_cost + fill.slippage_cost)
+        self.assertEqual(fill.fee, 0)
+
+    def test_zero_slippage_with_nonzero_spread(self):
+        fill = simulate_fill(side="SELL", quantity=1, reference_price=100,
+                             available_volume=1000, spread_bps=2,
+                             slippage_bps=0)
+        self.assertAlmostEqual(fill.spread_cost, 0.01)
+        self.assertEqual(fill.slippage_cost, 0)
+
     def test_reject_illiquid_order(self):
         self.assertIsNone(simulate_fill(side="BUY", quantity=2,
                                        reference_price=100, available_volume=100))
