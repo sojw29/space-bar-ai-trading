@@ -1,0 +1,36 @@
+name: SPACE BAR V94 Alerts Dashboard
+on:
+  push:
+    paths:
+      - 'agents/alerts_dashboard_v94.py'
+      - 'agents/test_v94_alerts_dashboard.py'
+      - '.github/workflows/test_v94_alerts_dashboard.yml'
+  pull_request:
+    paths:
+      - 'agents/alerts_dashboard_v94.py'
+      - 'agents/test_v94_alerts_dashboard.py'
+      - '.github/workflows/test_v94_alerts_dashboard.yml'
+  workflow_dispatch:
+jobs:
+  alerts-dashboard:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v94_alerts_dashboard.py' -v
+      - name: Headless alerts dashboard smoke test
+        shell: python
+        run: |
+          import json, subprocess, sys, tempfile
+          with tempfile.TemporaryDirectory() as d:
+              run = subprocess.run([sys.executable, "agents/alerts_dashboard_v94.py", "--headless", "--repo", d], capture_output=True, text=True)
+              assert run.returncode == 1, run.stderr
+              result = json.loads(run.stdout)
+              assert result["severity"] == "CRITICAL"
+              assert result["live_trading_approved"] is False
