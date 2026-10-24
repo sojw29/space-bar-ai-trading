@@ -20,8 +20,8 @@ def build_snapshot(repo=None, reports=None, log=None, now=None):
     trends = analyze(log)
     statuses = (check["status"], audit["status"])
     overall = "BLOCKED" if "BLOCKED" in statuses else "REVIEW" if any(
-        status not in ("PC_READY", "LOCAL_AUDIT_PASS") for status in statuses
-    ) else "LOCAL_STATUS_PASS"
+        status not in ("LOCAL_DIAGNOSTICS_PASS", "LOCAL_AUDIT_PASS") for status in statuses
+    ) or trends["status"] != "ANALYZED" else "LOCAL_STATUS_PASS"
     return {"version": "V84.0", "timestamp_utc": now.isoformat(),
             "status": overall, "pc_status": check["status"],
             "audit_status": audit["status"], "history_status": trends["status"],
