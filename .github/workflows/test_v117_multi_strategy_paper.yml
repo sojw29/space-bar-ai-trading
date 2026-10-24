@@ -1,0 +1,26 @@
+name: SPACE BAR V117 Multi Strategy Paper
+on:
+  push:
+    paths:
+      - 'agents/multi_strategy_paper_v117.py'
+      - 'agents/test_v117_multi_strategy_paper.py'
+      - '.github/workflows/test_v117_multi_strategy_paper.yml'
+  pull_request:
+    paths:
+      - 'agents/multi_strategy_paper_v117.py'
+      - 'agents/test_v117_multi_strategy_paper.py'
+      - '.github/workflows/test_v117_multi_strategy_paper.yml'
+  workflow_dispatch:
+jobs:
+  multi-strategy-paper:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v117_multi_strategy_paper.py' -v
