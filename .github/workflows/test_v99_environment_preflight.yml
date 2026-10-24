@@ -1,0 +1,28 @@
+name: SPACE BAR V99 Desktop Environment Preflight
+on:
+  push:
+    paths:
+      - 'agents/environment_preflight_v99.py'
+      - 'agents/test_v99_environment_preflight.py'
+      - '.github/workflows/test_v99_environment_preflight.yml'
+  pull_request:
+    paths:
+      - 'agents/environment_preflight_v99.py'
+      - 'agents/test_v99_environment_preflight.py'
+      - '.github/workflows/test_v99_environment_preflight.yml'
+  workflow_dispatch:
+jobs:
+  desktop-preflight:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v99_environment_preflight.py' -v
+      - name: CLI environment preflight
+        run: python agents/environment_preflight_v99.py
