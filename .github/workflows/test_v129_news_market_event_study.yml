@@ -1,0 +1,26 @@
+name: SPACE BAR V129 News Market Event Study
+on:
+  push:
+    paths:
+      - 'agents/news_market_event_study_v129.py'
+      - 'agents/test_v129_news_market_event_study.py'
+      - '.github/workflows/test_v129_news_market_event_study.yml'
+  pull_request:
+    paths:
+      - 'agents/news_market_event_study_v129.py'
+      - 'agents/test_v129_news_market_event_study.py'
+      - '.github/workflows/test_v129_news_market_event_study.yml'
+  workflow_dispatch:
+jobs:
+  offline-event-study:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v129_news_market_event_study.py' -v
