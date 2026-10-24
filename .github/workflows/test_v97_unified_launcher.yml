@@ -1,0 +1,37 @@
+name: SPACE BAR V97 Unified Offline Launcher
+on:
+  push:
+    paths:
+      - 'agents/unified_launcher_v97.py'
+      - 'agents/test_v97_unified_launcher.py'
+      - '.github/workflows/test_v97_unified_launcher.yml'
+  pull_request:
+    paths:
+      - 'agents/unified_launcher_v97.py'
+      - 'agents/test_v97_unified_launcher.py'
+      - '.github/workflows/test_v97_unified_launcher.yml'
+  workflow_dispatch:
+jobs:
+  unified-launcher:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v97_unified_launcher.py' -v
+      - name: Headless readiness and alerts smoke
+        shell: python
+        run: |
+          import json, subprocess, sys, tempfile
+          with tempfile.TemporaryDirectory() as d:
+              for action, expected in (("readiness", "BLOCKED"), ("alerts", "CRITICAL")):
+                  run = subprocess.run([sys.executable, "agents/unified_launcher_v97.py", "--headless", action, "--repo", d], capture_output=True, text=True)
+                  assert run.returncode == 1, run.stderr
+                  data = json.loads(run.stdout)
+                  assert data["status"] == expected
+                  assert data["live_trading_approved"] is False
