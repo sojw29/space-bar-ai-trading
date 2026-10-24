@@ -1,0 +1,26 @@
+name: SPACE BAR V131 News Risk Guardian
+on:
+  push:
+    paths:
+      - 'agents/news_risk_guardian_v131.py'
+      - 'agents/test_v131_news_risk_guardian.py'
+      - '.github/workflows/test_v131_news_risk_guardian.yml'
+  pull_request:
+    paths:
+      - 'agents/news_risk_guardian_v131.py'
+      - 'agents/test_v131_news_risk_guardian.py'
+      - '.github/workflows/test_v131_news_risk_guardian.yml'
+  workflow_dispatch:
+jobs:
+  offline-news-guardian:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m unittest discover -s agents -p 'test_v131_news_risk_guardian.py' -v
