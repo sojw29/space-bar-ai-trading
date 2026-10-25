@@ -1,0 +1,32 @@
+name: SPACE BAR V163 Historical OHLCV Integrity
+
+on:
+  pull_request:
+    paths:
+      - 'agents/history.py'
+      - 'agents/test_v163_history_integrity.py'
+      - '.github/workflows/test_v163_history_integrity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agents/history.py'
+      - 'agents/test_v163_history_integrity.py'
+      - '.github/workflows/test_v163_history_integrity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  history-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile historical data modules
+        run: python -m py_compile agents/history.py agents/test_v163_history_integrity.py
+      - name: Run offline OHLCV regression
+        run: python -m unittest discover -s agents -p 'test_v163_history_integrity.py' -v
