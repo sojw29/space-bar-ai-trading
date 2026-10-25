@@ -94,6 +94,11 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div class="metric"><small>위험 게이트</small><strong id="selected-risk">확인 대기</strong></div>
 <p class="notice">에이전트는 규칙 기반 연구 모듈입니다. 3D 아바타의 동작은 실제 자율 AI 작업을 뜻하지 않습니다.</p>
 </section>
+<section class="panel" id="v158-agent-matrix" aria-label="에이전트별 연구 상태">
+<h2>AGENT MATRIX · VERIFIED RESEARCH</h2>
+<p class="notice">검증된 완료 봉 연구 이벤트만 표시합니다. 자동 작업 실행이나 실거래 상태가 아닙니다.</p>
+<div id="v158-agent-rows" aria-live="polite">연구 데이터 대기</div>
+</section>
 <section class="panel" id="commander-consensus-panel"><h2>COMMANDER · 3D CONSENSUS</h2>
 <div class="metric"><small>검증된 투표 합계</small><strong id="commander-tally">LONG 0 · SHORT 0 · WAIT 0</strong></div>
 <div class="metric"><small>RISK VETO</small><strong id="commander-veto" data-risk="UNKNOWN">확인 대기</strong></div>
@@ -499,7 +504,24 @@ function selectAgent(name){
  }
  renderInspector();
 }
+function renderAgentMatrix(){
+ const container=document.getElementById("v158-agent-rows");
+ container.replaceChildren();
+ for(const id of Object.keys(roles)){
+  const record=hasValid?events.get(id):null;
+  const row=document.createElement("div");
+  row.className="metric";
+  const label=document.createElement("small");
+  label.textContent=id+" · "+roles[id];
+  const value=document.createElement("strong");
+  value.textContent=record?record.decision+" · 완료 봉 연구":"OFFLINE · 검증 이벤트 없음";
+  value.dataset.decision=record?record.decision:"OFFLINE";
+  row.append(label,value);
+  container.append(row);
+ }
+}
 function renderInspector(){
+ renderAgentMatrix();
  const data=hasValid?events.get(selected):null;
  document.getElementById("selected-name").textContent=selected;
  document.getElementById("selected-role").textContent=roles[selected];
