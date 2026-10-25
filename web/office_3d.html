@@ -90,6 +90,8 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div class="metric"><small>결정 (주문 신호 아님)</small><strong id="selected-decision" class="WAIT">WAIT</strong></div>
 <div class="metric"><small>분석 근거</small><strong id="selected-reason">데이터 확인 대기</strong></div>
 <div class="metric"><small>완료 캔들 (UTC)</small><strong id="selected-time">—</strong></div>
+<div class="metric"><small>검증된 데이터 출처</small><strong id="selected-provenance">검증 대기</strong></div>
+<div class="metric"><small>연구 결과 사용 범위</small><strong id="selected-safety">읽기 전용 · 주문 비활성</strong></div>
 <div class="metric"><small>연구 활동 표시</small><strong id="agent-activity" data-status="OFFLINE">확정된 연구 이벤트 대기</strong></div>
 <div class="metric"><small>위험 게이트</small><strong id="selected-risk">확인 대기</strong></div>
 <p class="notice">에이전트는 규칙 기반 연구 모듈입니다. 3D 아바타의 동작은 실제 자율 AI 작업을 뜻하지 않습니다.</p>
@@ -537,6 +539,12 @@ function renderInspector(){
  const target=document.getElementById("selected-decision");target.textContent=decision;target.className=decision;
  document.getElementById("selected-reason").textContent=data?String(data.reason||"근거 없음"):"확인된 분석 없음";
  document.getElementById("selected-time").textContent=hasValid?lastObserved:"—";
+ const provenance=document.getElementById("selected-provenance");
+ provenance.textContent=data?
+  (sourceMode==="historical_csv"?"과거 CSV · 완료 봉":
+   sourceMode==="public_stream"?"공개 시장 스트림 · 완료 봉":"출처 확인 불가"):
+  "OFFLINE · 검증 데이터 없음";
+ document.getElementById("selected-safety").textContent="읽기 전용 · 주문 비활성 · 전략 실행 아님";
  const phase=document.getElementById("agent-activity");
  phase.dataset.status=data?"READY":"OFFLINE";
  phase.textContent=data?
