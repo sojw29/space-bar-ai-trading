@@ -1,0 +1,24 @@
+name: SPACE BAR V167 Meeting Endpoint
+
+on:
+  push:
+    paths:
+      - 'agents/dashboard_api_v28.py'
+      - 'agents/test_v167_meeting_endpoint.py'
+      - '.github/workflows/test_v167_meeting_endpoint.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  meeting-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test read-only meeting endpoint
+        run: python -m unittest discover -s agents -p 'test_v167_meeting_endpoint.py' -v
