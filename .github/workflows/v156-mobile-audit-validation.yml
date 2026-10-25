@@ -1,0 +1,23 @@
+name: V156 Mobile Audit Validation
+on:
+  pull_request:
+    paths:
+      - 'web/audit_room_mobile_v153.html'
+      - 'tests/test_mobile_audit_validation_v156.py'
+      - '.github/workflows/v156-mobile-audit-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/audit_room_mobile_v153.html'
+      - 'tests/test_mobile_audit_validation_v156.py'
+      - '.github/workflows/v156-mobile-audit-validation.yml'
+  workflow_dispatch:
+jobs:
+  mobile-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_mobile_audit_validation_v156.py' -v
