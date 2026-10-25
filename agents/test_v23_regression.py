@@ -115,6 +115,25 @@ class RegressionTests(unittest.TestCase):
         candles["nonconsecutive_intervals"] = 0
         self.assertEqual(v22.forward_evidence_status(candles, []), "FORWARD_CANDLES_PRESENT_UNVERIFIED")
 
+    def test_v22_unchanged_forward_snapshot_not_usable(self):
+        candles = {"forward_candle_count": 10, "nonconsecutive_intervals": 0}
+        self.assertEqual(
+            v22.forward_evidence_status(candles, [], ["NO_NEW_FORWARD_CANDLES"]),
+            "NO_NEW_FORWARD_CANDLES",
+        )
+        self.assertNotEqual(
+            v22.forward_evidence_status(candles, [], ["NO_NEW_FORWARD_CANDLES"]),
+            "FORWARD_CANDLES_PRESENT_UNVERIFIED",
+        )
+        self.assertEqual(
+            v22.forward_evidence_status(candles, [], []),
+            "FORWARD_CANDLES_PRESENT_UNVERIFIED",
+        )
+        self.assertEqual(
+            v22.forward_evidence_status(candles, ["FORWARD_DATA_REGRESSION"], ["NO_NEW_FORWARD_CANDLES"]),
+            "INTEGRITY_FAILURE",
+        )
+
     def test_v22_candle_integrity(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "candles.csv"
