@@ -1,0 +1,23 @@
+name: V161 Candle Age Disclosure
+on:
+  pull_request:
+    paths:
+      - 'web/office_3d.html'
+      - 'tests/test_candle_age_v161.py'
+      - '.github/workflows/v161-candle-age.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/office_3d.html'
+      - 'tests/test_candle_age_v161.py'
+      - '.github/workflows/v161-candle-age.yml'
+  workflow_dispatch:
+jobs:
+  candle-age:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_candle_age_v161.py' -v
