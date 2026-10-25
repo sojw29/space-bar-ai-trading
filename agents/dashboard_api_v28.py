@@ -14,6 +14,7 @@ import agent_events_v27 as v27
 
 DEFAULT_HISTORY = Path("data/history/BTC_5m.csv")
 DASHBOARD_HTML = Path(__file__).resolve().parent.parent / "web" / "command_center.html"
+AUDIT_ROOM_HTML = Path(__file__).resolve().parent.parent / "web" / "audit_room_mobile_v153.html"
 OFFICE_3D_HTML = Path(__file__).resolve().parent.parent / "web" / "office_3d.html"
 MAX_BYTES = 1_000_000
 
@@ -56,9 +57,9 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
-            if path in ("/", "/dashboard", "/office3d"):
+            if path in ("/", "/dashboard", "/office3d", "/audit-room"):
                 try:
-                    content = (OFFICE_3D_HTML if path == "/office3d" else DASHBOARD_HTML).read_bytes()
+                    content = (AUDIT_ROOM_HTML if path == "/audit-room" else OFFICE_3D_HTML if path == "/office3d" else DASHBOARD_HTML).read_bytes()
                 except OSError:
                     self.reply(503, {"error": "dashboard_unavailable"})
                     return
@@ -87,6 +88,24 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                             source="historical_csv_snapshot"))
                 except (OSError, ValueError, KeyError, RuntimeError) as exc:
                     self.reply(503, {"error": "market_chart_unavailable",
+                                     "orders_enabled": False})
+            elif path == "/api/v1/replay/audit":
+                try:
+                    from agents.offline_replay_audit_v151 import audit_history
+                    import re
+                    match = re.fullmatch(r"(BTC|ETH|SOL)_(1|5|15)m[.]csv", history_path.name)
+                    if match is None:
+                        self.reply(503, {"error": "history_filename_must_identify_symbol_timeframe",
+                                         "orders_enabled": False})
+                        return
+                    result = audit_history(history_path, symbol=match.group(1),
+                                           timeframe_minutes=int(match.group(2)))
+                    self.reply(200, {"mode": "historical_offline_audit",
+                                     "realtime": False, "orders_enabled": False,
+                                     "signals_enabled": False,
+                                     "audit": result.as_dict()})
+                except (OSError, ValueError, KeyError, OverflowError):
+                    self.reply(503, {"error": "history_audit_unavailable_or_invalid",
                                      "orders_enabled": False})
             elif path == "/api/v1/paper/analytics":
                 if paper_journal is None:
