@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SPACE BAR · AUDIT ROOM</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#080e1b;color:#eaf2ff}
+*{box-sizing:border-box}body{margin:0;padding:clamp(16px,4vw,36px);background:radial-gradient(ellipse at 80% 0%,#172e4e,#080e1b 55%);min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:clamp(25px,5vw,45px);letter-spacing:.12em;margin:12px 0}
+small,.muted{color:#91a7c4}.badge{border:1px solid #4b6387;border-radius:999px;padding:8px 12px;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;margin-top:24px}
+.card{background:linear-gradient(150deg,#17273f,#101b2c);border:1px solid #304865;border-radius:18px;padding:22px;min-height:128px;box-shadow:0 14px 35px #0004}
+.label{font-size:12px;letter-spacing:.12em;color:#93b7e3}.value{font-size:clamp(22px,4vw,35px);font-weight:700;overflow-wrap:anywhere;margin-top:12px}
+footer{margin-top:28px;font-size:13px;line-height:1.7;color:#91a7c4}
+button{background:#203a5a;border:1px solid #52749e;color:white;border-radius:10px;padding:10px 16px;cursor:pointer}
+.error{color:#ffb8ac}.ok{color:#9af1ce}
+</style></head><body>
+<header><div><small>SPACE BAR AI TRADING / LOCAL RESEARCH</small><h1>AUDIT ROOM</h1></div><span class="badge" id="status" role="status" aria-live="polite">연결 확인 중</span></header>
+<p class="muted">검증된 과거 데이터만 표시합니다. 실시간 시세나 실거래 결과가 아닙니다.</p>
+<button type="button" id="refresh">지금 새로고침</button>
+<main class="grid" id="cards" aria-live="polite"></main>
+<footer><div id="detail">데이터 로딩 중…</div><div>READ ONLY · OFFLINE PAPER RESEARCH · NO ORDERS</div></footer>
+<script>
+"use strict";
+const fields=[["symbol","MARKET"],["timeframe_minutes","TIMEFRAME (MIN)"],["candle_count","VALID CANDLES"],["closed_trades","CLOSED PAPER TRADES"],["realized_pnl","REALIZED P&L"],["ending_realized_equity","REALIZED EQUITY"],["open_quantity","OPEN QUANTITY"],["max_drawdown_pct","MAX DRAWDOWN %"]];
+const cards=document.getElementById("cards"),status=document.getElementById("status"),detail=document.getElementById("detail");
+function render(a){cards.replaceChildren();for(const [key,label] of fields){const card=document.createElement("section");card.className="card";const title=document.createElement("div");title.className="label";title.textContent=label;const value=document.createElement("div");value.className="value";value.textContent=a[key]===undefined?"미제공":String(a[key]);card.append(title,value);cards.append(card)}}
+async function refresh(){status.textContent="검증 데이터 조회 중";status.className="badge";try{const res=await fetch("/api/v1/replay/audit",{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const body=await res.json();if(body.realtime!==false||body.orders_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");render(body.audit);status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)"}catch(err){cards.replaceChildren();status.textContent="데이터 미연결";status.className="badge error";detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message}}
+}
+document.getElementById("refresh").addEventListener("click",refresh);
+refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
+</script></body></html>
