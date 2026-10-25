@@ -13,9 +13,23 @@ class MeetingQualityVisualTests(unittest.TestCase):
                      'keys.get("APEX")', 'keys.get("COMMANDER")',
                      'risk.group.userData.qualityVeto=!verified',
                      'chief.group.userData.qualityDecision="WAIT"',
-                     'risk.screen.material.color.setHex',
-                     'chief.screen.material.color.setHex'):
+                     'new THREE.TorusGeometry(.42,.065,8,24)',
+                     'meetingQualityRings.get("APEX").material.color.setHex',
+                     'meetingQualityRings.get("COMMANDER").material.color.setHex',
+                     'applyMeetingQuality(window.spacebarMeetingQualityVerified===true)',
+                     'window.spacebarMeetingQualityVerified=false',
+                     'window.spacebarMeetingQualityVerified=true'):
             self.assertIn(part,html)
+
+    def test_strategy_refresh_does_not_overwrite_quality_halos(self):
+        html=PAGE.read_text(encoding="utf-8")
+        start=html.index('function applyMeetingQuality(verified)')
+        end=html.index('window.addEventListener("spacebar:meeting-quality"',start)
+        handler=html[start:end]
+        self.assertNotIn('.screen.material.color',handler)
+        self.assertNotIn('.badge.material.color',handler)
+        self.assertIn('meetingQualityRings.get("APEX")',handler)
+        self.assertIn('meetingQualityRings.get("COMMANDER")',handler)
 
     def test_read_only(self):
         html=PAGE.read_text(encoding="utf-8")
