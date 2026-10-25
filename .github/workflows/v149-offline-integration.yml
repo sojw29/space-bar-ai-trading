@@ -1,0 +1,32 @@
+name: SPACE BAR V149 Offline Integration
+on:
+  pull_request:
+    paths:
+      - 'agents/offline_trade_session_v149.py'
+      - 'agents/offline_paper_execution_v145.py'
+      - 'agents/offline_paper_orders_v146.py'
+      - 'agents/offline_position_ledger_v147.py'
+      - 'agents/offline_performance_tracker_v148.py'
+      - 'tests/test_offline_trade_session_v149.py'
+      - '.github/workflows/v149-offline-integration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agents/offline_trade_session_v149.py'
+      - 'agents/offline_paper_execution_v145.py'
+      - 'agents/offline_paper_orders_v146.py'
+      - 'agents/offline_position_ledger_v147.py'
+      - 'agents/offline_performance_tracker_v148.py'
+      - 'tests/test_offline_trade_session_v149.py'
+      - '.github/workflows/v149-offline-integration.yml'
+  workflow_dispatch:
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run V149 offline integration tests
+        run: python -m unittest discover -s tests -p 'test_offline_trade_session_v149.py' -v
