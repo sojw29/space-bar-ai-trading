@@ -79,6 +79,15 @@ def score_file(path, timeframe, now=None):
         result["status"] = "FAIL"
     return result
 
+def overall_quality_status(rows):
+    """Fail closed: a missing, unverified, or stale file cannot yield PASS."""
+    if not rows or any(row.get("status") == "FAIL" for row in rows):
+        return "FAIL"
+    if any(row.get("status") != "PASS" or not row.get("research_usable", False)
+           for row in rows):
+        return "REVIEW"
+    return "PASS"
+
 def main():
     parser = argparse.ArgumentParser(description="V65 offline candle quality report")
     parser.add_argument("--data-dir", type=Path, default=Path("data/history"))
@@ -87,13 +96,18 @@ def main():
     now = datetime.now(timezone.utc)
     rows = [score_file(args.data_dir / f"{symbol}_{tf}m.csv", tf, now)
             for symbol in SYMBOLS for tf in TIMEFRAMES]
-    report = {"version": "V65.0", "generated_utc": now.isoformat(),
+    overall = overall_quality_status(rows)
+    report = {"version": "V65.1", "generated_utc": now.isoformat(),
+              "overall_status": overall,
+              "research_usable": overall == "PASS",
+              "file_status_counts": {status: sum(r["status"] == status for r in rows)
+                                     for status in ("PASS", "REVIEW", "FAIL")},
               "results": rows, "research_only": True,
               "independent_oos_verified": False, "live_trading_approved": False}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
-    return 1 if any(r["status"] == "FAIL" for r in rows) else 0
+    return 1 if overall == "FAIL" else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
