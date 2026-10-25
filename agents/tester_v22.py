@@ -55,7 +55,7 @@ def inspect_candles(path, cutoff):
     }
 
 
-def forward_evidence_status(candles, issues, warnings=()):
+def forward_evidence_status(candles, issues, warnings=(), baseline_available=False):
     """Distinguish intact archives from actual post-cutoff observations."""
     if issues:
         return "INTEGRITY_FAILURE"
@@ -65,12 +65,14 @@ def forward_evidence_status(candles, issues, warnings=()):
         return "NO_NEW_FORWARD_CANDLES"
     if candles["nonconsecutive_intervals"]:
         return "CANDLE_GAPS_REQUIRE_REVIEW"
+    if not baseline_available:
+        return "NO_PRIOR_FORWARD_BASELINE"
     return "FORWARD_CANDLES_PRESENT_UNVERIFIED"
 
 
-def forward_evidence_usable_for_research(candles, issues, warnings=()):
+def forward_evidence_usable_for_research(candles, issues, warnings=(), baseline_available=False):
     """Only newly extended, gap-free forward snapshots may be used as research evidence."""
-    return forward_evidence_status(candles, issues, warnings) == "FORWARD_CANDLES_PRESENT_UNVERIFIED"
+    return forward_evidence_status(candles, issues, warnings, baseline_available) == "FORWARD_CANDLES_PRESENT_UNVERIFIED"
 
 
 def previous_evidence_path():
@@ -122,6 +124,9 @@ def run():
         issues.append("FORWARD_DATA_REGRESSION")
     if prior and previous_last == current_last:
         warnings.append("NO_NEW_FORWARD_CANDLES")
+    baseline_available = bool(previous_last)
+    if not baseline_available:
+        warnings.append("NO_PRIOR_FORWARD_BASELINE")
     if prior and prior.get("cutoff_utc") != protocol.get("cutoff_utc"):
         issues.append("PRIOR_CUTOFF_MISMATCH")
     report = {
@@ -141,9 +146,9 @@ def run():
         "errors": sorted(set(issues)),
         "warnings": sorted(set(warnings)),
         "integrity_pass": not issues,
-        "forward_evidence_status": forward_evidence_status(candles, issues, warnings),
+        "forward_evidence_status": forward_evidence_status(candles, issues, warnings, baseline_available),
         "forward_evidence_available": candles["forward_candle_count"] > 0,
-        "forward_evidence_usable_for_research": forward_evidence_usable_for_research(candles, issues, warnings),
+        "forward_evidence_usable_for_research": forward_evidence_usable_for_research(candles, issues, warnings, baseline_available),
         "independent_oos_verified": False,
         "live_trading_approved": False,
         "limitations": [

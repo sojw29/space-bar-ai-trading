@@ -113,7 +113,7 @@ class RegressionTests(unittest.TestCase):
         candles["nonconsecutive_intervals"] = 1
         self.assertEqual(v22.forward_evidence_status(candles, []), "CANDLE_GAPS_REQUIRE_REVIEW")
         candles["nonconsecutive_intervals"] = 0
-        self.assertEqual(v22.forward_evidence_status(candles, []), "FORWARD_CANDLES_PRESENT_UNVERIFIED")
+        self.assertEqual(v22.forward_evidence_status(candles, [], baseline_available=True), "FORWARD_CANDLES_PRESENT_UNVERIFIED")
 
     def test_v22_unchanged_forward_snapshot_not_usable(self):
         candles = {"forward_candle_count": 10, "nonconsecutive_intervals": 0}
@@ -126,7 +126,7 @@ class RegressionTests(unittest.TestCase):
             "FORWARD_CANDLES_PRESENT_UNVERIFIED",
         )
         self.assertEqual(
-            v22.forward_evidence_status(candles, [], []),
+            v22.forward_evidence_status(candles, [], [], baseline_available=True),
             "FORWARD_CANDLES_PRESENT_UNVERIFIED",
         )
         self.assertEqual(
@@ -144,7 +144,23 @@ class RegressionTests(unittest.TestCase):
             {"forward_candle_count": 0, "nonconsecutive_intervals": 0}, [], []))
         self.assertFalse(v22.forward_evidence_usable_for_research(
             {"forward_candle_count": 10, "nonconsecutive_intervals": 1}, [], []))
-        self.assertTrue(v22.forward_evidence_usable_for_research(candles, [], []))
+        self.assertTrue(v22.forward_evidence_usable_for_research(candles, [], [], baseline_available=True))
+
+    def test_v22_missing_prior_baseline_never_claims_new_evidence(self):
+        candles = {"forward_candle_count": 10, "nonconsecutive_intervals": 0}
+        self.assertEqual(
+            v22.forward_evidence_status(candles, []),
+            "NO_PRIOR_FORWARD_BASELINE",
+        )
+        self.assertFalse(v22.forward_evidence_usable_for_research(candles, []))
+        self.assertFalse(v22.forward_evidence_usable_for_research(
+            candles, [], ["NO_PRIOR_FORWARD_BASELINE"]))
+        self.assertEqual(
+            v22.forward_evidence_status(candles, [], baseline_available=True),
+            "FORWARD_CANDLES_PRESENT_UNVERIFIED",
+        )
+        self.assertTrue(v22.forward_evidence_usable_for_research(
+            candles, [], baseline_available=True))
 
     def test_v22_candle_integrity(self):
         with tempfile.TemporaryDirectory() as directory:
