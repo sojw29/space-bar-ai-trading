@@ -1,0 +1,25 @@
+name: V157 Offline Audit Provenance
+on:
+  pull_request:
+    paths:
+      - 'web/audit_room_mobile_v153.html'
+      - 'web/office_3d.html'
+      - 'tests/test_audit_provenance_v157.py'
+      - '.github/workflows/v157-audit-provenance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/audit_room_mobile_v153.html'
+      - 'web/office_3d.html'
+      - 'tests/test_audit_provenance_v157.py'
+      - '.github/workflows/v157-audit-provenance.yml'
+  workflow_dispatch:
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_audit_provenance_v157.py' -v
