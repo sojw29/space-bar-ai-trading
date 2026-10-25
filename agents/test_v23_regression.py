@@ -134,6 +134,18 @@ class RegressionTests(unittest.TestCase):
             "INTEGRITY_FAILURE",
         )
 
+    def test_v22_forward_research_usability_respects_warnings(self):
+        candles = {"forward_candle_count": 10, "nonconsecutive_intervals": 0}
+        self.assertFalse(v22.forward_evidence_usable_for_research(
+            candles, [], ["NO_NEW_FORWARD_CANDLES"]))
+        self.assertFalse(v22.forward_evidence_usable_for_research(
+            candles, ["CUTOFF_DRIFT"], []))
+        self.assertFalse(v22.forward_evidence_usable_for_research(
+            {"forward_candle_count": 0, "nonconsecutive_intervals": 0}, [], []))
+        self.assertFalse(v22.forward_evidence_usable_for_research(
+            {"forward_candle_count": 10, "nonconsecutive_intervals": 1}, [], []))
+        self.assertTrue(v22.forward_evidence_usable_for_research(candles, [], []))
+
     def test_v22_candle_integrity(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "candles.csv"
