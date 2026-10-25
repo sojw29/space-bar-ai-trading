@@ -1,5 +1,6 @@
 """V152 local read-only audit API smoke tests."""
 import csv
+import sys
 import json
 import tempfile
 import threading
@@ -9,6 +10,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'agents'))
 from agents.dashboard_api_v28 import make_handler
 
 
