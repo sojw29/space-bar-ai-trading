@@ -1,0 +1,24 @@
+name: SPACE BAR V166 Offline Meeting Report
+
+on:
+  push:
+    paths:
+      - 'agents/meeting_quality_report_v166.py'
+      - 'agents/test_v166_meeting_quality_report.py'
+      - '.github/workflows/test_v166_meeting_report.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  meeting-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline regression tests
+        run: python -m unittest discover -s agents -p 'test_v166_meeting_quality_report.py' -v
