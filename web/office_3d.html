@@ -933,6 +933,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <div>GUARDIAN <strong id="v168-guardian">VETO</strong></div>
   <div>COMMANDER <strong id="v168-commander">WAIT</strong></div>
  </div>
+ <div id="v169-alert-hud" data-level="BLOCKED" role="status" aria-live="polite" style="margin-top:10px;padding:12px;border:2px solid #ff7685;border-radius:10px;background:#381d2c;color:#ffe3e8;font-weight:700">🔴 GUARDIAN VETO · COMMANDER WAIT</div>
  <p style="font-size:12px;color:#9eb8cc">READ ONLY · OFFLINE QUALITY EVIDENCE · NOT LIVE TRADING</p>
 </section>
 <script>
@@ -947,6 +948,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   guardian.textContent="VETO";
   commander.textContent="WAIT";
   status.textContent=reason+" · WAIT";
+  const hud=document.getElementById("v169-alert-hud");
+  hud.dataset.level="BLOCKED";
+  hud.textContent="GUARDIAN VETO · COMMANDER WAIT · "+reason;
+  hud.style.borderColor="#ff7685";
  }
  async function refreshMeeting(){
   try{
@@ -968,6 +973,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    guardian.textContent="CLEAR";
    commander.textContent="WAIT";
    status.textContent="과거 데이터 검증 통과 · 연구 판단 대기";
+   const hud=document.getElementById("v169-alert-hud");
+   hud.dataset.level="VERIFIED";
+   hud.textContent="ATLAS VERIFIED · GUARDIAN CLEAR · COMMANDER WAIT";
+   hud.style.borderColor="#79dfb7";
   }catch(error){blocked("회의 데이터 연결 실패");}
  }
  blocked("검증 대기");
