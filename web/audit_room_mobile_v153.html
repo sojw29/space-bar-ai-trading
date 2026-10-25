@@ -37,7 +37,7 @@ function validateAudit(a){
     typeof a.data_sha256!=="string"||!/^[a-f0-9]{64}$/.test(a.data_sha256))
    throw new Error("감사 결과 형식 오류");
 }
-async function refresh(){status.textContent="검증 데이터 조회 중";status.className="badge";try{const res=await fetch("/api/v1/replay/audit",{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const body=await res.json();if(body.realtime!==false||body.orders_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");validateAudit(body.audit);render(body.audit);status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)"}catch(err){cards.replaceChildren();status.textContent="데이터 미연결";status.className="badge error";detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message}}
+async function refresh(){status.textContent="검증 데이터 조회 중";status.className="badge";try{const res=await fetch("/api/v1/replay/audit",{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const body=await res.json();if(body.mode!=="historical_offline_audit"||body.realtime!==false||body.orders_enabled!==false||body.signals_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");validateAudit(body.audit);render(body.audit);status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)"}catch(err){cards.replaceChildren();status.textContent="데이터 미연결";status.className="badge error";detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message}}
 }
 document.getElementById("refresh").addEventListener("click",refresh);
 refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
