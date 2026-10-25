@@ -498,6 +498,19 @@ for(const name of names){
  button.textContent=name;button.addEventListener("click",()=>selectAgent(name));buttons.append(button);
  keys.get(name).button=button;
 }
+// V170: APEX is the existing 3D risk avatar; it visualizes GUARDIAN's quality veto.
+// This is independent from strategy votes and never enables trading.
+window.addEventListener("spacebar:meeting-quality",event=>{
+ const verified=event.detail&&event.detail.verified===true;
+ const risk=keys.get("APEX"),chief=keys.get("COMMANDER");
+ if(!risk||!chief)return;
+ risk.badge.material.color.setHex(verified?0x39d8a6:0xef637e);
+ chief.badge.material.color.setHex(0xdbad68);
+ risk.screen.material.color.setHex(verified?0x39d8a6:0xef637e);
+ chief.screen.material.color.setHex(0xdbad68);
+ risk.group.userData.qualityVeto=!verified;
+ chief.group.userData.qualityDecision="WAIT";
+});
 function selectAgent(name){
  if(!keys.has(name))return;
  selected=name;
@@ -952,6 +965,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   hud.dataset.level="BLOCKED";
   hud.textContent="GUARDIAN VETO · COMMANDER WAIT · "+reason;
   hud.style.borderColor="#ff7685";
+  window.dispatchEvent(new CustomEvent("spacebar:meeting-quality",{detail:{verified:false}}));
  }
  async function refreshMeeting(){
   try{
@@ -977,6 +991,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    hud.dataset.level="VERIFIED";
    hud.textContent="ATLAS VERIFIED · GUARDIAN CLEAR · COMMANDER WAIT";
    hud.style.borderColor="#79dfb7";
+   window.dispatchEvent(new CustomEvent("spacebar:meeting-quality",{detail:{verified:true}}));
   }catch(error){blocked("회의 데이터 연결 실패");}
  }
  blocked("검증 대기");
