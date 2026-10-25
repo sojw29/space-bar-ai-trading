@@ -92,7 +92,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                 try:
                     from agents.offline_replay_audit_v151 import audit_history
                     import re
-                    match = re.fullmatch(r"(BTC|ETH|SOL)_(1|5|15)m\\.csv", history_path.name)
+                    match = re.fullmatch(r"(BTC|ETH|SOL)_(1|5|15)m[.]csv", history_path.name)
                     if match is None:
                         self.reply(503, {"error": "history_filename_must_identify_symbol_timeframe",
                                          "orders_enabled": False})
