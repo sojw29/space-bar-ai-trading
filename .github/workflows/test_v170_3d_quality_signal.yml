@@ -1,0 +1,24 @@
+name: SPACE BAR V170 3D Quality Signal
+
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v170_3d_quality_signal.py'
+      - '.github/workflows/test_v170_3d_quality_signal.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-signal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check 3D quality signal contract
+        run: python -m unittest discover -s agents -p 'test_v170_3d_quality_signal.py' -v
