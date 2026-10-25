@@ -1,0 +1,24 @@
+name: SPACE BAR V168 3D Meeting Status
+
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v168_meeting_display.py'
+      - '.github/workflows/test_v168_meeting_display.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  meeting-display:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify read-only 3D meeting panel
+        run: python -m unittest discover -s agents -p 'test_v168_meeting_display.py' -v

@@ -924,4 +924,55 @@ async function update(){
 update();setInterval(()=>{if(!document.hidden)update()},30000);
 })();
 </script>
+
+<section id="v168-meeting" aria-label="AI 회의 검증 현황" style="margin:16px auto;max-width:1100px;padding:16px;border:1px solid #426482;border-radius:12px;background:#101c30;color:#d8eafa">
+ <h2 style="margin:0 0 10px;font-size:18px">AI MEETING · VERIFIED STATUS</h2>
+ <p id="v168-meeting-status" role="status" aria-live="polite">검증 데이터 확인 중 · WAIT</p>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+  <div>ATLAS <strong id="v168-atlas">UNVERIFIED</strong></div>
+  <div>GUARDIAN <strong id="v168-guardian">VETO</strong></div>
+  <div>COMMANDER <strong id="v168-commander">WAIT</strong></div>
+ </div>
+ <p style="font-size:12px;color:#9eb8cc">READ ONLY · OFFLINE QUALITY EVIDENCE · NOT LIVE TRADING</p>
+</section>
+<script>
+(()=>{
+ "use strict";
+ const status=document.getElementById("v168-meeting-status");
+ const atlas=document.getElementById("v168-atlas");
+ const guardian=document.getElementById("v168-guardian");
+ const commander=document.getElementById("v168-commander");
+ function blocked(reason){
+  atlas.textContent="UNVERIFIED";
+  guardian.textContent="VETO";
+  commander.textContent="WAIT";
+  status.textContent=reason+" · WAIT";
+ }
+ async function refreshMeeting(){
+  try{
+   const response=await fetch("/api/v1/meeting",{cache:"no-store"});
+   if(!response.ok)throw new Error("HTTP "+response.status);
+   const data=await response.json();
+   if(data.orders_enabled!==false||data.live_trading_approved!==false||
+      data.research_only!==true||!data.quality_gate||!data.agents||
+      !data.agents.ATLAS||!data.agents.GUARDIAN||!data.agents.COMMANDER)
+      throw new Error("invalid contract");
+   const gate=data.quality_gate;
+   const verified=gate.quality_verified===true&&gate.risk_veto===false&&
+      gate.quality_status==="PASS";
+   const safe=verified&&data.agents.ATLAS.state==="DATA_VERIFIED"&&
+      data.agents.GUARDIAN.state==="CLEAR"&&
+      data.agents.COMMANDER.decision==="WAIT";
+   if(!safe){blocked("검증 불충분 또는 판단 보류");return;}
+   atlas.textContent="DATA_VERIFIED";
+   guardian.textContent="CLEAR";
+   commander.textContent="WAIT";
+   status.textContent="과거 데이터 검증 통과 · 연구 판단 대기";
+  }catch(error){blocked("회의 데이터 연결 실패");}
+ }
+ blocked("검증 대기");
+ refreshMeeting();
+ setInterval(()=>{if(!document.hidden)refreshMeeting()},30000);
+})();
+</script>
 </body></html>
