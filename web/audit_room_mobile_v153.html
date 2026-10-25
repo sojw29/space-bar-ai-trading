@@ -24,7 +24,20 @@ button{background:#203a5a;border:1px solid #52749e;color:white;border-radius:10p
 const fields=[["symbol","MARKET"],["timeframe_minutes","TIMEFRAME (MIN)"],["candle_count","VALID CANDLES"],["closed_trades","CLOSED PAPER TRADES"],["realized_pnl","REALIZED P&L"],["ending_realized_equity","REALIZED EQUITY"],["open_quantity","OPEN QUANTITY"],["max_drawdown_pct","MAX DRAWDOWN %"]];
 const cards=document.getElementById("cards"),status=document.getElementById("status"),detail=document.getElementById("detail");
 function render(a){cards.replaceChildren();for(const [key,label] of fields){const card=document.createElement("section");card.className="card";const title=document.createElement("div");title.className="label";title.textContent=label;const value=document.createElement("div");value.className="value";value.textContent=a[key]===undefined?"미제공":String(a[key]);card.append(title,value);cards.append(card)}}
-async function refresh(){status.textContent="검증 데이터 조회 중";status.className="badge";try{const res=await fetch("/api/v1/replay/audit",{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const body=await res.json();if(body.realtime!==false||body.orders_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");render(body.audit);status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)"}catch(err){cards.replaceChildren();status.textContent="데이터 미연결";status.className="badge error";detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message}}
+function validateAudit(a){
+ if(!["BTC","ETH","SOL"].includes(a.symbol)||
+    ![1,5,15].includes(a.timeframe_minutes)||
+    !Number.isSafeInteger(a.candle_count)||a.candle_count<2||
+    !Number.isSafeInteger(a.first_timestamp)||!Number.isSafeInteger(a.last_timestamp)||
+    a.first_timestamp>=a.last_timestamp||
+    !Number.isSafeInteger(a.closed_trades)||a.closed_trades<0||
+    !Number.isFinite(a.realized_pnl)||!Number.isFinite(a.ending_realized_equity)||
+    !Number.isFinite(a.open_quantity)||!Number.isFinite(a.win_rate_pct)||
+    !Number.isFinite(a.max_drawdown_pct)||
+    typeof a.data_sha256!=="string"||!/^[a-f0-9]{64}$/.test(a.data_sha256))
+   throw new Error("감사 결과 형식 오류");
+}
+async function refresh(){status.textContent="검증 데이터 조회 중";status.className="badge";try{const res=await fetch("/api/v1/replay/audit",{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const body=await res.json();if(body.realtime!==false||body.orders_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");validateAudit(body.audit);render(body.audit);status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)"}catch(err){cards.replaceChildren();status.textContent="데이터 미연결";status.className="badge error";detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message}}
 }
 document.getElementById("refresh").addEventListener("click",refresh);
 refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
