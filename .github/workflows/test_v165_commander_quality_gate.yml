@@ -1,0 +1,24 @@
+name: SPACE BAR V165 Commander Quality Gate
+
+on:
+  push:
+    paths:
+      - 'agents/commander_quality_gate_v165.py'
+      - 'agents/test_v165_commander_quality_gate.py'
+      - '.github/workflows/test_v165_commander_quality_gate.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test research-only quality gate
+        run: python -m unittest discover -s agents -p 'test_v165_commander_quality_gate.py' -v
