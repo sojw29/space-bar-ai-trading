@@ -1,0 +1,23 @@
+name: V159 Agent Matrix Selection
+on:
+  pull_request:
+    paths:
+      - 'web/office_3d.html'
+      - 'tests/test_agent_selection_v159.py'
+      - '.github/workflows/v159-agent-selection.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/office_3d.html'
+      - 'tests/test_agent_selection_v159.py'
+      - '.github/workflows/v159-agent-selection.yml'
+  workflow_dispatch:
+jobs:
+  selection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_agent_selection_v159.py' -v

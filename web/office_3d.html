@@ -516,7 +516,15 @@ function renderAgentMatrix(){
   const value=document.createElement("strong");
   value.textContent=record?record.decision+" · 완료 봉 연구":"OFFLINE · 검증 이벤트 없음";
   value.dataset.decision=record?record.decision:"OFFLINE";
-  row.append(label,value);
+  value.title=record?String(record.reason||"근거 없음"):"검증된 연구 데이터 없음";
+  const select=document.createElement("button");
+  select.type="button";
+  select.className="agent-btn";
+  select.textContent="분석 근거 보기";
+  select.setAttribute("aria-label",id+" 연구 근거 보기");
+  select.setAttribute("aria-pressed",String(selected===id));
+  select.addEventListener("click",()=>selectAgent(id));
+  row.append(label,value,select);
   container.append(row);
  }
 }
