@@ -3,12 +3,22 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from data_quality_v65 import score_file
+from data_quality_v65 import score_file, overall_quality_status
 
 NOW = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
 LAST = int(datetime(2026, 10, 19, 23, 55, tzinfo=timezone.utc).timestamp())
 
 class QualityTests(unittest.TestCase):
+    def test_v164_overall_gate(self):
+        good = {"status": "PASS", "research_usable": True}
+        review = {"status": "REVIEW", "research_usable": False}
+        bad = {"status": "FAIL", "research_usable": False}
+        self.assertEqual(overall_quality_status([good] * 9), "PASS")
+        self.assertEqual(overall_quality_status([good, review]), "REVIEW")
+        self.assertEqual(overall_quality_status([good, bad]), "FAIL")
+        self.assertEqual(overall_quality_status([]), "FAIL")
+        self.assertEqual(overall_quality_status([{"status": "PASS"}]), "REVIEW")
+
     def make(self, root, rows):
         path = Path(root) / "BTC_5m.csv"
         with path.open("w", newline="", encoding="utf-8") as f:
