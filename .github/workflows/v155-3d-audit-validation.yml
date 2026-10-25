@@ -1,0 +1,23 @@
+name: V155 3D Audit Payload Validation
+on:
+  pull_request:
+    paths:
+      - 'web/office_3d.html'
+      - 'tests/test_3d_audit_validation_v155.py'
+      - '.github/workflows/v155-3d-audit-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/office_3d.html'
+      - 'tests/test_3d_audit_validation_v155.py'
+      - '.github/workflows/v155-3d-audit-validation.yml'
+  workflow_dispatch:
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_3d_audit_validation_v155.py' -v

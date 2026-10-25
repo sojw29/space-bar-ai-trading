@@ -854,6 +854,12 @@ async function update(){
   const payload=await response.json();
   if(payload.realtime!==false||payload.orders_enabled!==false||!payload.audit)throw new Error("검증되지 않은 응답");
   const a=payload.audit;
+  if(!["BTC","ETH","SOL"].includes(a.symbol)||![1,5,15].includes(a.timeframe_minutes)||
+     !Number.isSafeInteger(a.candle_count)||a.candle_count<2||
+     !Number.isSafeInteger(a.closed_trades)||a.closed_trades<0||
+     !Number.isFinite(a.realized_pnl)||!Number.isFinite(a.max_drawdown_pct)||
+     typeof a.data_sha256!=="string"||!/^[a-f0-9]{64}$/.test(a.data_sha256))
+     throw new Error("감사 결과 형식 오류");
   status.textContent="검증 완료 · "+a.symbol+" "+a.timeframe_minutes+"m";
   metrics.replaceChildren();
   for(const [label,key] of [["캔들","candle_count"],["모의 청산 거래","closed_trades"],["실현손익","realized_pnl"],["최대 낙폭(%)","max_drawdown_pct"]]){
