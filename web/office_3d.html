@@ -852,7 +852,7 @@ async function update(){
   const response=await fetch("/api/v1/replay/audit",{cache:"no-store"});
   if(!response.ok)throw new Error("HTTP "+response.status);
   const payload=await response.json();
-  if(payload.realtime!==false||payload.orders_enabled!==false||!payload.audit)throw new Error("검증되지 않은 응답");
+  if(payload.mode!=="historical_offline_audit"||payload.realtime!==false||payload.orders_enabled!==false||payload.signals_enabled!==false||!payload.audit)throw new Error("검증되지 않은 응답");
   const a=payload.audit;
   if(!["BTC","ETH","SOL"].includes(a.symbol)||![1,5,15].includes(a.timeframe_minutes)||
      !Number.isSafeInteger(a.candle_count)||a.candle_count<2||
