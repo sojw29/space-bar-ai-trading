@@ -48,7 +48,6 @@ class PaperOrder:
         # No volume is reused on repeated calls for the same bar.
         if getattr(self, "_last_bar", -1) >= bar:
             raise ValueError("bars must advance strictly")
-        self._last_bar = bar
         capacity = volume * participation
         if not isfinite(capacity):
             raise ValueError("nonfinite capacity")
@@ -60,6 +59,7 @@ class PaperOrder:
                              max_participation=participation, **costs)
         if fill is None:
             return None
+        self._last_bar = bar
         self.remaining = max(0.0, self.remaining - fill_qty)
         self.status = "FILLED" if self.remaining <= self.quantity * 1e-12 else "PARTIAL"
         return fill
