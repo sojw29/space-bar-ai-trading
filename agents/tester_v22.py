@@ -68,6 +68,11 @@ def forward_evidence_status(candles, issues, warnings=()):
     return "FORWARD_CANDLES_PRESENT_UNVERIFIED"
 
 
+def forward_evidence_usable_for_research(candles, issues, warnings=()):
+    """Only newly extended, gap-free forward snapshots may be used as research evidence."""
+    return forward_evidence_status(candles, issues, warnings) == "FORWARD_CANDLES_PRESENT_UNVERIFIED"
+
+
 def previous_evidence_path():
     """Resolve both supported artifact ZIP layouts, never current-run files."""
     configured = PREVIOUS / "evidence.json"
@@ -138,7 +143,7 @@ def run():
         "integrity_pass": not issues,
         "forward_evidence_status": forward_evidence_status(candles, issues, warnings),
         "forward_evidence_available": candles["forward_candle_count"] > 0,
-        "forward_evidence_usable_for_research": forward_evidence_status(candles, issues) == "FORWARD_CANDLES_PRESENT_UNVERIFIED",
+        "forward_evidence_usable_for_research": forward_evidence_usable_for_research(candles, issues, warnings),
         "independent_oos_verified": False,
         "live_trading_approved": False,
         "limitations": [
