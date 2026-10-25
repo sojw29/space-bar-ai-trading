@@ -1,0 +1,38 @@
+name: SPACE BAR Node24 Actions Compatibility
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/backtest_v17.yml'
+      - '.github/workflows/backtest_v18.yml'
+      - '.github/workflows/backtest_v19.yml'
+      - '.github/workflows/backtest_v20.yml'
+      - '.github/workflows/backtest_v21.yml'
+      - '.github/workflows/backtest_v22.yml'
+      - '.github/workflows/test_v23_regression.yml'
+      - '.github/workflows/test_node24_actions_compat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node24-actions-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Create harmless offline artifact
+        run: |
+          mkdir -p /tmp/space-bar-action-smoke
+          python -c "from pathlib import Path; Path('/tmp/space-bar-action-smoke/status.txt').write_text('OFFLINE ONLY\\n', encoding='utf-8')"
+      - name: Verify upload-artifact v6 compatibility
+        uses: actions/upload-artifact@v6
+        with:
+          name: space-bar-node24-smoke
+          path: /tmp/space-bar-action-smoke/status.txt
+          if-no-files-found: error
+          retention-days: 1
