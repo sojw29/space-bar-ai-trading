@@ -14,6 +14,7 @@ import agent_events_v27 as v27
 
 DEFAULT_HISTORY = Path("data/history/BTC_5m.csv")
 DASHBOARD_HTML = Path(__file__).resolve().parent.parent / "web" / "command_center.html"
+AUDIT_ROOM_HTML = Path(__file__).resolve().parent.parent / "web" / "audit_room_mobile_v153.html"
 OFFICE_3D_HTML = Path(__file__).resolve().parent.parent / "web" / "office_3d.html"
 MAX_BYTES = 1_000_000
 
@@ -56,9 +57,9 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
-            if path in ("/", "/dashboard", "/office3d"):
+            if path in ("/", "/dashboard", "/office3d", "/audit-room"):
                 try:
-                    content = (OFFICE_3D_HTML if path == "/office3d" else DASHBOARD_HTML).read_bytes()
+                    content = (AUDIT_ROOM_HTML if path == "/audit-room" else OFFICE_3D_HTML if path == "/office3d" else DASHBOARD_HTML).read_bytes()
                 except OSError:
                     self.reply(503, {"error": "dashboard_unavailable"})
                     return
