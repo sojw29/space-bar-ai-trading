@@ -7,6 +7,7 @@
 
 import csv
 import io
+import math
 import os
 import time
 import zipfile
@@ -147,6 +148,9 @@ def add_rows(candles, rows, start_ts, end_ts):
                 continue
 
             if lo > min(op, cl):
+                continue
+
+            if not all(math.isfinite(x) for x in (op, hi, lo, cl, vol)):
                 continue
 
             if vol < 0:
