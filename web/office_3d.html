@@ -834,4 +834,36 @@ setInterval(updateOpsClock,5000);
 updateOpsClock();
 renderFrame();
 </script>
+<!-- V154: read-only historical audit HUD; does not drive orders or 3D agent decisions. -->
+<section id="v154-audit-hud" aria-label="과거 데이터 검증 상태" style="position:fixed;z-index:10;right:12px;bottom:12px;width:min(340px,calc(100vw - 24px));padding:14px;background:#101d32f5;border:1px solid #507390;border-radius:14px;box-shadow:0 10px 30px #0008;color:#e8f2ff;font:13px system-ui,sans-serif">
+  <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><strong>DATA AUDIT · HISTORICAL</strong><button id="v154-audit-toggle" type="button" aria-expanded="true" aria-controls="v154-audit-content" style="background:#25435e;color:white;border:1px solid #547c9a;border-radius:6px;padding:5px 10px">접기</button></div>
+  <div id="v154-audit-content"><p id="v154-audit-status" role="status" aria-live="polite">검증 결과 확인 중…</p><div id="v154-audit-metrics" style="line-height:1.7;overflow-wrap:anywhere"></div><a href="/audit-room" style="color:#90ddff">모바일 상세 보기 →</a><p style="font-size:11px;color:#9bb3c9;margin-bottom:0">READ ONLY · NOT REALTIME · NO ORDERS</p></div>
+</section>
+<script>
+(()=>{
+"use strict";
+const status=document.getElementById("v154-audit-status");
+const metrics=document.getElementById("v154-audit-metrics");
+const content=document.getElementById("v154-audit-content");
+const toggle=document.getElementById("v154-audit-toggle");
+toggle.addEventListener("click",()=>{const expanded=toggle.getAttribute("aria-expanded")==="true";toggle.setAttribute("aria-expanded",String(!expanded));content.hidden=expanded;toggle.textContent=expanded?"펼치기":"접기";});
+async function update(){
+ try{
+  const response=await fetch("/api/v1/replay/audit",{cache:"no-store"});
+  if(!response.ok)throw new Error("HTTP "+response.status);
+  const payload=await response.json();
+  if(payload.realtime!==false||payload.orders_enabled!==false||!payload.audit)throw new Error("검증되지 않은 응답");
+  const a=payload.audit;
+  status.textContent="검증 완료 · "+a.symbol+" "+a.timeframe_minutes+"m";
+  metrics.replaceChildren();
+  for(const [label,key] of [["캔들","candle_count"],["모의 청산 거래","closed_trades"],["실현손익","realized_pnl"],["최대 낙폭(%)","max_drawdown_pct"]]){
+   const line=document.createElement("div");
+   line.textContent=label+": "+(a[key]===undefined?"미제공":String(a[key]));
+   metrics.appendChild(line);
+  }
+ }catch(e){status.textContent="검증 데이터 미연결";metrics.textContent="과거 데이터 검증 실패 또는 서버 미설정. 임의의 거래 성과를 표시하지 않습니다.";}
+}
+update();setInterval(()=>{if(!document.hidden)update()},30000);
+})();
+</script>
 </body></html>
