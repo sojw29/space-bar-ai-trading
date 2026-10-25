@@ -55,12 +55,14 @@ def inspect_candles(path, cutoff):
     }
 
 
-def forward_evidence_status(candles, issues):
+def forward_evidence_status(candles, issues, warnings=()):
     """Distinguish intact archives from actual post-cutoff observations."""
     if issues:
         return "INTEGRITY_FAILURE"
     if candles["forward_candle_count"] == 0:
         return "NO_FORWARD_CANDLES"
+    if "NO_NEW_FORWARD_CANDLES" in warnings:
+        return "NO_NEW_FORWARD_CANDLES"
     if candles["nonconsecutive_intervals"]:
         return "CANDLE_GAPS_REQUIRE_REVIEW"
     return "FORWARD_CANDLES_PRESENT_UNVERIFIED"
@@ -134,7 +136,7 @@ def run():
         "errors": sorted(set(issues)),
         "warnings": sorted(set(warnings)),
         "integrity_pass": not issues,
-        "forward_evidence_status": forward_evidence_status(candles, issues),
+        "forward_evidence_status": forward_evidence_status(candles, issues, warnings),
         "forward_evidence_available": candles["forward_candle_count"] > 0,
         "forward_evidence_usable_for_research": forward_evidence_status(candles, issues) == "FORWARD_CANDLES_PRESENT_UNVERIFIED",
         "independent_oos_verified": False,
