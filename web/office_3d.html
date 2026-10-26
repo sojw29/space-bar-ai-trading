@@ -979,6 +979,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <div id="v179-timeline-bars" role="img" aria-label="관측된 회의 상태 변화 없음" style="display:flex;align-items:flex-end;gap:3px;height:52px;margin-top:8px"></div>
  </div>
  <div id="v180-evidence-compare" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">근거 비교 · 관측 데이터 대기 · 거래 성과 아님</div>
+ <div id="v181-decision-compare" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">회의 판단 변화 · 관측 대기 · 주문 없음</div>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -1001,6 +1002,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const meetingMetrics=document.getElementById("v178-meeting-metrics");
  const timelineBars=document.getElementById("v179-timeline-bars");
  const evidenceCompare=document.getElementById("v180-evidence-compare");
+ const decisionCompare=document.getElementById("v181-decision-compare");
+ function meetingDecisionLabel(state){
+  if(state.startsWith("BLOCKED"))return "BLOCKED";
+  if(state.includes("ATLAS VERIFIED")&&state.includes("GUARDIAN CLEAR")&&state.includes("COMMANDER WAIT"))return "VERIFIED / WAIT";
+  return "WAIT / UNVERIFIED";
+ }
+ function renderDecisionCompare(){
+  const current=historyEntries[0];
+  const previous=historyEntries.find(item=>current&&meetingDecisionLabel(item.state)!==meetingDecisionLabel(current.state));
+  if(!current){
+   decisionCompare.textContent="회의 판단 변화 · 관측 없음 · 주문 없음";
+   return;
+  }
+  const label=meetingDecisionLabel(current.state);
+  decisionCompare.textContent=previous?
+   "회의 판단 변화 · 이전 "+previous.time+" "+meetingDecisionLabel(previous.state)+
+   " → 최근 "+current.time+" "+label+" · 관측 상태 비교 · 주문 없음":
+   "회의 판단 변화 · 최근 "+current.time+" "+label+
+   " · 비교할 다른 상태 없음 · 주문 없음";
+ }
  function renderEvidenceCompare(){
   const entries=historyEntries.filter(item=>item.source!=="NO VERIFIED EVIDENCE");
   const current=entries[0];
@@ -1042,6 +1063,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · 중복 분류 가능 · 거래 성과 아님";
  }
  function renderMeetingHistory(){
+  renderDecisionCompare();
   renderEvidenceCompare();
   updateMeetingMetrics();
   renderMeetingTimeline();
