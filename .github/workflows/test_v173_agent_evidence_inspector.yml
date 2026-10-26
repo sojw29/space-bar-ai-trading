@@ -1,0 +1,20 @@
+name: SPACE BAR V173 Agent Evidence Inspector
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v173_agent_evidence_inspector.py'
+      - '.github/workflows/test_v173_agent_evidence_inspector.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  agent-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v173_agent_evidence_inspector.py' -v
