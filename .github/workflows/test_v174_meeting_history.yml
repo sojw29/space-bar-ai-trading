@@ -1,0 +1,20 @@
+name: SPACE BAR V174 Meeting History
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v174_meeting_history.py'
+      - '.github/workflows/test_v174_meeting_history.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  meeting-history:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v174_meeting_history.py' -v
