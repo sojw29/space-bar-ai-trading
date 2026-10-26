@@ -999,7 +999,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     payload.persistent_audit!==false||!Array.isArray(payload.events)||payload.events.length>20)
     throw new Error("기록 형식 불일치");
    const rows=payload.events.map(item=>{
-    if(!item||typeof item.time!=="string"||!/^\\d{4}-\\d{2}-\\d{2}T/.test(item.time)||
+    if(!item||typeof item.time!=="string"||!/^\d{4}-\d{2}-\d{2}T/.test(item.time)||
      !Number.isFinite(Date.parse(item.time))||typeof item.state!=="string"||
      item.state.length>160||typeof item.source!=="string"||
      !(item.source==="NO VERIFIED EVIDENCE"||/^[a-f0-9]{64}$/.test(item.source)))
