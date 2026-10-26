@@ -965,6 +965,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <option value="ATLAS">ATLAS</option><option value="GUARDIAN">GUARDIAN</option><option value="COMMANDER">COMMANDER</option>
   </select>
  </div>
+ <button id="v175-export-meeting-history" type="button" style="margin-top:8px;background:#25435e;color:#fff;border:1px solid #547c9a;border-radius:6px;padding:6px 10px">회의 기록 JSON 저장 (로컬)</button>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -983,6 +984,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const agentDetail=document.getElementById("v173-agent-detail");
  const history=document.getElementById("v174-meeting-history");
  const historyEntries=[];
+ document.getElementById("v175-export-meeting-history").addEventListener("click",()=>{
+  const payload={version:"V175.0",mode:"browser_observed_ui_events",research_only:true,
+   orders_enabled:false,persistent_audit:false,events:historyEntries.map(item=>({...item}))};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement("a");
+  anchor.href=url;
+  anchor.download="spacebar-meeting-ui-history.json";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+ });
  let lastHistoryKey=null;
  function logMeeting(state,sha){
   const fingerprint=typeof sha==="string"&&/^[a-f0-9]{64}$/.test(sha)?sha:"NO VERIFIED EVIDENCE";
