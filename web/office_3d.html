@@ -966,6 +966,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   </select>
  </div>
  <button id="v175-export-meeting-history" type="button" style="margin-top:8px;background:#25435e;color:#fff;border:1px solid #547c9a;border-radius:6px;padding:6px 10px">회의 기록 JSON 저장 (로컬)</button>
+ <label for="v176-import-meeting-history" style="display:inline-block;margin-left:8px">불러오기 (로컬 JSON)</label>
+ <input id="v176-import-meeting-history" type="file" accept=".json,application/json" aria-label="저장한 회의 상태 기록 불러오기" style="max-width:220px">
+ <p id="v176-import-status" role="status" style="font-size:12px;color:#9eb8cc">파일은 서버에 전송되지 않습니다. 불러온 기록은 현재 회의 판단에 사용되지 않습니다.</p>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -984,6 +987,45 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const agentDetail=document.getElementById("v173-agent-detail");
  const history=document.getElementById("v174-meeting-history");
  const historyEntries=[];
+ const importStatus=document.getElementById("v176-import-status");
+ document.getElementById("v176-import-meeting-history").addEventListener("change",async event=>{
+  const file=event.target.files&&event.target.files[0];
+  if(!file)return;
+  try{
+   if(file.size>65536)throw new Error("파일 크기 제한 초과");
+   const payload=JSON.parse(await file.text());
+   if(!payload||payload.version!=="V175.0"||payload.mode!=="browser_observed_ui_events"||
+    payload.research_only!==true||payload.orders_enabled!==false||
+    payload.persistent_audit!==false||!Array.isArray(payload.events)||payload.events.length>20)
+    throw new Error("기록 형식 불일치");
+   const rows=payload.events.map(item=>{
+    if(!item||typeof item.time!=="string"||!/^\d{4}-\d{2}-\d{2}T/.test(item.time)||
+     !Number.isFinite(Date.parse(item.time))||typeof item.state!=="string"||
+     item.state.length>160||typeof item.source!=="string"||
+     !(item.source==="NO VERIFIED EVIDENCE"||/^[a-f0-9]{64}$/.test(item.source)))
+     throw new Error("기록 항목 검증 실패");
+    return {time:item.time,state:item.state,source:item.source};
+   });
+   importStatus.textContent="로컬 파일 검증 완료 · "+rows.length+"개 · 과거 UI 관측 기록 (현재 판단과 무관)";
+   const details=document.createElement("details");
+   const summary=document.createElement("summary");
+   summary.textContent="불러온 과거 UI 기록 보기";
+   details.appendChild(summary);
+   for(const item of rows){
+    const line=document.createElement("div");
+    line.textContent=item.time+" · "+item.state+" · "+item.source;
+    details.appendChild(line);
+   }
+   const previous=document.getElementById("v176-imported-history");
+   if(previous)previous.remove();
+   details.id="v176-imported-history";
+   importStatus.after(details);
+  }catch(error){
+   importStatus.textContent="불러오기 거부 · "+error.message;
+   const previous=document.getElementById("v176-imported-history");
+   if(previous)previous.remove();
+  }finally{event.target.value="";}
+ });
  document.getElementById("v175-export-meeting-history").addEventListener("click",()=>{
   const payload={version:"V175.0",mode:"browser_observed_ui_events",research_only:true,
    orders_enabled:false,persistent_audit:false,events:historyEntries.map(item=>({...item}))};
