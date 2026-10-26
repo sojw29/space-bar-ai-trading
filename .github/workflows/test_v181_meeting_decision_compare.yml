@@ -1,0 +1,20 @@
+name: SPACE BAR V181 Meeting Decision Comparison
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v181_meeting_decision_compare.py'
+      - '.github/workflows/test_v181_meeting_decision_compare.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  decision-compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v181_meeting_decision_compare.py' -v
