@@ -13,6 +13,10 @@ def evaluate(report, evidence, reconciliation):
     blockers = []
     if evidence is None or not evidence.get("integrity_pass", False):
         blockers.append("EVIDENCE_INTEGRITY_UNVERIFIED")
+    # Archive integrity and a prior snapshot do not prove fresh forward evidence.
+    # Fail closed when V22 explicitly reports unchanged/missing forward candles.
+    if evidence is None or evidence.get("forward_evidence_usable_for_research") is not True:
+        blockers.append("FORWARD_EVIDENCE_UNUSABLE")
     if evidence is None or not evidence.get("prior_evidence_available", False):
         blockers.append("NO_PRIOR_EVIDENCE_SNAPSHOT")
     if reconciliation is None or not reconciliation.get("previous_snapshot_available", False):
