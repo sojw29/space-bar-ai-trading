@@ -3,13 +3,22 @@
 This produces a JSON snapshot only. It never places orders.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from commander_quality_gate_v165 import from_report
 
 
 def build_report(quality_path):
+    quality_path = Path(quality_path)
     gate = from_report(quality_path, "WAIT")
+    try:
+        raw = quality_path.read_bytes()
+        quality_sha256 = hashlib.sha256(raw).hexdigest()
+        quality_bytes = len(raw)
+    except OSError:
+        quality_sha256 = None
+        quality_bytes = None
     return {
         "version": "V166.0",
         "room": "SPACE BAR AI MEETING",
@@ -19,6 +28,13 @@ def build_report(quality_path):
             "COMMANDER": {"decision": gate["decision"], "reason": gate["reason"]},
         },
         "quality_gate": gate,
+        "evidence": {
+            "source": "offline_v65_quality_report",
+            "sha256": quality_sha256,
+            "bytes": quality_bytes,
+            "verified": gate["quality_verified"],
+            "note": "SHA256 identifies input bytes; it does not prove market accuracy",
+        },
         "research_only": True,
         "orders_enabled": False,
         "live_trading_approved": False,
