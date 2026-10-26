@@ -959,6 +959,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <div>GUARDIAN <strong id="v168-guardian">VETO</strong></div>
   <div>COMMANDER <strong id="v168-commander">WAIT</strong></div>
  </div>
+ <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <label for="v173-agent-select">AGENT INSPECTOR</label>
+  <select id="v173-agent-select" aria-label="회의 요원 선택" style="background:#182b44;color:#e8f2ff;border:1px solid #507390;border-radius:6px;padding:6px">
+   <option value="ATLAS">ATLAS</option><option value="GUARDIAN">GUARDIAN</option><option value="COMMANDER">COMMANDER</option>
+  </select>
+ </div>
+ <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
  <div id="v169-alert-hud" data-level="BLOCKED" role="status" aria-live="polite" style="margin-top:10px;padding:12px;border:2px solid #ff7685;border-radius:10px;background:#381d2c;color:#ffe3e8;font-weight:700">🔴 GUARDIAN VETO · COMMANDER WAIT</div>
  <p style="font-size:12px;color:#9eb8cc">READ ONLY · OFFLINE QUALITY EVIDENCE · NOT LIVE TRADING</p>
@@ -971,6 +978,28 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const guardian=document.getElementById("v168-guardian");
  const commander=document.getElementById("v168-commander");
  const evidence=document.getElementById("v172-evidence");
+ const agentSelect=document.getElementById("v173-agent-select");
+ const agentDetail=document.getElementById("v173-agent-detail");
+ let latestMeeting=null;
+ function inspectAgent(){
+  const id=agentSelect.value;
+  const meeting=latestMeeting;
+  const agent=meeting&&meeting.agents&&meeting.agents[id];
+  const source=meeting&&meeting.evidence;
+  const gate=meeting&&meeting.quality_gate;
+  const trusted=source&&source.verified===true&&
+   typeof source.sha256==="string"&&/^[a-f0-9]{64}$/.test(source.sha256)&&
+   gate&&gate.quality_verified===true&&meeting.orders_enabled===false&&
+   meeting.live_trading_approved===false&&meeting.research_only===true;
+  const value=agent&&(id==="COMMANDER"?agent.decision:agent.state);
+  const allowed=id==="ATLAS"?["DATA_VERIFIED","DATA_UNVERIFIED"]:
+   id==="GUARDIAN"?["CLEAR","VETO"]:["WAIT"];
+  const state=allowed.includes(value)?value:"UNVERIFIED";
+  agentDetail.textContent=id+" · "+(trusted?state:"UNVERIFIED")+
+   " · "+(trusted?"SOURCE SHA-256 "+source.sha256:"NO VERIFIED EVIDENCE")+
+   " · RESEARCH ONLY / NO ORDERS";
+ }
+ agentSelect.addEventListener("change",inspectAgent);
  function showEvidence(data){
   const source=data&&data.evidence;
   const gate=data&&data.quality_gate;
@@ -985,6 +1014,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
 
  function blocked(reason){
+  latestMeeting=null;
+  inspectAgent();
   showEvidence(null);
   atlas.textContent="UNVERIFIED";
   guardian.textContent="VETO";
@@ -1014,6 +1045,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       data.agents.GUARDIAN.state==="CLEAR"&&
       data.agents.COMMANDER.decision==="WAIT";
    if(!safe){blocked("검증 불충분 또는 판단 보류");return;}
+   latestMeeting=data;
+   inspectAgent();
    atlas.textContent="DATA_VERIFIED";
    guardian.textContent="CLEAR";
    commander.textContent="WAIT";
