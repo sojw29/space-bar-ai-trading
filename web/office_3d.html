@@ -965,6 +965,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <option value="ATLAS">ATLAS</option><option value="GUARDIAN">GUARDIAN</option><option value="COMMANDER">COMMANDER</option>
   </select>
  </div>
+ <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
  <div id="v169-alert-hud" data-level="BLOCKED" role="status" aria-live="polite" style="margin-top:10px;padding:12px;border:2px solid #ff7685;border-radius:10px;background:#381d2c;color:#ffe3e8;font-weight:700">🔴 GUARDIAN VETO · COMMANDER WAIT</div>
@@ -980,6 +981,25 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const evidence=document.getElementById("v172-evidence");
  const agentSelect=document.getElementById("v173-agent-select");
  const agentDetail=document.getElementById("v173-agent-detail");
+ const history=document.getElementById("v174-meeting-history");
+ const historyEntries=[];
+ let lastHistoryKey=null;
+ function logMeeting(state,sha){
+  const fingerprint=typeof sha==="string"&&/^[a-f0-9]{64}$/.test(sha)?sha:"NO VERIFIED EVIDENCE";
+  const key=state+"|"+fingerprint;
+  if(key===lastHistoryKey)return;
+  lastHistoryKey=key;
+  const entry={time:new Date().toISOString(),state,source:fingerprint};
+  historyEntries.unshift(entry);
+  if(historyEntries.length>20)historyEntries.length=20;
+  history.replaceChildren();
+  for(const item of historyEntries){
+   const row=document.createElement("div");
+   row.textContent=item.time+" · "+item.state+" · "+item.source;
+   history.appendChild(row);
+  }
+ }
+ logMeeting("WAIT",null);
  let latestMeeting=null;
  function inspectAgent(){
   const id=agentSelect.value;
@@ -1014,6 +1034,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
 
  function blocked(reason){
+  logMeeting("BLOCKED · "+reason,null);
   latestMeeting=null;
   inspectAgent();
   showEvidence(null);
@@ -1046,6 +1067,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       data.agents.COMMANDER.decision==="WAIT";
    if(!safe){blocked("검증 불충분 또는 판단 보류");return;}
    latestMeeting=data;
+   logMeeting("ATLAS VERIFIED · GUARDIAN CLEAR · COMMANDER WAIT",data.evidence&&data.evidence.sha256);
    inspectAgent();
    atlas.textContent="DATA_VERIFIED";
    guardian.textContent="CLEAR";
