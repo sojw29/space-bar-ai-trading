@@ -959,6 +959,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <div>GUARDIAN <strong id="v168-guardian">VETO</strong></div>
   <div>COMMANDER <strong id="v168-commander">WAIT</strong></div>
  </div>
+ <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
  <div id="v169-alert-hud" data-level="BLOCKED" role="status" aria-live="polite" style="margin-top:10px;padding:12px;border:2px solid #ff7685;border-radius:10px;background:#381d2c;color:#ffe3e8;font-weight:700">🔴 GUARDIAN VETO · COMMANDER WAIT</div>
  <p style="font-size:12px;color:#9eb8cc">READ ONLY · OFFLINE QUALITY EVIDENCE · NOT LIVE TRADING</p>
 </section>
@@ -969,7 +970,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const atlas=document.getElementById("v168-atlas");
  const guardian=document.getElementById("v168-guardian");
  const commander=document.getElementById("v168-commander");
+ const evidence=document.getElementById("v172-evidence");
+ function showEvidence(data){
+  const source=data&&data.evidence;
+  const gate=data&&data.quality_gate;
+  const valid=source&&source.source==="offline_v65_quality_report"&&
+   typeof source.sha256==="string"&&/^[a-f0-9]{64}$/.test(source.sha256)&&
+   Number.isSafeInteger(source.bytes)&&source.bytes>0&&
+   source.verified===true&&gate&&gate.quality_verified===true;
+  evidence.dataset.verified=String(Boolean(valid));
+  evidence.textContent=valid?
+   "EVIDENCE · OFFLINE V65 · SHA-256 "+source.sha256+" · "+source.bytes+" bytes · FILE IDENTITY ONLY":
+   "EVIDENCE · MISSING OR UNVERIFIED · NO PROVENANCE CLAIM";
+ }
+
  function blocked(reason){
+  showEvidence(null);
   atlas.textContent="UNVERIFIED";
   guardian.textContent="VETO";
   commander.textContent="WAIT";
@@ -991,6 +1007,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       !data.agents.ATLAS||!data.agents.GUARDIAN||!data.agents.COMMANDER)
       throw new Error("invalid contract");
    const gate=data.quality_gate;
+   showEvidence(data);
    const verified=gate.quality_verified===true&&gate.risk_veto===false&&
       gate.quality_status==="PASS";
    const safe=verified&&data.agents.ATLAS.state==="DATA_VERIFIED"&&
