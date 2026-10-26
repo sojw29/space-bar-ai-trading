@@ -978,6 +978,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <div style="font-size:12px;color:#9eb8cc">상태 변화 타임라인 · 최근 20개 브라우저 관측 이벤트 · 거래 성과 아님</div>
   <div id="v179-timeline-bars" role="img" aria-label="관측된 회의 상태 변화 없음" style="display:flex;align-items:flex-end;gap:3px;height:52px;margin-top:8px"></div>
  </div>
+ <div id="v180-evidence-compare" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">근거 비교 · 관측 데이터 대기 · 거래 성과 아님</div>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -999,6 +1000,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const historyFilter=document.getElementById("v177-history-filter");
  const meetingMetrics=document.getElementById("v178-meeting-metrics");
  const timelineBars=document.getElementById("v179-timeline-bars");
+ const evidenceCompare=document.getElementById("v180-evidence-compare");
+ function renderEvidenceCompare(){
+  const entries=historyEntries.filter(item=>item.source!=="NO VERIFIED EVIDENCE");
+  const current=entries[0];
+  const previous=entries.find(item=>current&&item.source!==current.source);
+  if(!current){
+   evidenceCompare.textContent="근거 비교 · 검증 가능한 SHA-256 관측 없음 · 판단 보류";
+   return;
+  }
+  if(!previous){
+   evidenceCompare.textContent="근거 비교 · 현재 관측 SHA-256 "+current.source+
+    " · 비교할 다른 지문 없음 · 파일 식별자만 확인 · 시장 정확성 증명 아님";
+   return;
+  }
+  evidenceCompare.textContent="근거 비교 · 최신 관측 "+current.time+" · "+current.source+
+   " / 이전 다른 지문 "+previous.time+" · "+previous.source+
+   " · 지문 변경 관측 · 내용 개선 또는 거래 성과를 의미하지 않음";
+ }
  function renderMeetingTimeline(){
   timelineBars.replaceChildren();
   const events=historyEntries.slice().reverse();
@@ -1023,6 +1042,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · 중복 분류 가능 · 거래 성과 아님";
  }
  function renderMeetingHistory(){
+  renderEvidenceCompare();
   updateMeetingMetrics();
   renderMeetingTimeline();
   const mode=historyFilter.value;
