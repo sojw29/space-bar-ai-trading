@@ -1,0 +1,20 @@
+name: SPACE BAR V177 Meeting History Filter
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v177_meeting_history_filter.py'
+      - '.github/workflows/test_v177_meeting_history_filter.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  meeting-filter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v177_meeting_history_filter.py' -v
