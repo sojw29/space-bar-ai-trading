@@ -973,6 +973,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  <select id="v177-history-filter" aria-label="회의 상태 기록 필터" style="background:#182b44;color:#e8f2ff;border:1px solid #507390;border-radius:6px;padding:6px">
   <option value="ALL">전체</option><option value="BLOCKED">차단</option><option value="VERIFIED">검증</option><option value="WAIT">대기</option>
  </select>
+ <div id="v178-meeting-metrics" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">최근 관측: 0 · 차단: 0 · 검증: 0 · 대기: 0</div>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -992,7 +993,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const history=document.getElementById("v174-meeting-history");
  const historyEntries=[];
  const historyFilter=document.getElementById("v177-history-filter");
+ const meetingMetrics=document.getElementById("v178-meeting-metrics");
+ function updateMeetingMetrics(){
+  const blocked=historyEntries.filter(item=>item.state.startsWith("BLOCKED")).length;
+  const verified=historyEntries.filter(item=>item.state.includes("VERIFIED")&&!item.state.startsWith("BLOCKED")).length;
+  const waiting=historyEntries.filter(item=>item.state.includes("WAIT")).length;
+  meetingMetrics.textContent="브라우저 관측 이벤트 "+historyEntries.length+
+   "개 · 차단 "+blocked+" · 검증 "+verified+" · 대기 "+waiting+
+   " · 중복 분류 가능 · 거래 성과 아님";
+ }
  function renderMeetingHistory(){
+  updateMeetingMetrics();
   const mode=historyFilter.value;
   history.replaceChildren();
   const filtered=historyEntries.filter(item=>mode==="ALL"||
