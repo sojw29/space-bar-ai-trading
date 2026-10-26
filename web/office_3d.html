@@ -974,6 +974,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <option value="ALL">전체</option><option value="BLOCKED">차단</option><option value="VERIFIED">검증</option><option value="WAIT">대기</option>
  </select>
  <div id="v178-meeting-metrics" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">최근 관측: 0 · 차단: 0 · 검증: 0 · 대기: 0</div>
+ <div id="v179-meeting-timeline" aria-label="AI 회의 상태 변화 시간순 그래프" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">
+  <div style="font-size:12px;color:#9eb8cc">상태 변화 타임라인 · 최근 20개 브라우저 관측 이벤트 · 거래 성과 아님</div>
+  <div id="v179-timeline-bars" role="img" aria-label="관측된 회의 상태 변화 없음" style="display:flex;align-items:flex-end;gap:3px;height:52px;margin-top:8px"></div>
+ </div>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -994,6 +998,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const historyEntries=[];
  const historyFilter=document.getElementById("v177-history-filter");
  const meetingMetrics=document.getElementById("v178-meeting-metrics");
+ const timelineBars=document.getElementById("v179-timeline-bars");
+ function renderMeetingTimeline(){
+  timelineBars.replaceChildren();
+  const events=historyEntries.slice().reverse();
+  timelineBars.setAttribute("aria-label",events.length+"개 브라우저 관측 회의 상태 변화. 차단은 빨강, 검증은 초록, 대기는 노랑.");
+  for(const item of events){
+   const blocked=item.state.startsWith("BLOCKED");
+   const verified=item.state.includes("VERIFIED")&&!blocked;
+   const bar=document.createElement("span");
+   bar.style.cssText="display:inline-block;flex:1;min-width:3px;max-width:24px;border-radius:3px 3px 0 0;height:"+
+    (blocked?"45px":verified?"32px":"18px")+";background:"+
+    (blocked?"#df6370":verified?"#52b994":"#e0ba5a");
+   bar.title=item.time+" · "+item.state+" · "+item.source;
+   timelineBars.appendChild(bar);
+  }
+ }
  function updateMeetingMetrics(){
   const blocked=historyEntries.filter(item=>item.state.startsWith("BLOCKED")).length;
   const verified=historyEntries.filter(item=>item.state.includes("VERIFIED")&&!item.state.startsWith("BLOCKED")).length;
@@ -1004,6 +1024,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function renderMeetingHistory(){
   updateMeetingMetrics();
+  renderMeetingTimeline();
   const mode=historyFilter.value;
   history.replaceChildren();
   const filtered=historyEntries.filter(item=>mode==="ALL"||
