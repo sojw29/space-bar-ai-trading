@@ -982,6 +982,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  <div id="v181-decision-compare" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">회의 판단 변화 · 관측 대기 · 주문 없음</div>
  <div id="v182-integrity-summary" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px">종합 검증 · 연결 대기 · NO ORDERS</div>
  <div id="v183-validation-scorecard" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px">검증 스코어카드 · 계산 대기 · 거래 성과 아님</div>
+ <div id="v184-readiness-audit" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px">운영 준비도 감사 · 계산 대기 · 실거래 승인 아님</div>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -1007,6 +1008,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const decisionCompare=document.getElementById("v181-decision-compare");
  const integritySummary=document.getElementById("v182-integrity-summary");
  const validationScorecard=document.getElementById("v183-validation-scorecard");
+ const readinessAudit=document.getElementById("v184-readiness-audit");
  function renderValidationScorecard(){
   const meeting=latestMeeting;
   const gate=meeting&&meeting.quality_gate;
@@ -1024,6 +1026,28 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const status=passed===checks.length?"VERIFIED":"BLOCKED / INCOMPLETE";
   validationScorecard.textContent="검증 스코어카드 · "+status+" · "+passed+"/"+checks.length+
    " 조건 충족 · 오프라인 근거/시스템 계약 확인용 · 거래 성과 아님";
+ }
+ function renderReadinessAudit(){
+  const meeting=latestMeeting;
+  const gate=meeting&&meeting.quality_gate;
+  const ev=meeting&&meeting.evidence;
+  const checks={
+   evidence_identity:Boolean(ev&&ev.source==="offline_v65_quality_report"&&typeof ev.sha256==="string"&&/^[a-f0-9]{64}$/.test(ev.sha256)&&Number.isSafeInteger(ev.bytes)&&ev.bytes>0&&ev.verified===true),
+   quality_gate:Boolean(gate&&gate.quality_verified===true&&gate.quality_status==="PASS"&&gate.risk_veto===false),
+   agent_consensus:Boolean(meeting&&meeting.agents&&meeting.agents.ATLAS&&meeting.agents.ATLAS.state==="DATA_VERIFIED"&&meeting.agents.GUARDIAN&&meeting.agents.GUARDIAN.state==="CLEAR"&&meeting.agents.COMMANDER&&meeting.agents.COMMANDER.decision==="WAIT"),
+   research_only:Boolean(meeting&&meeting.research_only===true),
+   orders_disabled:Boolean(meeting&&meeting.orders_enabled===false),
+   live_not_approved:Boolean(meeting&&meeting.live_trading_approved===false)
+  };
+  const passed=Object.values(checks).filter(Boolean).length;
+  const blockers=[];
+  if(!checks.evidence_identity)blockers.push("근거 식별 실패");
+  if(!checks.quality_gate)blockers.push("품질/위험 게이트 미충족");
+  if(!checks.agent_consensus)blockers.push("에이전트 합의 미충족");
+  if(!checks.research_only)blockers.push("research-only 계약 불일치");
+  if(!checks.orders_disabled)blockers.push("주문 비활성 계약 불일치");
+  if(!checks.live_not_approved)blockers.push("실거래 승인 상태 불일치");
+  readinessAudit.textContent="운영 준비도 감사 · BLOCKED · RESEARCH ONLY · "+passed+"/6 계약 충족 · "+(blockers.length?blockers.join(", "):"실거래 전환은 의도적으로 차단됨");
  }
  function hasVerifiedMeetingEvidence(meeting){
   const ev=meeting&&meeting.evidence;
@@ -1234,7 +1258,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   latestMeeting=null;
   renderIntegritySummary();
   renderValidationScorecard();
-  inspectAgent();
+  renderReadinessAudit();
+  inspectAgent;
   showEvidence(null);
   atlas.textContent="UNVERIFIED";
   guardian.textContent="VETO";
@@ -1268,6 +1293,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    latestMeeting=data;
    renderIntegritySummary();
    renderValidationScorecard();
+   renderReadinessAudit();
    logMeeting("ATLAS VERIFIED · GUARDIAN CLEAR · COMMANDER WAIT",data.evidence&&data.evidence.sha256);
    inspectAgent();
    atlas.textContent="DATA_VERIFIED";
