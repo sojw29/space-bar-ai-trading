@@ -29,8 +29,11 @@ const invalid=[
   null, {}, {evidence:null},
   {evidence:{...base.evidence,source:"unknown"}},
   {evidence:{...base.evidence,sha256:"bad"}},
+  {evidence:{...base.evidence,sha256:"g".repeat(64)}},
   {evidence:{...base.evidence,bytes:0}},
-  {evidence:{...base.evidence,verified:false}}
+  {evidence:{...base.evidence,bytes:1.5}},
+  {evidence:{...base.evidence,verified:false}},
+  {evidence:{...base.evidence,verified:"true"}}
 ];
 if(!hasVerifiedMeetingEvidence(base)||invalid.some(hasVerifiedMeetingEvidence))process.exit(1);
 """
