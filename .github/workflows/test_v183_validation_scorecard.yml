@@ -1,0 +1,20 @@
+name: SPACE BAR V183 Validation Scorecard
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v183_validation_scorecard.py'
+      - '.github/workflows/test_v183_validation_scorecard.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validation-scorecard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v183_validation_scorecard.py' -v
