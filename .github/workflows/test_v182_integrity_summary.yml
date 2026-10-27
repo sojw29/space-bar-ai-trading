@@ -1,0 +1,20 @@
+name: SPACE BAR V182 Integrity Summary
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v182_integrity_summary.py'
+      - '.github/workflows/test_v182_integrity_summary.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integrity-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v182_integrity_summary.py' -v
