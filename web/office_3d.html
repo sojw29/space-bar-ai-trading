@@ -1005,13 +1005,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const evidenceCompare=document.getElementById("v180-evidence-compare");
  const decisionCompare=document.getElementById("v181-decision-compare");
  const integritySummary=document.getElementById("v182-integrity-summary");
+ function hasVerifiedMeetingEvidence(meeting){
+  const ev=meeting&&meeting.evidence;
+  return Boolean(ev&&ev.source==="offline_v65_quality_report"&&
+   typeof ev.sha256==="string"&&/^[a-f0-9]{64}$/.test(ev.sha256)&&
+   Number.isSafeInteger(ev.bytes)&&ev.bytes>0&&ev.verified===true);
+ }
  function renderIntegritySummary(){
   const meeting=latestMeeting;
   const gate=meeting&&meeting.quality_gate;
-  const ev=meeting&&meeting.evidence;
-  const sourceOk=ev&&ev.source==="offline_v65_quality_report"&&
-   typeof ev.sha256==="string"&&/^[a-f0-9]{64}$/.test(ev.sha256)&&
-   Number.isSafeInteger(ev.bytes)&&ev.bytes>0&&ev.verified===true;
+  const sourceOk=hasVerifiedMeetingEvidence(meeting);
   const gateOk=gate&&gate.quality_verified===true&&gate.risk_veto===false&&gate.quality_status==="PASS";
   const agentsOk=meeting&&meeting.agents&&meeting.agents.ATLAS&&
    meeting.agents.ATLAS.state==="DATA_VERIFIED"&&meeting.agents.GUARDIAN&&
@@ -1236,7 +1239,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    showEvidence(data);
    const verified=gate.quality_verified===true&&gate.risk_veto===false&&
       gate.quality_status==="PASS";
-   const safe=verified&&data.agents.ATLAS.state==="DATA_VERIFIED"&&
+   const safe=verified&&hasVerifiedMeetingEvidence(data)&&
+      data.agents.ATLAS.state==="DATA_VERIFIED"&&
       data.agents.GUARDIAN.state==="CLEAR"&&
       data.agents.COMMANDER.decision==="WAIT";
    if(!safe){blocked("검증 불충분 또는 판단 보류");return;}
