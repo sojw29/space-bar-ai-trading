@@ -1,0 +1,20 @@
+name: SPACE BAR V184 Live Readiness Audit
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v184_live_readiness_audit.py'
+      - '.github/workflows/test_v184_live_readiness_audit.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readiness-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v184_live_readiness_audit.py' -v
