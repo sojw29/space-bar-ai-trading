@@ -980,6 +980,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  </div>
  <div id="v180-evidence-compare" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">근거 비교 · 관측 데이터 대기 · 거래 성과 아님</div>
  <div id="v181-decision-compare" role="status" aria-live="polite" style="margin-top:8px;padding:8px;border:1px solid #426482;border-radius:8px">회의 판단 변화 · 관측 대기 · 주문 없음</div>
+ <div id="v182-integrity-summary" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px">종합 검증 · 연결 대기 · NO ORDERS</div>
  <div id="v174-meeting-history" role="log" aria-live="polite" aria-label="회의 상태 기록" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;max-height:180px;overflow:auto">회의 기록 대기 · NO VERIFIED EVIDENCE</div>
  <div id="v173-agent-detail" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">ATLAS · UNVERIFIED · NO EVIDENCE</div>
  <div id="v172-evidence" role="status" aria-live="polite" data-verified="false" style="margin-top:10px;padding:10px;border:1px solid #426482;border-radius:8px;overflow-wrap:anywhere">EVIDENCE · NOT VERIFIED</div>
@@ -1003,6 +1004,30 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const timelineBars=document.getElementById("v179-timeline-bars");
  const evidenceCompare=document.getElementById("v180-evidence-compare");
  const decisionCompare=document.getElementById("v181-decision-compare");
+ const integritySummary=document.getElementById("v182-integrity-summary");
+ function renderIntegritySummary(){
+  const meeting=latestMeeting;
+  const gate=meeting&&meeting.quality_gate;
+  const ev=meeting&&meeting.evidence;
+  const sourceOk=ev&&ev.source==="offline_v65_quality_report"&&
+   typeof ev.sha256==="string"&&/^[a-f0-9]{64}$/.test(ev.sha256)&&
+   Number.isSafeInteger(ev.bytes)&&ev.bytes>0&&ev.verified===true;
+  const gateOk=gate&&gate.quality_verified===true&&gate.risk_veto===false&&gate.quality_status==="PASS";
+  const agentsOk=meeting&&meeting.agents&&meeting.agents.ATLAS&&
+   meeting.agents.ATLAS.state==="DATA_VERIFIED"&&meeting.agents.GUARDIAN&&
+   meeting.agents.GUARDIAN.state==="CLEAR"&&meeting.agents.COMMANDER&&
+   meeting.agents.COMMANDER.decision==="WAIT";
+  const researchOk=meeting&&meeting.research_only===true&&
+   meeting.orders_enabled===false&&meeting.live_trading_approved===false;
+  const safe=Boolean(sourceOk&&gateOk&&agentsOk&&researchOk);
+  integritySummary.dataset.level=safe?"VERIFIED":"BLOCKED";
+  integritySummary.textContent="종합 검증 · "+(safe?"OFFLINE VERIFIED":"BLOCKED / UNVERIFIED")+
+   " · SOURCE "+(sourceOk?"IDENTIFIED":"UNVERIFIED")+
+   " · GATE "+(gateOk?"PASS":"BLOCKED")+
+   " · AGENTS "+(agentsOk?"CONSISTENT":"UNVERIFIED")+
+   " · RESEARCH "+(researchOk?"ONLY":"UNVERIFIED")+
+   " · NO ORDERS · 파일 지문은 시장 정확성을 증명하지 않음";
+ }
  function meetingDecisionLabel(state){
   if(state.startsWith("BLOCKED"))return "BLOCKED";
   if(state.includes("ATLAS VERIFIED")&&state.includes("GUARDIAN CLEAR")&&state.includes("COMMANDER WAIT"))return "VERIFIED / WAIT";
@@ -1184,6 +1209,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function blocked(reason){
   logMeeting("BLOCKED · "+reason,null);
   latestMeeting=null;
+  renderIntegritySummary();
   inspectAgent();
   showEvidence(null);
   atlas.textContent="UNVERIFIED";
@@ -1215,6 +1241,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       data.agents.COMMANDER.decision==="WAIT";
    if(!safe){blocked("검증 불충분 또는 판단 보류");return;}
    latestMeeting=data;
+   renderIntegritySummary();
    logMeeting("ATLAS VERIFIED · GUARDIAN CLEAR · COMMANDER WAIT",data.evidence&&data.evidence.sha256);
    inspectAgent();
    atlas.textContent="DATA_VERIFIED";
