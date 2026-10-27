@@ -21,7 +21,7 @@ class IntegritySummaryTests(unittest.TestCase):
         import re
         import subprocess
         self.assertIn('const safe=verified&&hasVerifiedMeetingEvidence(data)&&', self.html)
-        match = re.search(r' function hasVerifiedMeetingEvidence\\(meeting\\)\\{.*?\\n \\}', self.html, re.S)
+        match = re.search(r' function hasVerifiedMeetingEvidence\(meeting\)\{.*?\n \}', self.html, re.S)
         self.assertIsNotNone(match)
         script = match.group(0) + """
 const base={evidence:{source:"offline_v65_quality_report",sha256:"a".repeat(64),bytes:100,verified:true}};
