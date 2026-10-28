@@ -9,6 +9,9 @@ import math
 def evaluate_backtest_evidence(report, *, min_holdout_trades=100):
     """Validate explicit out-of-sample metrics and cost accounting; fail closed."""
     failures = []
+    if type(min_holdout_trades) is not int or min_holdout_trades < 100:
+        failures.append("invalid_min_holdout_trades")
+        min_holdout_trades = 100
     if not isinstance(report, dict):
         return {"status": "INSUFFICIENT_EVIDENCE", "evidence_sufficient": False,
                 "failures": ["invalid_report"], "live_trading_approved": False,
@@ -40,6 +43,10 @@ def evaluate_backtest_evidence(report, *, min_holdout_trades=100):
         failures.append("missing_execution_costs")
     if report.get("holdout_includes_fees_and_slippage") is not True:
         failures.append("costs_not_included")
+
+    pf = holdout.get("profit_factor")
+    if type(pf) in (int, float) and math.isfinite(pf) and pf < 0:
+        failures.append("invalid_profit_factor_range")
 
     if holdout.get("max_drawdown_pct") is not None and type(holdout.get("max_drawdown_pct")) in (int, float):
         dd = holdout["max_drawdown_pct"]
