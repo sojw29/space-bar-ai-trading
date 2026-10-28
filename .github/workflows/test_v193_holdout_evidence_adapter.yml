@@ -1,0 +1,20 @@
+name: SPACE BAR V193 Legacy Holdout Evidence Adapter
+on:
+  push:
+    paths:
+      - 'agents/holdout_evidence_adapter_v193.py'
+      - 'agents/test_v193_holdout_evidence_adapter.py'
+      - '.github/workflows/test_v193_holdout_evidence_adapter.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  legacy-holdout-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v193_holdout_evidence_adapter.py' -v
