@@ -1,0 +1,21 @@
+name: SPACE BAR V196 Multi-Strategy Slippage
+on:
+  push:
+    paths:
+      - 'agents/multi_strategy_holdout_v105.py'
+      - 'agents/test_v194_holdout_pipeline_evidence.py'
+      - 'agents/test_v196_multistrategy_slippage.py'
+      - '.github/workflows/test_v196_multistrategy_slippage.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  multi-strategy-slippage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v196_multistrategy_slippage.py' -v

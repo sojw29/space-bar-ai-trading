@@ -12,7 +12,7 @@ from pathlib import Path
 from chronological_holdout_v102 import split_csv
 from holdout_comparison_v103 import compare
 from holdout_evidence_adapter_v193 import assess_legacy_holdout
-from ema_holdout_pipeline_v104 import _ema, FEE_RATE, INITIAL_CASH, FRACTION
+from ema_holdout_pipeline_v104 import _ema, FEE_RATE, SLIPPAGE_RATE, INITIAL_CASH, FRACTION
 
 STRATEGIES = ("EMA_CROSS", "EMA_PULLBACK", "VOLUME_BREAKOUT")
 MIN_BARS = 80
@@ -47,7 +47,7 @@ def _metrics(rows, strategy):
             sell = closes[k] < ema20[k]
         price = opens[i]
         if units and sell:
-            proceeds = units * price
+            proceeds = units * price * (1 - SLIPPAGE_RATE)
             exit_fee = proceeds * FEE_RATE
             cash += proceeds - exit_fee
             pnl.append(proceeds - exit_fee - cost - entry_fee)
@@ -56,13 +56,13 @@ def _metrics(rows, strategy):
             budget = cash * FRACTION
             entry_fee = budget * FEE_RATE / (1 + FEE_RATE)
             cost = budget - entry_fee
-            units = cost / price
+            units = cost / (price * (1 + SLIPPAGE_RATE))
             cash -= budget
         equity = cash + units * closes[i]
         peak = max(peak, equity)
         drawdown = max(drawdown, (peak - equity) / peak * 100)
     if units:
-        proceeds = units * closes[-1]
+        proceeds = units * closes[-1] * (1 - SLIPPAGE_RATE)
         exit_fee = proceeds * FEE_RATE
         cash += proceeds - exit_fee
         pnl.append(proceeds - exit_fee - cost - entry_fee)
@@ -100,12 +100,15 @@ def run(source, symbol="BTC", timeframe="5m"):
             results.append(report)
     output = {"version": "V105.0", "status": "RESEARCH_REVIEW_REQUIRED",
             "split": split, "strategies": results,
+            "fee_rate_per_side": FEE_RATE,
+            "slippage_rate_per_side": SLIPPAGE_RATE,
+            "holdout_includes_fees_and_slippage": True,
             "strategy_count": len(results), "research_only": True,
             "orders_enabled": False, "live_trading_approved": False,
             "validated_edge": False,
             "limitations": [
                 "Fixed long-only demonstration strategies, not optimized.",
-                "No slippage, spread, funding, partial fills or intrabar stops.",
+                "Fixed adverse 0.02% slippage per side; no spread, funding, variable liquidity, partial fills or intrabar stops.",
                 "Separate indicator warmups and hypothetical next-open fills.",
                 "Holdout attestation is not independently audited.",
                 "No statistical confidence or repeated walk-forward validation.",
@@ -113,7 +116,10 @@ def run(source, symbol="BTC", timeframe="5m"):
     output["evidence_assessments"] = [assess_legacy_holdout({
         "version": output["version"], "research_only": output["research_only"],
         "orders_enabled": output["orders_enabled"],
-        "fee_rate_per_side": FEE_RATE, "comparison": item,
+        "fee_rate_per_side": FEE_RATE,
+        "slippage_rate_per_side": SLIPPAGE_RATE,
+        "holdout_includes_fees_and_slippage": True,
+        "comparison": item,
     }) for item in results]
     return output
 
