@@ -129,7 +129,10 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     self.reply(200, live_store.status())
             elif path == "/api/v1/meeting":
                 from meeting_quality_report_v166 import build_report
-                self.reply(200, build_report(Path("reports/v65/quality.json")))
+                from meeting_contract_validator_v186 import validate_meeting_snapshot
+                report = build_report(Path("reports/v65/quality.json"))
+                report["contract_validation"] = validate_meeting_snapshot(report)
+                self.reply(200, report)
             elif path == "/api/v1/agents":
                 try:
                     if live_store is not None:
