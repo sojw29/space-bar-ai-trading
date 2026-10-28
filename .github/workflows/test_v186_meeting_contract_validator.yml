@@ -1,0 +1,20 @@
+name: SPACE BAR V186 Meeting Contract Validator
+on:
+  push:
+    paths:
+      - 'agents/meeting_contract_validator_v186.py'
+      - 'agents/test_v186_meeting_contract_validator.py'
+      - '.github/workflows/test_v186_meeting_contract_validator.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  meeting-contract-validator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v186_meeting_contract_validator.py' -v
