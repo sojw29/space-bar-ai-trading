@@ -1,0 +1,20 @@
+name: SPACE BAR V197 Strategy Comparison Scorecard
+on:
+  push:
+    paths:
+      - 'agents/strategy_comparison_scorecard_v197.py'
+      - 'agents/test_v197_strategy_comparison_scorecard.py'
+      - '.github/workflows/test_v197_strategy_comparison_scorecard.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  strategy-scorecard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v197_strategy_comparison_scorecard.py' -v
