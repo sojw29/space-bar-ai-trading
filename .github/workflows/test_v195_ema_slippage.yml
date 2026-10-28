@@ -1,0 +1,22 @@
+name: SPACE BAR V195 EMA Slippage Cost Model
+on:
+  push:
+    paths:
+      - 'agents/ema_holdout_pipeline_v104.py'
+      - 'agents/holdout_evidence_adapter_v193.py'
+      - 'agents/test_v194_holdout_pipeline_evidence.py'
+      - 'agents/test_v195_ema_slippage.py'
+      - '.github/workflows/test_v195_ema_slippage.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ema-slippage-cost:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v195_ema_slippage.py' -v
