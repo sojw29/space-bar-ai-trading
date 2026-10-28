@@ -130,9 +130,20 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
             elif path == "/api/v1/meeting":
                 from meeting_quality_report_v166 import build_report
                 from meeting_contract_validator_v186 import validate_meeting_snapshot
-                report = build_report(Path("reports/v65/quality.json"))
-                report["contract_validation"] = validate_meeting_snapshot(report)
-                self.reply(200, report)
+                try:
+                    report = build_report(Path("reports/v65/quality.json"))
+                    if not isinstance(report, dict):
+                        raise ValueError("invalid_meeting_snapshot")
+                    report["contract_validation"] = validate_meeting_snapshot(report)
+                    self.reply(200, report)
+                except (OSError, ValueError, TypeError, KeyError):
+                    self.reply(503, {"error": "meeting_snapshot_unavailable",
+                                     "research_only": True, "orders_enabled": False,
+                                     "live_trading_approved": False,
+                                     "contract_validation": {
+                                         "verified": False, "status": "BLOCKED",
+                                         "failures": ["source_unavailable"],
+                                         "orders_allowed": False, "live_trading_allowed": False}})
             elif path == "/api/v1/agents":
                 try:
                     if live_store is not None:
