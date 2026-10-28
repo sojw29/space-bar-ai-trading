@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from chronological_holdout_v102 import split_csv
 from holdout_comparison_v103 import compare
+from holdout_evidence_adapter_v193 import assess_legacy_holdout
 
 FEE_RATE = 0.00055
 INITIAL_CASH = 10000.0
@@ -94,7 +95,7 @@ def run(source, symbol="BTC", timeframe="5m", ratio=0.7):
         "independent_holdout": True,
         "strategy_frozen_before_validation": True,
     })
-    return {
+    output = {
         "version": "V104.0", "status": "RESEARCH_REVIEW_REQUIRED",
         "split": split, "comparison": result,
         "fee_rate_per_side": FEE_RATE,
@@ -103,6 +104,8 @@ def run(source, symbol="BTC", timeframe="5m", ratio=0.7):
         "research_only": True, "live_trading_approved": False,
         "orders_enabled": False, "oos_profitability_verified": False,
     }
+    output["evidence_assessment"] = assess_legacy_holdout(output)
+    return output
 
 def main():
     parser = argparse.ArgumentParser(description="V104 fixed EMA offline holdout research")

@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from chronological_holdout_v102 import split_csv
 from holdout_comparison_v103 import compare
+from holdout_evidence_adapter_v193 import assess_legacy_holdout
 from ema_holdout_pipeline_v104 import _ema, FEE_RATE, INITIAL_CASH, FRACTION
 
 STRATEGIES = ("EMA_CROSS", "EMA_PULLBACK", "VOLUME_BREAKOUT")
@@ -97,7 +98,7 @@ def run(source, symbol="BTC", timeframe="5m"):
                 "strategy_frozen_before_validation": True,
             })
             results.append(report)
-    return {"version": "V105.0", "status": "RESEARCH_REVIEW_REQUIRED",
+    output = {"version": "V105.0", "status": "RESEARCH_REVIEW_REQUIRED",
             "split": split, "strategies": results,
             "strategy_count": len(results), "research_only": True,
             "orders_enabled": False, "live_trading_approved": False,
@@ -109,6 +110,12 @@ def run(source, symbol="BTC", timeframe="5m"):
                 "Holdout attestation is not independently audited.",
                 "No statistical confidence or repeated walk-forward validation.",
             ]}
+    output["evidence_assessments"] = [assess_legacy_holdout({
+        "version": output["version"], "research_only": output["research_only"],
+        "orders_enabled": output["orders_enabled"],
+        "fee_rate_per_side": FEE_RATE, "comparison": item,
+    }) for item in results]
+    return output
 
 def main():
     parser = argparse.ArgumentParser(description="V105 offline multi-strategy holdout comparison")
