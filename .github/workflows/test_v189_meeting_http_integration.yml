@@ -1,0 +1,21 @@
+name: SPACE BAR V189 Meeting API HTTP Integration
+on:
+  push:
+    paths:
+      - 'agents/dashboard_api_v28.py'
+      - 'agents/meeting_contract_validator_v186.py'
+      - 'agents/test_v189_meeting_http_integration.py'
+      - '.github/workflows/test_v189_meeting_http_integration.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  meeting-http-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v189_meeting_http_integration.py' -v
