@@ -1,0 +1,20 @@
+name: SPACE BAR V191 Meeting Source Failure Guard
+on:
+  push:
+    paths:
+      - 'agents/dashboard_api_v28.py'
+      - 'agents/test_v191_meeting_source_failure.py'
+      - '.github/workflows/test_v191_meeting_source_failure.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  meeting-source-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v191_meeting_source_failure.py' -v
