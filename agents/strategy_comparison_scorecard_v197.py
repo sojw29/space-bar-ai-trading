@@ -12,6 +12,10 @@ def _finite(value):
 def build_scorecard(report):
     if not isinstance(report, dict) or report.get("version") != "V105.0":
         raise ValueError("INVALID_V105_REPORT")
+    if (report.get("research_only") is not True or
+            report.get("orders_enabled") is not False or
+            report.get("live_trading_approved") is not False):
+        raise ValueError("UNSAFE_V105_REPORT")
     strategies = report.get("strategies")
     assessments = report.get("evidence_assessments")
     if not isinstance(strategies, list) or not isinstance(assessments, list) or not strategies or len(strategies) != len(assessments):
@@ -27,16 +31,28 @@ def build_scorecard(report):
             raise ValueError("INVALID_STRATEGY_IDENTITY")
         seen.add(name)
         trades = validation.get("trades")
-        if type(trades) is not int or trades < 0:
+        if type(trades) is not int or not 0 <= trades <= 1_000_000:
             raise ValueError("INVALID_TRADE_COUNT")
         for key in ("win_rate", "return", "profit_factor", "max_drawdown"):
             if not _finite(validation.get(key)):
                 raise ValueError("INVALID_METRICS")
-        if not 0 <= validation["win_rate"] <= 100 or not 0 <= validation["max_drawdown"] <= 100 or validation["profit_factor"] < 0:
+        if (not 0 <= validation["win_rate"] <= 100 or
+                not 0 <= validation["max_drawdown"] <= 100 or
+                validation["return"] < -100 or validation["profit_factor"] < 0 or
+                (trades == 0 and (validation["win_rate"] != 0 or validation["profit_factor"] != 0))):
             raise ValueError("INVALID_METRIC_RANGE")
         if assessment.get("orders_allowed") is not False or assessment.get("live_trading_approved") is not False:
             raise ValueError("UNSAFE_EVIDENCE_ASSESSMENT")
-        if assessment.get("status") not in ("INSUFFICIENT_EVIDENCE", "EVIDENCE_REVIEWABLE"):
+        status = assessment.get("status")
+        failures = assessment.get("failures")
+        sufficient = assessment.get("evidence_sufficient")
+        if (type(sufficient) is not bool or not isinstance(failures, list) or
+                any(not isinstance(item, str) or not item for item in failures)):
+            raise ValueError("INVALID_EVIDENCE_SCHEMA")
+        if ((status == "EVIDENCE_REVIEWABLE" and (not sufficient or failures)) or
+                (status == "INSUFFICIENT_EVIDENCE" and (sufficient or not failures))):
+            raise ValueError("INCONSISTENT_EVIDENCE_STATUS")
+        if status not in ("INSUFFICIENT_EVIDENCE", "EVIDENCE_REVIEWABLE"):
             raise ValueError("UNKNOWN_EVIDENCE_STATUS")
         rows.append({
             "strategy": name, "holdout_trades": trades,
@@ -44,8 +60,8 @@ def build_scorecard(report):
             "holdout_net_return_pct": validation["return"],
             "holdout_profit_factor": validation["profit_factor"],
             "holdout_max_drawdown_pct": validation["max_drawdown"],
-            "evidence_status": assessment["status"],
-            "evidence_failures": assessment.get("failures", []),
+            "evidence_status": status,
+            "evidence_failures": list(failures),
         })
     return {
         "version": "V197.0", "status": "RESEARCH_COMPARISON_ONLY",
