@@ -1,0 +1,20 @@
+name: SPACE BAR V192 Offline Backtest Evidence Gate
+on:
+  push:
+    paths:
+      - 'agents/backtest_evidence_gate_v192.py'
+      - 'agents/test_v192_backtest_evidence_gate.py'
+      - '.github/workflows/test_v192_backtest_evidence_gate.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-evidence-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v192_backtest_evidence_gate.py' -v
