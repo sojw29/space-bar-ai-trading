@@ -48,7 +48,12 @@ class HoldoutPipelineEvidenceTests(unittest.TestCase):
         self.assertEqual(len(report["evidence_assessments"]), len(report["strategies"]))
         self.assertEqual(len(report["evidence_assessments"]), 3)
         for assessment in report["evidence_assessments"]:
-            self.assert_insufficient(assessment)
+            self.assertEqual(assessment["status"], "INSUFFICIENT_EVIDENCE")
+            self.assertIn("insufficient_holdout_trades", assessment["failures"])
+            self.assertNotIn("missing_execution_costs", assessment["failures"])
+            self.assertNotIn("costs_not_included", assessment["failures"])
+            self.assertFalse(assessment["orders_allowed"])
+            self.assertFalse(assessment["live_trading_approved"])
         self.assertFalse(report["orders_enabled"])
 
 
