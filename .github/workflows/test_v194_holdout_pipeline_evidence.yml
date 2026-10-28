@@ -1,0 +1,22 @@
+name: SPACE BAR V194 Holdout Evidence Pipeline Integration
+on:
+  push:
+    paths:
+      - 'agents/ema_holdout_pipeline_v104.py'
+      - 'agents/multi_strategy_holdout_v105.py'
+      - 'agents/holdout_evidence_adapter_v193.py'
+      - 'agents/test_v194_holdout_pipeline_evidence.py'
+      - '.github/workflows/test_v194_holdout_pipeline_evidence.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  holdout-evidence-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v194_holdout_pipeline_evidence.py' -v
