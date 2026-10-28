@@ -30,6 +30,24 @@ class EvidenceGateTests(unittest.TestCase):
         report["holdout"]["trades"] = 8
         self.assertIn("insufficient_holdout_trades", evaluate_backtest_evidence(report)["failures"])
 
+    def test_invalid_minimum_override_never_bypasses_100_trade_floor(self):
+        report = example()
+        report["holdout"]["trades"] = 1
+        for minimum in (0, -1, True, 5.0, "100", None):
+            with self.subTest(minimum=minimum):
+                result = evaluate_backtest_evidence(report, min_holdout_trades=minimum)
+                self.assertFalse(result["evidence_sufficient"])
+                self.assertIn("invalid_min_holdout_trades", result["failures"])
+                self.assertIn("insufficient_holdout_trades", result["failures"])
+                self.assertFalse(result["orders_allowed"])
+
+    def test_negative_profit_factor_is_invalid(self):
+        report = example()
+        report["holdout"]["profit_factor"] = -0.1
+        result = evaluate_backtest_evidence(report)
+        self.assertFalse(result["evidence_sufficient"])
+        self.assertIn("invalid_profit_factor_range", result["failures"])
+
     def test_missing_costs_or_cost_inclusion(self):
         for key, value in (("fee_pct_per_side", None), ("slippage_pct_per_side", -1), ("holdout_includes_fees_and_slippage", False)):
             with self.subTest(key=key):
