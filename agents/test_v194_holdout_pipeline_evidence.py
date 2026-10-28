@@ -35,7 +35,12 @@ class HoldoutPipelineEvidenceTests(unittest.TestCase):
 
     def test_v104_emits_assessment(self):
         report = ema_run(self.path)
-        self.assert_insufficient(report["evidence_assessment"])
+        assessment = report["evidence_assessment"]
+        self.assertEqual(assessment["status"], "INSUFFICIENT_EVIDENCE")
+        self.assertIn("insufficient_holdout_trades", assessment["failures"])
+        self.assertNotIn("missing_execution_costs", assessment["failures"])
+        self.assertNotIn("costs_not_included", assessment["failures"])
+        self.assertFalse(assessment["orders_allowed"])
         self.assertFalse(report["orders_enabled"])
 
     def test_v105_emits_assessment_per_strategy(self):

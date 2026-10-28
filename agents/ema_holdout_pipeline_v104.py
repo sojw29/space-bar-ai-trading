@@ -14,6 +14,7 @@ from holdout_comparison_v103 import compare
 from holdout_evidence_adapter_v193 import assess_legacy_holdout
 
 FEE_RATE = 0.00055
+SLIPPAGE_RATE = 0.0002  # 0.02% adverse per side, illustrative constant
 INITIAL_CASH = 10000.0
 FRACTION = 0.1
 
@@ -47,7 +48,7 @@ def backtest(csv_path):
         sell = fast[i-2] >= slow[i-2] and fast[i-1] < slow[i-1]
         price = op[i]
         if units and sell:
-            proceeds = units * price
+            proceeds = units * price * (1 - SLIPPAGE_RATE)
             fee = proceeds * FEE_RATE
             cash += proceeds - fee
             closed.append(proceeds - fee - entry_cost - entry_fee)
@@ -57,13 +58,13 @@ def backtest(csv_path):
             fee = budget * FEE_RATE / (1 + FEE_RATE)
             entry_cost = budget - fee
             entry_fee = fee
-            units = entry_cost / price
+            units = entry_cost / (price * (1 + SLIPPAGE_RATE))
             cash -= budget
         equity = cash + units * cl[i]
         peak = max(peak, equity)
         max_dd = max(max_dd, (peak-equity)/peak*100)
     if units:
-        proceeds = units * cl[-1]
+        proceeds = units * cl[-1] * (1 - SLIPPAGE_RATE)
         fee = proceeds * FEE_RATE
         cash += proceeds - fee
         closed.append(proceeds - fee - entry_cost - entry_fee)
@@ -99,8 +100,10 @@ def run(source, symbol="BTC", timeframe="5m", ratio=0.7):
         "version": "V104.0", "status": "RESEARCH_REVIEW_REQUIRED",
         "split": split, "comparison": result,
         "fee_rate_per_side": FEE_RATE,
+        "slippage_rate_per_side": SLIPPAGE_RATE,
+        "holdout_includes_fees_and_slippage": True,
         "strategy": "FIXED_EMA20_50_NEXT_OPEN_LONG_ONLY",
-        "assumptions": "No slippage, spread, funding, partial fills or intrabar stops. Separate EMA warmups per split.",
+        "assumptions": "Fixed 0.02% adverse slippage each side (illustrative); no spread, funding, variable liquidity, partial fills or intrabar stops. Separate EMA warmups per split.",
         "research_only": True, "live_trading_approved": False,
         "orders_enabled": False, "oos_profitability_verified": False,
     }

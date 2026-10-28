@@ -19,6 +19,10 @@ def assess_legacy_holdout(result):
     # Legacy fee rate is a fraction, whereas V192 uses percent.
     fee_pct = fee_rate * 100 if type(fee_rate) in (int, float) else None
 
+    slippage_rate = result.get("slippage_rate_per_side")
+    slippage_pct = slippage_rate * 100 if type(slippage_rate) in (int, float) else None
+    cost_attested = result.get("holdout_includes_fees_and_slippage") is True
+
     report = {
         "mode": "historical_offline_backtest",
         "holdout_is_out_of_sample": comparison.get("independent_holdout") is True,
@@ -26,9 +30,9 @@ def assess_legacy_holdout(result):
         "research_only": result.get("research_only"),
         "orders_enabled": result.get("orders_enabled"),
         "fee_pct_per_side": fee_pct,
-        # Never fill in slippage with zero unless a source explicitly attests it.
-        "slippage_pct_per_side": None,
-        "holdout_includes_fees_and_slippage": False,
+        # Legacy outputs without explicit slippage attestation remain blocked.
+        "slippage_pct_per_side": slippage_pct if cost_attested else None,
+        "holdout_includes_fees_and_slippage": cost_attested,
         "holdout": {
             "trades": validation.get("trades"),
             "net_return_pct": validation.get("return"),
@@ -38,5 +42,5 @@ def assess_legacy_holdout(result):
     }
     assessment = evaluate_backtest_evidence(report)
     assessment["source_version"] = result.get("version")
-    assessment["cost_model_limitation"] = "Legacy V104/V105 omit slippage/spread/funding; reported returns are not all-in execution-cost adjusted."
+    assessment["cost_model_limitation"] = ("Fixed slippage and fees modeled; spread, funding, variable liquidity and real fills remain unmodeled." if cost_attested else "Legacy output lacks attested slippage; spread/funding also unmodeled.")
     return assessment
