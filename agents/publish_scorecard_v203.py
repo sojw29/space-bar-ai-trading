@@ -3,6 +3,9 @@
 No background polling, no exchange access, no live orders, no optimization.
 """
 import argparse
+import csv
+import hashlib
+from datetime import datetime, timezone
 import json
 import os
 import tempfile
@@ -25,6 +28,31 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
         raise ValueError("SOURCE_OUTPUT_COLLISION")
     result = run(source, symbol=symbol, timeframe=timeframe)
     render(result)  # V199 strict fail-closed schema and safety gate.
+    # Provenance metadata is descriptive, not independent data authenticity.
+    digest = hashlib.sha256()
+    with source.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    with source.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        if "timestamp" not in (reader.fieldnames or []):
+            raise ValueError("MISSING_HISTORY_TIMESTAMP")
+        last_timestamp = None
+        for row in reader:
+            last_timestamp = row["timestamp"]
+    if last_timestamp is None:
+        raise ValueError("EMPTY_HISTORY")
+    result["snapshot_provenance"] = {
+        "version": "V204.0",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "history_last_timestamp_raw": str(last_timestamp)[:64],
+        "history_sha256": digest.hexdigest(),
+        "source_type": "LOCAL_HISTORICAL_CSV",
+        "history_timestamp_verified": False,
+        "data_authenticity_verified": False,
+        "realtime": False,
+        "research_only": True,
+    }
     raw = json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2)
     if len(raw.encode("utf-8")) > 2_000_000:
         raise ValueError("SCORECARD_TOO_LARGE")
