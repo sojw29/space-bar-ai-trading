@@ -44,6 +44,19 @@ class HistoryGateTests(unittest.TestCase):
         self.assertEqual(result["candles"], 525600)
         self.assertEqual(result["missing_candles"], 0)
 
+    def test_uniformly_shifted_candles_blocked_and_not_published(self):
+        # Equal 5m deltas alone must not admit timestamps shifted off the UTC grid.
+        for row in self.rows:
+            row["timestamp"] += 1
+        self.write()
+        result = inspect_history(self.path)
+        self.assertEqual(result["status"], "BLOCK")
+        self.assertEqual(result["errors"][0]["reason"], "MISALIGNED_TIMESTAMP")
+        target = Path(self.temp.name) / "shifted_snapshot.json"
+        with self.assertRaisesRegex(ValueError, "HISTORY_INTEGRITY_BLOCKED"):
+            publish(self.path, target)
+        self.assertFalse(target.exists())
+
     def test_duplicate_blocked(self):
         self.rows[12]["timestamp"]=self.rows[11]["timestamp"]
         self.write()
