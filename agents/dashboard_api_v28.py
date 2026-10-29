@@ -84,8 +84,12 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         return
                     payload = json.loads(scorecard_path.read_text(encoding="utf-8"))
                     render(payload)  # Strict V199 schema and safety validation.
+                    # The shared HTTP reply cap is smaller than the input-file cap.
+                    # Reject oversized JSON as unavailable, not as a 500 response.
+                    if len(json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")) > MAX_BYTES:
+                        raise ValueError("scorecard_response_too_large")
                     self.reply(200, payload)
-                except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+                except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
                     self.reply(503, {"error": "offline_scorecard_invalid",
                                      "orders_enabled": False})
             elif path == "/api/v1/market":
