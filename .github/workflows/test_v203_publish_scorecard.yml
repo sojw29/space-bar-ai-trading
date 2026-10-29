@@ -1,0 +1,20 @@
+name: SPACE BAR V203 Validated Scorecard Publisher
+on:
+  push:
+    paths:
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v203_publish_scorecard.py'
+      - '.github/workflows/test_v203_publish_scorecard.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-publisher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v203_publish_scorecard.py' -v
