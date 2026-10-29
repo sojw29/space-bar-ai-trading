@@ -41,6 +41,7 @@ class ProvenanceTests(unittest.TestCase):
         self.assertIn('p.data_authenticity_verified!==false',html)
         self.assertIn('label.textContent=',html)
         self.assertIn("과거 데이터/진위 미검증",html)
+        self.assertIn('if(provenance)provenance.textContent="생성 시각 및 데이터 출처 확인 대기"',html)
 
 
 if __name__=="__main__":
