@@ -1368,6 +1368,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "holdout_net_return_pct","holdout_profit_factor","holdout_max_drawdown_pct","evidence_status"];
  function clear(message){
    tbody.replaceChildren();table.hidden=true;status.textContent=message;
+   // Do not retain provenance from a previous snapshot after a failed or new load.
+   const provenance=document.getElementById("v204-scorecard-provenance");
+   if(provenance)provenance.textContent="생성 시각 및 데이터 출처 확인 대기";
  }
  function validate(data){
    if(!data||data.version!=="V105.0"||data.research_only!==true||
