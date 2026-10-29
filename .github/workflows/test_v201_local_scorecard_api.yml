@@ -1,0 +1,20 @@
+name: SPACE BAR V201 Local Scorecard Snapshot
+on:
+  push:
+    paths:
+      - 'agents/dashboard_api_v28.py'
+      - 'agents/test_v201_local_scorecard_api.py'
+      - '.github/workflows/test_v201_local_scorecard_api.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  local-scorecard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v201_local_scorecard_api.py' -v
