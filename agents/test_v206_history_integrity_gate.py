@@ -32,6 +32,18 @@ class HistoryGateTests(unittest.TestCase):
         self.assertEqual(result["missing_candles"],0)
         self.assertFalse(result["orders_allowed"])
 
+    def test_full_year_one_minute_history_is_accepted(self):
+        # The collector emits 525,600 1m candles for 365 days; 500k was too low.
+        minute_path = Path(self.temp.name) / "BTC_1m.csv"
+        with minute_path.open("w", encoding="utf-8", newline="") as stream:
+            stream.write("timestamp,open,high,low,close,volume\\n".replace("\\n", "\n"))
+            for i in range(365 * 24 * 60):
+                stream.write(f"{1700000000000 + i * 60000},100,101,99,100,1\\n".replace("\\n", "\n"))
+        result = inspect_history(minute_path, timeframe="1m")
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["candles"], 525600)
+        self.assertEqual(result["missing_candles"], 0)
+
     def test_duplicate_blocked(self):
         self.rows[12]["timestamp"]=self.rows[11]["timestamp"]
         self.write()
