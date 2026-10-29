@@ -19,6 +19,7 @@ def inspect_history(path, timeframe="5m", max_missing=0):
     if not source.is_file() or source.stat().st_size > 200_000_000:
         raise ValueError("INVALID_HISTORY_FILE")
     prev = None
+    timestamp_unit = None
     count = 0
     missing = 0
     errors = []
@@ -33,9 +34,22 @@ def inspect_history(path, timeframe="5m", max_missing=0):
                 raise ValueError("HISTORY_ROW_LIMIT")
             try:
                 stamp = int(row["timestamp"])
+                # The history collector writes epoch seconds; other CSV sources
+                # may use epoch milliseconds. Normalize without silently
+                # accepting mixed units, microseconds or off-grid candles.
+                if 1_000_000_000 <= stamp < 10_000_000_000:
+                    row_unit, normalized_stamp = "seconds", stamp * 1000
+                elif 1_000_000_000_000 <= stamp < 10_000_000_000_000:
+                    row_unit, normalized_stamp = "milliseconds", stamp
+                else:
+                    raise ValueError("INVALID_TIMESTAMP_UNIT")
+                if timestamp_unit is None:
+                    timestamp_unit = row_unit
+                elif timestamp_unit != row_unit:
+                    raise ValueError("MIXED_TIMESTAMP_UNITS")
                 # Every exchange candle must start on its UTC timeframe grid.
                 # A uniformly shifted series can have valid deltas but invalid open times.
-                if stamp < 0 or stamp % INTERVAL_MS[timeframe] != 0:
+                if normalized_stamp % INTERVAL_MS[timeframe] != 0:
                     raise ValueError("MISALIGNED_TIMESTAMP")
                 values = [float(row[k]) for k in ("open","high","low","close","volume")]
                 op, hi, lo, cl, vol = values
@@ -44,13 +58,13 @@ def inspect_history(path, timeframe="5m", max_missing=0):
                 if lo > min(op,cl) or hi < max(op,cl) or hi < lo:
                     raise ValueError("OHLC_INCONSISTENT")
                 if prev is not None:
-                    delta = stamp-prev
+                    delta = normalized_stamp-prev
                     if delta <= 0:
                         raise ValueError("DUPLICATE_OR_NONMONOTONIC_TIMESTAMP")
                     if delta % INTERVAL_MS[timeframe] != 0:
                         raise ValueError("IRREGULAR_TIMESTAMP_INTERVAL")
                     missing += delta // INTERVAL_MS[timeframe]-1
-                prev = stamp
+                prev = normalized_stamp
             except (ValueError, TypeError, KeyError, OverflowError) as exc:
                 errors.append({"row": count, "reason": str(exc)[:100]})
                 break
@@ -60,5 +74,6 @@ def inspect_history(path, timeframe="5m", max_missing=0):
         errors.append({"row": count, "reason": "MISSING_CANDLES"})
     return {"version": "V206.0", "status": "PASS" if not errors else "BLOCK",
             "candles": count, "missing_candles": missing, "errors": errors,
-            "timeframe": timeframe, "research_only": True,
+            "timeframe": timeframe, "timestamp_unit": timestamp_unit,
+            "research_only": True,
             "orders_allowed": False, "live_trading_approved": False}
