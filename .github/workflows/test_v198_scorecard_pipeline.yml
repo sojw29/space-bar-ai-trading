@@ -1,0 +1,20 @@
+name: SPACE BAR V198 Scorecard Pipeline Integration
+on:
+  push:
+    paths:
+      - 'agents/multi_strategy_holdout_v105.py'
+      - 'agents/test_v198_scorecard_pipeline.py'
+      - '.github/workflows/test_v198_scorecard_pipeline.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scorecard-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v198_scorecard_pipeline.py' -v
