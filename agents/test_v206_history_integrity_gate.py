@@ -44,6 +44,42 @@ class HistoryGateTests(unittest.TestCase):
         self.assertEqual(result["candles"], 525600)
         self.assertEqual(result["missing_candles"], 0)
 
+    def test_collector_seconds_pass_and_publish(self):
+        # agents/history.py saves epoch seconds, not milliseconds.
+        for row in self.rows:
+            row["timestamp"] //= 1000
+        self.write()
+        integrity = inspect_history(self.path)
+        self.assertEqual(integrity["status"], "PASS")
+        self.assertEqual(integrity["timestamp_unit"], "seconds")
+        self.assertEqual(integrity["missing_candles"], 0)
+        target = Path(self.temp.name) / "collector_snapshot.json"
+        self.assertEqual(publish(self.path, target)["status"],
+                         "OFFLINE_SNAPSHOT_PUBLISHED")
+        self.assertTrue(target.is_file())
+
+    def test_mixed_seconds_and_milliseconds_blocked(self):
+        self.rows[10]["timestamp"] //= 1000
+        self.write()
+        result = inspect_history(self.path)
+        self.assertEqual(result["status"], "BLOCK")
+        self.assertEqual(result["errors"][0]["reason"], "MIXED_TIMESTAMP_UNITS")
+
+    def test_off_grid_seconds_blocked(self):
+        for row in self.rows:
+            row["timestamp"] = row["timestamp"] // 1000 + 1
+        self.write()
+        result = inspect_history(self.path)
+        self.assertEqual(result["status"], "BLOCK")
+        self.assertEqual(result["errors"][0]["reason"], "MISALIGNED_TIMESTAMP")
+
+    def test_microsecond_timestamps_blocked(self):
+        self.rows[10]["timestamp"] *= 1000
+        self.write()
+        result = inspect_history(self.path)
+        self.assertEqual(result["status"], "BLOCK")
+        self.assertEqual(result["errors"][0]["reason"], "INVALID_TIMESTAMP_UNIT")
+
     def test_uniformly_shifted_candles_blocked_and_not_published(self):
         # Equal 5m deltas alone must not admit timestamps shifted off the UTC grid.
         for row in self.rows:
