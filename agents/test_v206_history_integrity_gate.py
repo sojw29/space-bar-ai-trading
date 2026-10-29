@@ -16,7 +16,7 @@ class HistoryGateTests(unittest.TestCase):
         self.rows=[]
         for i in range(600):
             p=100+i*.02
-            self.rows.append({"timestamp":1700000000000+i*300000,"open":p,
+            self.rows.append({"timestamp":1700000100000+i*300000,"open":p,
                               "high":p+1,"low":p-1,"close":p,"volume":100})
         self.write()
 
@@ -38,7 +38,7 @@ class HistoryGateTests(unittest.TestCase):
         with minute_path.open("w", encoding="utf-8", newline="") as stream:
             stream.write("timestamp,open,high,low,close,volume\\n".replace("\\n", "\n"))
             for i in range(365 * 24 * 60):
-                stream.write(f"{1700000000000 + i * 60000},100,101,99,100,1\\n".replace("\\n", "\n"))
+                stream.write(f"{1700000100000 + i * 60000},100,101,99,100,1\\n".replace("\\n", "\n"))
         result = inspect_history(minute_path, timeframe="1m")
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(result["candles"], 525600)
