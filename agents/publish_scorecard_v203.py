@@ -26,7 +26,12 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
         raise ValueError("INVALID_OUTPUT_EXTENSION")
     if source == destination:
         raise ValueError("SOURCE_OUTPUT_COLLISION")
+    from history_integrity_gate_v206 import inspect_history
+    integrity = inspect_history(source, timeframe=timeframe)
+    if integrity["status"] != "PASS":
+        raise ValueError("HISTORY_INTEGRITY_BLOCKED: " + str(integrity["errors"]))
     result = run(source, symbol=symbol, timeframe=timeframe)
+    result["history_integrity"] = integrity
     render(result)  # V199 strict fail-closed schema and safety gate.
     # Provenance metadata is descriptive, not independent data authenticity.
     digest = hashlib.sha256()
