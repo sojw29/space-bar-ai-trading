@@ -12,6 +12,7 @@ from pathlib import Path
 from chronological_holdout_v102 import split_csv
 from holdout_comparison_v103 import compare
 from holdout_evidence_adapter_v193 import assess_legacy_holdout
+from strategy_comparison_scorecard_v197 import build_scorecard
 from ema_holdout_pipeline_v104 import _ema, FEE_RATE, SLIPPAGE_RATE, INITIAL_CASH, FRACTION
 
 STRATEGIES = ("EMA_CROSS", "EMA_PULLBACK", "VOLUME_BREAKOUT")
@@ -121,6 +122,7 @@ def run(source, symbol="BTC", timeframe="5m"):
         "holdout_includes_fees_and_slippage": True,
         "comparison": item,
     }) for item in results]
+    output["strategy_scorecard"] = build_scorecard(output)
     return output
 
 def main():
