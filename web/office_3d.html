@@ -1403,8 +1403,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      }
      tbody.replaceChildren(fragment);table.hidden=false;
      status.textContent=source+" · "+rows.length+"개 전략 · 자동 순위/실거래 없음";
-   }catch(error){clear("차단: "+(error instanceof SyntaxError?"JSON 형식 오류":error.message));}
-
  }
  input.addEventListener("change",async function(){
    clear("파일 검사 중…");
