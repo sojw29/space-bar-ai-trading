@@ -149,6 +149,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <h2>전략별 검증 · OFFLINE SCORECARD</h2>
 <p class="notice">V198 JSON 파일을 직접 선택해 로컬에서만 표시합니다. 업로드·주문·자동 전략 선택 없음.</p>
 <label for="v200-scorecard-file">연구 결과 JSON 선택</label>
+<button type="button" id="v202-scorecard-refresh" class="camera-btn">저장된 연구 결과 불러오기</button>
 <input id="v200-scorecard-file" type="file" accept=".json,application/json">
 <p id="v200-scorecard-status" role="status">파일을 선택하면 검증된 연구 결과를 표시합니다.</p>
 <div style="overflow-x:auto"><table id="v200-scorecard-table" hidden>
@@ -1390,14 +1391,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }
    return card.rows;
  }
- input.addEventListener("change",async function(){
-   clear("파일 검사 중…");
-   const file=input.files&&input.files[0];
-   if(!file){clear("파일을 선택하세요.");return;}
-   if(file.size>2000000){clear("2MB를 초과한 파일은 차단됩니다.");return;}
-   try{
-     const data=JSON.parse(await file.text());
-     const rows=validate(data);
+ function renderRows(rows,source){
      const fragment=document.createDocumentFragment();
      for(const row of rows){
        const tr=document.createElement("tr");
@@ -1408,9 +1402,41 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        fragment.appendChild(tr);
      }
      tbody.replaceChildren(fragment);table.hidden=false;
-     status.textContent="오프라인 연구 결과 "+rows.length+"개 전략 · 자동 순위/실거래 없음";
+     status.textContent=source+" · "+rows.length+"개 전략 · 자동 순위/실거래 없음";
+   }catch(error){clear("차단: "+(error instanceof SyntaxError?"JSON 형식 오류":error.message));}
+
+ }
+ input.addEventListener("change",async function(){
+   clear("파일 검사 중…");
+   const file=input.files&&input.files[0];
+   if(!file){clear("파일을 선택하세요.");return;}
+   if(file.size>2000000){clear("2MB를 초과한 파일은 차단됩니다.");return;}
+   try{
+     const data=JSON.parse(await file.text());
+     renderRows(validate(data),"직접 선택한 파일");
    }catch(error){clear("차단: "+(error instanceof SyntaxError?"JSON 형식 오류":error.message));}
  });
+ const refresh=document.getElementById("v202-scorecard-refresh");
+ async function loadLocalSnapshot(){
+   clear("로컬 저장 결과 조회 중…");
+   refresh.disabled=true;
+   try{
+     const response=await fetch("/api/v1/research/scorecard",{
+       method:"GET",cache:"no-store",credentials:"same-origin",
+       headers:{"Accept":"application/json"}
+     });
+     if(!response.ok)throw Error(response.status===404?"저장된 연구 결과 없음":"로컬 연구 결과 조회 실패");
+     const contentLength=Number(response.headers.get("content-length"));
+     if(Number.isFinite(contentLength)&&contentLength>2000000)throw Error("응답 크기 초과");
+     const raw=await response.text();
+     if(raw.length>2000000)throw Error("응답 크기 초과");
+     renderRows(validate(JSON.parse(raw)),"로컬 저장 결과");
+   }catch(error){clear("로컬 조회 불가: "+error.message+" · JSON 파일을 직접 선택할 수 있습니다.");}
+   finally{refresh.disabled=false;}
+ }
+ refresh.addEventListener("click",loadLocalSnapshot);
+ if(location.protocol==="http:"||location.protocol==="https:")loadLocalSnapshot();
+
 })();
 </script>
 </body></html>
