@@ -7,7 +7,8 @@ import csv
 import math
 from pathlib import Path
 
-MAX_ROWS = 500_000
+# Allow a complete 365-day 1-minute history (525,600 candles) with a bounded margin.
+MAX_ROWS = 600_000
 INTERVAL_MS = {"1m": 60_000, "5m": 300_000, "15m": 900_000}
 
 
