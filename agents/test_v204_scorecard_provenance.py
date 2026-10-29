@@ -19,7 +19,7 @@ class ProvenanceTests(unittest.TestCase):
                 writer.writeheader()
                 for i in range(600):
                     price=100+i*0.02+(5 if (i//25)%2 else -5)
-                    writer.writerow({"timestamp":1700000000000+i*300000,
+                    writer.writerow({"timestamp":1700000100000+i*300000,
                         "open":price,"high":price+1,"low":price-1,"close":price,
                         "volume":150 if i%17==0 else 80})
             target=Path(tmp)/"snapshot.json"
@@ -28,7 +28,7 @@ class ProvenanceTests(unittest.TestCase):
             p=result["snapshot_provenance"]
             self.assertEqual(p["version"],"V204.0")
             self.assertEqual(p["history_sha256"],hashlib.sha256(source.read_bytes()).hexdigest())
-            self.assertEqual(p["history_last_timestamp_raw"],str(1700000000000+599*300000))
+            self.assertEqual(p["history_last_timestamp_raw"],str(1700000100000+599*300000))
             self.assertFalse(p["data_authenticity_verified"])
             self.assertFalse(p["history_timestamp_verified"])
             self.assertFalse(p["realtime"])
