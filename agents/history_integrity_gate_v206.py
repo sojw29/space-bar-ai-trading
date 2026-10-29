@@ -33,6 +33,10 @@ def inspect_history(path, timeframe="5m", max_missing=0):
                 raise ValueError("HISTORY_ROW_LIMIT")
             try:
                 stamp = int(row["timestamp"])
+                # Every exchange candle must start on its UTC timeframe grid.
+                # A uniformly shifted series can have valid deltas but invalid open times.
+                if stamp < 0 or stamp % INTERVAL_MS[timeframe] != 0:
+                    raise ValueError("MISALIGNED_TIMESTAMP")
                 values = [float(row[k]) for k in ("open","high","low","close","volume")]
                 op, hi, lo, cl, vol = values
                 if not all(map(math.isfinite, values)) or min(op,hi,lo,cl) <= 0 or vol < 0:
