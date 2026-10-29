@@ -73,6 +73,21 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
             elif path == "/health":
                 self.reply(200, {"status": "ok", "mode": "local-paper-only",
                                  "orders_enabled": False})
+            elif path == "/api/v1/research/scorecard":
+                # Local static snapshot only; never computes/optimizes or trades.
+                try:
+                    from strategy_scorecard_html_v199 import render
+                    scorecard_path = Path(__file__).resolve().parent.parent / "reports" / "strategy_scorecard_latest.json"
+                    if not scorecard_path.is_file() or scorecard_path.stat().st_size > 2_000_000:
+                        self.reply(404, {"error": "offline_scorecard_not_available",
+                                         "orders_enabled": False})
+                        return
+                    payload = json.loads(scorecard_path.read_text(encoding="utf-8"))
+                    render(payload)  # Strict V199 schema and safety validation.
+                    self.reply(200, payload)
+                except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+                    self.reply(503, {"error": "offline_scorecard_invalid",
+                                     "orders_enabled": False})
             elif path == "/api/v1/market":
                 try:
                     if live_store is not None:
