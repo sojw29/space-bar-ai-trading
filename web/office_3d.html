@@ -145,6 +145,16 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <p id="renderer-error" role="alert"></p>
 <p class="notice">5분봉이 완료된 후 생성된 판단만 표시합니다. 공개 시장 스트림 또는 과거 데이터 연결 상태를 확인하세요. 본 화면에는 주문 기능이 없습니다.</p>
 </section>
+<section class="panel" id="v200-scorecard-panel" aria-label="오프라인 전략 비교표">
+<h2>전략별 검증 · OFFLINE SCORECARD</h2>
+<p class="notice">V198 JSON 파일을 직접 선택해 로컬에서만 표시합니다. 업로드·주문·자동 전략 선택 없음.</p>
+<label for="v200-scorecard-file">연구 결과 JSON 선택</label>
+<input id="v200-scorecard-file" type="file" accept=".json,application/json">
+<p id="v200-scorecard-status" role="status">파일을 선택하면 검증된 연구 결과를 표시합니다.</p>
+<div style="overflow-x:auto"><table id="v200-scorecard-table" hidden>
+<thead><tr><th>전략</th><th>거래</th><th>승률 %</th><th>순수익 %</th><th>PF</th><th>MDD %</th><th>검증</th></tr></thead>
+<tbody id="v200-scorecard-rows"></tbody></table></div>
+</section>
 </aside>
 </main>
 <script>
@@ -1343,6 +1353,64 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  blocked("검증 대기");
  refreshMeeting();
  setInterval(()=>{if(!document.hidden)refreshMeeting()},30000);
+})();
+</script>
+<script>
+/* V200: local-only scorecard import. Never fetches a file or submits an order. */
+(function(){
+ const input=document.getElementById("v200-scorecard-file");
+ const status=document.getElementById("v200-scorecard-status");
+ const table=document.getElementById("v200-scorecard-table");
+ const tbody=document.getElementById("v200-scorecard-rows");
+ const columns=["strategy","holdout_trades","holdout_win_rate_pct",
+   "holdout_net_return_pct","holdout_profit_factor","holdout_max_drawdown_pct","evidence_status"];
+ function clear(message){
+   tbody.replaceChildren();table.hidden=true;status.textContent=message;
+ }
+ function validate(data){
+   if(!data||data.version!=="V105.0"||data.research_only!==true||
+      data.orders_enabled!==false||data.live_trading_approved!==false)throw Error("안전 모드 불일치");
+   const card=data.strategy_scorecard;
+   if(!card||card.version!=="V197.0"||card.status!=="RESEARCH_COMPARISON_ONLY"||
+      card.research_only!==true||card.ranking_enabled!==false||
+      card.strategy_selection_enabled!==false||card.orders_allowed!==false||
+      card.live_trading_approved!==false||!Array.isArray(card.rows)||
+      card.rows.length<1||card.rows.length>30)throw Error("비교표 검증 실패");
+   const seen=new Set();
+   for(const row of card.rows){
+     if(!row||typeof row.strategy!=="string"||!row.strategy||
+        row.strategy.length>120||seen.has(row.strategy)||
+        !Number.isInteger(row.holdout_trades)||row.holdout_trades<0||
+        !["INSUFFICIENT_EVIDENCE","EVIDENCE_REVIEWABLE"].includes(row.evidence_status)||
+        !columns.slice(2,6).every(k=>typeof row[k]==="number"&&Number.isFinite(row[k]))||
+        row.holdout_win_rate_pct<0||row.holdout_win_rate_pct>100||
+        row.holdout_max_drawdown_pct<0||row.holdout_max_drawdown_pct>100||
+        row.holdout_profit_factor<0)throw Error("행 데이터 검증 실패");
+     seen.add(row.strategy);
+   }
+   return card.rows;
+ }
+ input.addEventListener("change",async function(){
+   clear("파일 검사 중…");
+   const file=input.files&&input.files[0];
+   if(!file){clear("파일을 선택하세요.");return;}
+   if(file.size>2000000){clear("2MB를 초과한 파일은 차단됩니다.");return;}
+   try{
+     const data=JSON.parse(await file.text());
+     const rows=validate(data);
+     const fragment=document.createDocumentFragment();
+     for(const row of rows){
+       const tr=document.createElement("tr");
+       for(const key of columns){
+         const td=document.createElement("td");
+         td.textContent=String(row[key]);tr.appendChild(td);
+       }
+       fragment.appendChild(tr);
+     }
+     tbody.replaceChildren(fragment);table.hidden=false;
+     status.textContent="오프라인 연구 결과 "+rows.length+"개 전략 · 자동 순위/실거래 없음";
+   }catch(error){clear("차단: "+(error instanceof SyntaxError?"JSON 형식 오류":error.message));}
+ });
 })();
 </script>
 </body></html>
