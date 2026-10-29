@@ -35,6 +35,12 @@ class FreshnessTests(unittest.TestCase):
         del data["snapshot_provenance"]
         self.assertEqual(assess(data,now=NOW)["status"],"UNKNOWN")
 
+    def test_non_utc_and_implausibly_old_timestamps_fail_closed(self):
+        data=report(1)
+        data["snapshot_provenance"]["generated_at_utc"]="2026-10-29T12:00:00+00:00"
+        self.assertEqual(assess(data,now=NOW)["status"],"UNKNOWN")
+        self.assertEqual(assess(report(24*3651),now=NOW)["status"],"UNKNOWN")
+
     def test_unsafe_report_rejected(self):
         data=report(1)
         data["orders_enabled"]=True
@@ -46,6 +52,8 @@ class FreshnessTests(unittest.TestCase):
         self.assertIn("오래된 스냅샷(72시간 초과)",html)
         self.assertIn("최근 생성된 스냅샷",html)
         self.assertIn("생성 시각 오류",html)
+        self.assertIn('!p.generated_at_utc.endsWith("Z")',html)
+        self.assertIn("생성 시각 범위 오류",html)
 
 
 if __name__=="__main__":
