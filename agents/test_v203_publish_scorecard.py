@@ -21,7 +21,7 @@ class PublisherTests(unittest.TestCase):
             writer.writeheader()
             for i in range(600):
                 price = 100 + 0.02*i + (4 if (i//25)%2 else -4)
-                writer.writerow({"timestamp":1700000000000+i*300000,
+                writer.writerow({"timestamp":1700000100000+i*300000,
                                  "open":price,"high":price+1,"low":price-1,
                                  "close":price,"volume":120 if i%13==0 else 70})
 
