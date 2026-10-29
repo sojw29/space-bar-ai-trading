@@ -1,0 +1,21 @@
+name: SPACE BAR V206 History Integrity Gate
+on:
+  push:
+    paths:
+      - 'agents/history_integrity_gate_v206.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v206_history_integrity_gate.py'
+      - '.github/workflows/test_v206_history_integrity_gate.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  history-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v206_history_integrity_gate.py' -v
