@@ -1,0 +1,21 @@
+name: SPACE BAR V204 Scorecard Provenance
+on:
+  push:
+    paths:
+      - 'agents/publish_scorecard_v203.py'
+      - 'web/office_3d.html'
+      - 'agents/test_v204_scorecard_provenance.py'
+      - '.github/workflows/test_v204_scorecard_provenance.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scorecard-provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v204_scorecard_provenance.py' -v
