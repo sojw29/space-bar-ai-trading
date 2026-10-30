@@ -18,7 +18,7 @@ from ema_holdout_pipeline_v104 import _ema, FEE_RATE, SLIPPAGE_RATE, INITIAL_CAS
 STRATEGIES = ("EMA_CROSS", "EMA_PULLBACK", "VOLUME_BREAKOUT")
 MIN_BARS = 80
 
-def _metrics(rows, strategy):
+def _metrics(rows, strategy, trade_pnls=None):
     if strategy not in STRATEGIES:
         raise ValueError("UNKNOWN_STRATEGY")
     if len(rows) < MIN_BARS:
@@ -69,6 +69,8 @@ def _metrics(rows, strategy):
         pnl.append(proceeds - exit_fee - cost - entry_fee)
         peak = max(peak, cash)
         drawdown = max(drawdown, (peak - cash) / peak * 100)
+    if trade_pnls is not None:
+        trade_pnls.extend(pnl)
     winners = [x for x in pnl if x > 0]
     losers = [x for x in pnl if x < 0]
     # Profit factor without losses is undefined; zero is a conservative
