@@ -70,6 +70,7 @@ def compare_regime_strategy_metrics(history_csv):
         "status": "DESCRIPTIVE_ONLY" if observations else "INSUFFICIENT_HOLDOUT_CANDLES",
         "window_candles": WINDOW, "threshold_pct": THRESHOLD_PCT,
         "classified_windows": len(observations),
+        "window_observations": observations,
         "unclassified_tail_candles": len(history) % WINDOW,
         "rows": rows, "ranking_enabled": False,
         "strategy_selection_enabled": False, "research_only": True,
