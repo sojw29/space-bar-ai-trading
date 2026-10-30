@@ -70,6 +70,8 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
         result["chronological_stability"] = assess_stability(frozen)
         from market_regime_diagnostics_v211 import inspect_regimes
         result["market_regime_diagnostics"] = inspect_regimes(frozen)
+        from regime_strategy_attribution_v212 import assess_regime_strategy_performance
+        result["regime_strategy_attribution"] = assess_regime_strategy_performance(frozen)
         result["history_integrity"] = integrity
         render(result)
         if _sha256_file(frozen) != frozen_digest:

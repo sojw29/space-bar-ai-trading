@@ -1,0 +1,21 @@
+name: SPACE BAR V212 Regime Strategy Attribution
+on:
+  push:
+    paths:
+      - 'agents/regime_strategy_attribution_v212.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v212_regime_strategy_attribution.py'
+      - '.github/workflows/test_v212_regime_strategy_attribution.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regime-strategy-attribution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v212_regime_strategy_attribution.py' -v
