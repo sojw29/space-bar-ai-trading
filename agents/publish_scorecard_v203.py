@@ -76,6 +76,8 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
         result["regime_sample_adequacy"] = assess_regime_sample_adequacy(result["regime_strategy_metrics"])
         from winrate_uncertainty_v214 import attach_winrate_uncertainty
         result["winrate_uncertainty"] = attach_winrate_uncertainty(result["strategy_scorecard"])
+        from return_drawdown_stability_v215 import assess_return_drawdown_stability
+        result["return_drawdown_stability"] = assess_return_drawdown_stability(result["regime_strategy_metrics"])
         from regime_strategy_attribution_v212 import assess_regime_strategy_performance
         result["regime_strategy_attribution"] = assess_regime_strategy_performance(frozen)
         result["history_integrity"] = integrity
