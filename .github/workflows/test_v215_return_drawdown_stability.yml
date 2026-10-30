@@ -1,0 +1,21 @@
+name: SPACE BAR V215 Return Drawdown Stability Audit
+on:
+  push:
+    paths:
+      - 'agents/return_drawdown_stability_v215.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v215_return_drawdown_stability.py'
+      - '.github/workflows/test_v215_return_drawdown_stability.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  return-drawdown-stability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v215_return_drawdown_stability.py' -v
