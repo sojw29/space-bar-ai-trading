@@ -80,6 +80,8 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
         result["return_drawdown_stability"] = assess_return_drawdown_stability(result["regime_strategy_metrics"])
         from regime_window_dispersion_v216 import assess_window_dispersion
         result["regime_window_dispersion"] = assess_window_dispersion(result["regime_strategy_metrics"])
+        from losing_window_streaks_v217 import assess_losing_window_streaks
+        result["losing_window_streaks"] = assess_losing_window_streaks(result["regime_strategy_metrics"])
         from regime_strategy_attribution_v212 import assess_regime_strategy_performance
         result["regime_strategy_attribution"] = assess_regime_strategy_performance(frozen)
         result["history_integrity"] = integrity
