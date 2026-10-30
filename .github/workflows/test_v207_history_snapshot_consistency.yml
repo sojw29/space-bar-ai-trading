@@ -1,0 +1,20 @@
+name: SPACE BAR V207 History Snapshot Consistency
+on:
+  push:
+    paths:
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v207_history_snapshot_consistency.py'
+      - '.github/workflows/test_v207_history_snapshot_consistency.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  history-snapshot-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v207_history_snapshot_consistency.py' -v
