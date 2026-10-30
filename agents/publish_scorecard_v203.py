@@ -52,6 +52,20 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
         if _sha256_file(frozen) != frozen_digest:
             raise ValueError("FROZEN_HISTORY_CHANGED_DURING_VALIDATION")
         result = run(frozen, symbol=symbol, timeframe=timeframe)
+        repeat = run(frozen, symbol=symbol, timeframe=timeframe)
+        canonical = lambda report: json.dumps(report, sort_keys=True, ensure_ascii=False,
+                                               allow_nan=False, separators=(",", ":"))
+        first_result_hash = hashlib.sha256(canonical(result).encode("utf-8")).hexdigest()
+        repeat_result_hash = hashlib.sha256(canonical(repeat).encode("utf-8")).hexdigest()
+        if first_result_hash != repeat_result_hash:
+            raise ValueError("BACKTEST_NOT_REPRODUCIBLE")
+        result["reproducibility_check"] = {
+            "version": "V209.0", "status": "PASS", "runs": 2,
+            "canonical_result_sha256": first_result_hash,
+            "history_sha256": frozen_digest, "research_only": True,
+            "orders_allowed": False, "live_trading_approved": False,
+            "note": "Two identical offline runs; does not prove market-data authenticity or profitability.",
+        }
         result["history_integrity"] = integrity
         render(result)
         if _sha256_file(frozen) != frozen_digest:
