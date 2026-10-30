@@ -1,0 +1,21 @@
+name: SPACE BAR V211 Market Regime Diagnostics
+on:
+  push:
+    paths:
+      - 'agents/market_regime_diagnostics_v211.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v211_market_regime_diagnostics.py'
+      - '.github/workflows/test_v211_market_regime_diagnostics.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  market-regime-diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v211_market_regime_diagnostics.py' -v
