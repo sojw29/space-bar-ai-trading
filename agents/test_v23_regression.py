@@ -162,6 +162,28 @@ class RegressionTests(unittest.TestCase):
         self.assertTrue(v22.forward_evidence_usable_for_research(
             candles, [], baseline_available=True))
 
+    def test_v22_off_grid_candles_are_not_research_evidence(self):
+        # Uniformly shifted timestamps preserve 300s deltas but violate the UTC grid.
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "candles.csv"
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["timestamp"])
+                writer.writeheader()
+                for timestamp in (301, 601, 901):
+                    writer.writerow({"timestamp": timestamp})
+            candles = v22.inspect_candles(path, 900)
+            self.assertEqual(candles["nonconsecutive_intervals"], 0)
+            self.assertEqual(candles["off_grid_timestamps"], 3)
+            self.assertEqual(
+                v22.forward_evidence_status(candles, [], baseline_available=True),
+                "INTEGRITY_FAILURE",
+            )
+            self.assertFalse(
+                v22.forward_evidence_usable_for_research(
+                    candles, [], baseline_available=True
+                )
+            )
+
     def test_v22_candle_integrity(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "candles.csv"
@@ -174,6 +196,7 @@ class RegressionTests(unittest.TestCase):
             self.assertEqual(result["forward_candle_count"], 3)
             self.assertEqual(result["nonconsecutive_intervals"], 1)
             self.assertEqual(result["duplicate_or_unsorted_timestamps"], 1)
+            self.assertEqual(result["off_grid_timestamps"], 0)
             self.assertEqual(result["first_forward_candle_utc"], v22.v17.utc(1200))
             self.assertEqual(result["last_forward_candle_utc"], v22.v17.utc(1500))
 

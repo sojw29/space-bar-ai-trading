@@ -33,8 +33,11 @@ def inspect_candles(path, cutoff):
     previous = None
     gaps = 0
     duplicates = 0
+    off_grid = 0
     for row in rows(path):
         timestamp = int(row["timestamp"])
+        if timestamp % 300 != 0:
+            off_grid += 1
         if previous is not None:
             if timestamp <= previous:
                 duplicates += 1
@@ -52,12 +55,13 @@ def inspect_candles(path, cutoff):
         "last_forward_candle_utc": v17.utc(last) if last is not None else None,
         "nonconsecutive_intervals": gaps,
         "duplicate_or_unsorted_timestamps": duplicates,
+        "off_grid_timestamps": off_grid,
     }
 
 
 def forward_evidence_status(candles, issues, warnings=(), baseline_available=False):
     """Distinguish intact archives from actual post-cutoff observations."""
-    if issues:
+    if issues or candles.get("off_grid_timestamps", 0):
         return "INTEGRITY_FAILURE"
     if candles["forward_candle_count"] == 0:
         return "NO_FORWARD_CANDLES"
@@ -105,6 +109,8 @@ def run():
     warnings = []
     if candles["duplicate_or_unsorted_timestamps"]:
         issues.append("DUPLICATE_OR_UNSORTED_CANDLES")
+    if candles["off_grid_timestamps"]:
+        issues.append("OFF_GRID_CANDLE_TIMESTAMPS")
     if candles["nonconsecutive_intervals"]:
         warnings.append("HISTORICAL_CANDLE_GAPS")
     if candles["forward_candle_count"] == 0:
