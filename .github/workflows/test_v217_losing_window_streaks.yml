@@ -1,0 +1,21 @@
+name: SPACE BAR V217 Losing Window Streaks
+on:
+  push:
+    paths:
+      - 'agents/losing_window_streaks_v217.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v217_losing_window_streaks.py'
+      - '.github/workflows/test_v217_losing_window_streaks.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  losing-window-streaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v217_losing_window_streaks.py' -v
