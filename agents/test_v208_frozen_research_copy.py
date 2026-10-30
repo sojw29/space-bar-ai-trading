@@ -33,7 +33,7 @@ class FrozenCopyTests(unittest.TestCase):
             return actual(path,*args,**kwargs)
         with patch.object(pub,"run",side_effect=spy):
             pub.publish(self.source,self.output)
-        self.assertEqual(len(paths),1)
+        # V209 intentionally runs the same frozen history twice for reproducibility.\n        self.assertEqual(len(paths),2)\n        self.assertEqual(paths[0],paths[1])
         self.assertFalse(paths[0].exists())
         data=json.loads(self.output.read_text(encoding="utf-8"))
         self.assertEqual(data["snapshot_provenance"]["source_type"],
