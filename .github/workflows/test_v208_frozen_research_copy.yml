@@ -1,0 +1,21 @@
+name: SPACE BAR V208 Frozen Research Copy
+on:
+  push:
+    paths:
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v207_history_snapshot_consistency.py'
+      - 'agents/test_v208_frozen_research_copy.py'
+      - '.github/workflows/test_v208_frozen_research_copy.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frozen-research-copy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v20[78]*.py' -v
