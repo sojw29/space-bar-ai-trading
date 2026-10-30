@@ -1,0 +1,21 @@
+name: SPACE BAR V214 Wilson Winrate Uncertainty
+on:
+  push:
+    paths:
+      - 'agents/winrate_uncertainty_v214.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v214_winrate_uncertainty.py'
+      - '.github/workflows/test_v214_winrate_uncertainty.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  winrate-uncertainty:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v214_winrate_uncertainty.py' -v
