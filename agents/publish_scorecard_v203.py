@@ -8,6 +8,7 @@ import hashlib
 from datetime import datetime, timezone
 import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -34,46 +35,54 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
         raise ValueError("INVALID_OUTPUT_EXTENSION")
     if source == destination:
         raise ValueError("SOURCE_OUTPUT_COLLISION")
-    initial_digest = _sha256_file(source)
-    from history_integrity_gate_v206 import inspect_history
-    integrity = inspect_history(source, timeframe=timeframe)
-    if integrity["status"] != "PASS":
-        raise ValueError("HISTORY_INTEGRITY_BLOCKED: " + str(integrity["errors"]))
-    if _sha256_file(source) != initial_digest:
-        raise ValueError("HISTORY_CHANGED_DURING_VALIDATION")
-    result = run(source, symbol=symbol, timeframe=timeframe)
-    result["history_integrity"] = integrity
-    render(result)  # V199 strict fail-closed schema and safety gate.
-    # Provenance metadata is descriptive, not independent data authenticity.
-    if _sha256_file(source) != initial_digest:
-        raise ValueError("HISTORY_CHANGED_DURING_BACKTEST")
-    with source.open(newline="", encoding="utf-8") as stream:
-        reader = csv.DictReader(stream)
-        if "timestamp" not in (reader.fieldnames or []):
-            raise ValueError("MISSING_HISTORY_TIMESTAMP")
-        last_timestamp = None
-        for row in reader:
-            last_timestamp = row["timestamp"]
-    if last_timestamp is None:
-        raise ValueError("EMPTY_HISTORY")
-    result["snapshot_provenance"] = {
-        "version": "V204.0",
-        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "history_last_timestamp_raw": str(last_timestamp)[:64],
-        "history_sha256": initial_digest,
-        "source_type": "LOCAL_HISTORICAL_CSV",
-        "history_timestamp_verified": False,
-        "data_authenticity_verified": False,
-        "realtime": False,
-        "research_only": True,
-    }
-    if _sha256_file(source) != initial_digest:
-        raise ValueError("HISTORY_CHANGED_DURING_PROVENANCE")
-    raw = json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2)
-    if len(raw.encode("utf-8")) > 2_000_000:
-        raise ValueError("SCORECARD_TOO_LARGE")
-    if _sha256_file(source) != initial_digest:
-        raise ValueError("HISTORY_CHANGED_BEFORE_PUBLISH")
+    # Freeze a private copy for the full validation/backtest/provenance pipeline.
+    # This isolates ordinary concurrent writes to the source path.
+    with tempfile.TemporaryDirectory(prefix="spacebar-v208-") as scratch:
+        frozen = Path(scratch) / source.name
+        source_digest_before = _sha256_file(source)
+        shutil.copyfile(source, frozen)
+        frozen.chmod(0o400)  # Defense in depth; not an OS-enforced immutable file.
+        frozen_digest = _sha256_file(frozen)
+        if source_digest_before != frozen_digest or _sha256_file(source) != frozen_digest:
+            raise ValueError("HISTORY_CHANGED_DURING_SNAPSHOT")
+        from history_integrity_gate_v206 import inspect_history
+        integrity = inspect_history(frozen, timeframe=timeframe)
+        if integrity["status"] != "PASS":
+            raise ValueError("HISTORY_INTEGRITY_BLOCKED: " + str(integrity["errors"]))
+        if _sha256_file(frozen) != frozen_digest:
+            raise ValueError("FROZEN_HISTORY_CHANGED_DURING_VALIDATION")
+        result = run(frozen, symbol=symbol, timeframe=timeframe)
+        result["history_integrity"] = integrity
+        render(result)
+        if _sha256_file(frozen) != frozen_digest:
+            raise ValueError("FROZEN_HISTORY_CHANGED_DURING_BACKTEST")
+        with frozen.open(newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            if "timestamp" not in (reader.fieldnames or []):
+                raise ValueError("MISSING_HISTORY_TIMESTAMP")
+            last_timestamp = None
+            for row in reader:
+                last_timestamp = row["timestamp"]
+        if last_timestamp is None:
+            raise ValueError("EMPTY_HISTORY")
+        result["snapshot_provenance"] = {
+            "version": "V204.0",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "history_last_timestamp_raw": str(last_timestamp)[:64],
+            "history_sha256": frozen_digest,
+            "source_type": "LOCAL_HISTORICAL_CSV_FROZEN_COPY",
+            "history_timestamp_verified": False,
+            "data_authenticity_verified": False,
+            "realtime": False,
+            "research_only": True,
+        }
+        if _sha256_file(frozen) != frozen_digest:
+            raise ValueError("FROZEN_HISTORY_CHANGED_DURING_PROVENANCE")
+        raw = json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2)
+        if len(raw.encode("utf-8")) > 2_000_000:
+            raise ValueError("SCORECARD_TOO_LARGE")
+        if _sha256_file(frozen) != frozen_digest:
+            raise ValueError("FROZEN_HISTORY_CHANGED_BEFORE_PUBLISH")
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Atomic replace: failed validation must never corrupt the prior snapshot.
     temp_path = None
