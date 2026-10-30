@@ -20,9 +20,15 @@ def compare_regime_strategy_metrics(history_csv):
     with tempfile.TemporaryDirectory(prefix="spacebar-v212-") as scratch:
         train = Path(scratch) / "train.csv"
         valid = Path(scratch) / "validation.csv"
-        split_csv(history_csv, train, valid, ratio=0.7, min_rows=MIN_BARS)
-        with valid.open(newline="", encoding="utf-8") as stream:
-            history = list(csv.DictReader(stream))
+        try:
+            split_csv(history_csv, train, valid, ratio=0.7, min_rows=MIN_BARS)
+        except ValueError as exc:
+            if str(exc) != "INSUFFICIENT_ROWS":
+                raise
+            history = []
+        else:
+            with valid.open(newline="", encoding="utf-8") as stream:
+                history = list(csv.DictReader(stream))
     observations = []
     for end in range(WINDOW, len(history) + 1, WINDOW):
         start = end - WINDOW
