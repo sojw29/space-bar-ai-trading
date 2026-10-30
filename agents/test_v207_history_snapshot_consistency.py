@@ -1,4 +1,4 @@
-"""V207 history mutation fails closed and preserves last published snapshot."""
+"""V207/V208 history snapshot consistency regression tests."""
 import csv
 import tempfile
 import unittest
@@ -34,11 +34,11 @@ class ConsistencyTests(unittest.TestCase):
                     stream.write("\n")
             return original(path)
         with patch.object(publisher,"_sha256_file",side_effect=changing):
-            with self.assertRaisesRegex(ValueError,"HISTORY_CHANGED_DURING_VALIDATION"):
+            with self.assertRaisesRegex(ValueError,"HISTORY_CHANGED_DURING_SNAPSHOT"):
                 publisher.publish(self.source,self.target)
         self.assertEqual(self.target.read_text(encoding="utf-8"),'{"previous":"intact"}')
 
-    def test_change_during_backtest_blocks_publish(self):
+    def test_change_to_original_during_backtest_does_not_change_frozen_result(self):
         from multi_strategy_holdout_v105 import run as actual_run
         def mutated(*args,**kwargs):
             result=actual_run(*args,**kwargs)
@@ -46,9 +46,11 @@ class ConsistencyTests(unittest.TestCase):
                 stream.write("\n")
             return result
         with patch.object(publisher,"run",side_effect=mutated):
-            with self.assertRaisesRegex(ValueError,"HISTORY_CHANGED_DURING_BACKTEST"):
-                publisher.publish(self.source,self.target)
-        self.assertEqual(self.target.read_text(encoding="utf-8"),'{"previous":"intact"}')
+            summary=publisher.publish(self.source,self.target)
+        self.assertEqual(summary["status"],"OFFLINE_SNAPSHOT_PUBLISHED")
+        import json
+        payload=json.loads(self.target.read_text(encoding="utf-8"))
+        self.assertEqual(payload["snapshot_provenance"]["source_type"],"LOCAL_HISTORICAL_CSV_FROZEN_COPY")
 
     def test_stable_source_still_publishes(self):
         summary=publisher.publish(self.source,self.target)
