@@ -66,6 +66,8 @@ def publish(history_csv, output=DEFAULT_OUTPUT, symbol="BTC", timeframe="5m"):
             "orders_allowed": False, "live_trading_approved": False,
             "note": "Two identical offline runs; does not prove market-data authenticity or profitability.",
         }
+        from chronological_stability_v210 import assess_stability
+        result["chronological_stability"] = assess_stability(frozen)
         result["history_integrity"] = integrity
         render(result)
         if _sha256_file(frozen) != frozen_digest:

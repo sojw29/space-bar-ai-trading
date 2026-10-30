@@ -1,0 +1,21 @@
+name: SPACE BAR V210 Chronological Stability
+on:
+  push:
+    paths:
+      - 'agents/chronological_stability_v210.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v210_chronological_stability.py'
+      - '.github/workflows/test_v210_chronological_stability.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chronological-stability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v210_chronological_stability.py' -v
