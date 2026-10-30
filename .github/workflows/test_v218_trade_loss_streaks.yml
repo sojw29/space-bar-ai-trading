@@ -1,0 +1,22 @@
+name: SPACE BAR V218 Trade Loss Streaks
+on:
+  push:
+    paths:
+      - 'agents/trade_loss_streaks_v218.py'
+      - 'agents/multi_strategy_holdout_v105.py'
+      - 'agents/publish_scorecard_v203.py'
+      - 'agents/test_v218_trade_loss_streaks.py'
+      - '.github/workflows/test_v218_trade_loss_streaks.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trade-loss-streaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v218_trade_loss_streaks.py' -v
