@@ -1,0 +1,21 @@
+name: SPACE BAR V219 Browser Room Tests
+on:
+  push:
+    paths:
+      - 'web/index.html'
+      - 'agents/test_v219_browser_room.py'
+      - '.github/workflows/deploy_browser_room.yml'
+      - '.github/workflows/test_v219_browser_room.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-room:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v219_browser_room.py' -v
