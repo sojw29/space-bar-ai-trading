@@ -1,4 +1,6 @@
 import os
+import csv
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -69,4 +71,20 @@ class QualityTests(unittest.TestCase):
      main()
    self.assertEqual(source.read_text(encoding="utf-8"),"invalid")
    self.assertEqual(alias.read_text(encoding="utf-8"),"invalid")
+ def test_cli_output_symlink_does_not_overwrite_target(self):
+  with TemporaryDirectory() as directory:
+   source=Path(directory)/"history.csv"
+   target=Path(directory)/"quality.json"
+   unrelated=Path(directory)/"unrelated.json"
+   unrelated.write_text("preserve me",encoding="utf-8")
+   with source.open("w",newline="",encoding="utf-8") as handle:
+    writer=csv.DictWriter(handle,fieldnames=("timestamp_ms","open","high","low","close","volume"))
+    writer.writeheader()
+    writer.writerows(candles())
+   target.symlink_to(unrelated)
+   with patch("sys.argv",["v244",str(source),str(target)]):
+    main()
+   self.assertEqual(unrelated.read_text(encoding="utf-8"),"preserve me")
+   self.assertFalse(target.is_symlink())
+   self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["quality_gate"],"PASS")
 if __name__=="__main__":unittest.main()
