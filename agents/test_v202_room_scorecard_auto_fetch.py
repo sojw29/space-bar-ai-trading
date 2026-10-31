@@ -13,7 +13,8 @@ class ScorecardAutoFetchTests(unittest.TestCase):
         self.assertIn('method:"GET",cache:"no-store",credentials:"same-origin"', html)
         self.assertIn('id="v202-scorecard-refresh"', html)
         self.assertIn('refresh.addEventListener("click",loadLocalSnapshot)', html)
-        self.assertIn('if(location.protocol==="http:"||location.protocol==="https:")loadLocalSnapshot()', html)
+        self.assertIn('if(!isStaticPages&&(location.protocol==="http:"||location.protocol==="https:"))loadLocalSnapshot()', html)
+        self.assertIn('const isStaticPages = location.hostname.endsWith(".github.io");', html)
 
     def test_fallback_and_validation(self):
         html = ROOM.read_text(encoding="utf-8")
