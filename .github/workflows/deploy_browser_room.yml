@@ -7,6 +7,9 @@ on:
       - '.github/workflows/deploy_browser_room.yml'
       - 'agents/pages_snapshot_v222.py'
       - 'reports/strategy_scorecard_latest.json'
+      - 'agents/public_market_snapshot_v223.py'
+  schedule:
+    - cron: "17 */6 * * *"
   workflow_dispatch:
 permissions:
   contents: read
@@ -32,6 +35,9 @@ jobs:
       - name: Publish only validated optional historical scorecard
         run: |
           python agents/pages_snapshot_v222.py reports/strategy_scorecard_latest.json web/research_snapshot.json
+      - name: Collect public research-only market snapshot
+        continue-on-error: true
+        run: python agents/public_market_snapshot_v223.py web/market_snapshot.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
