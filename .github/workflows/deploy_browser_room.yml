@@ -5,6 +5,8 @@ on:
     paths:
       - 'web/**'
       - '.github/workflows/deploy_browser_room.yml'
+      - 'agents/pages_snapshot_v222.py'
+      - 'reports/strategy_scorecard_latest.json'
   workflow_dispatch:
 permissions:
   contents: read
