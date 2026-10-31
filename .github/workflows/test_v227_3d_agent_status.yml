@@ -1,0 +1,20 @@
+name: SPACE BAR V227 3D Research Agent Status
+on:
+  push:
+    paths:
+      - 'web/office_3d.html'
+      - 'agents/test_v227_3d_agent_status.py'
+      - '.github/workflows/test_v227_3d_agent_status.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  agent-status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v227_3d_agent_status.py' -v
