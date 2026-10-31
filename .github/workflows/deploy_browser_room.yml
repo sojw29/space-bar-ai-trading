@@ -27,6 +27,9 @@ jobs:
           test -s web/office_3d.html
           test -s web/command_center.html
           grep -q '읽기 전용 데모' web/index.html
+      - name: Publish only validated optional historical scorecard
+        run: |
+          python agents/pages_snapshot_v222.py reports/strategy_scorecard_latest.json web/research_snapshot.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

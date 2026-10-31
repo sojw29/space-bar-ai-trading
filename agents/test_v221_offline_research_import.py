@@ -14,8 +14,9 @@ class OfflineResearchImportTests(unittest.TestCase):
 
     def test_static_pages_skips_unavailable_local_api(self):
         self.assertIn('if(!isStaticPages&&(location.protocol==="http:"||location.protocol==="https:"))loadLocalSnapshot()',ROOM)
-        self.assertIn("refresh.disabled=true",ROOM)
-        self.assertIn("연구 결과 JSON 파일을 직접 선택하면 검증 후 비교표를 표시합니다",ROOM)
+        self.assertIn('if(!isStaticPages)refresh.addEventListener("click",loadLocalSnapshot)',ROOM)
+        self.assertIn('fetch("./research_snapshot.json"',ROOM)
+        self.assertIn("JSON 파일을 직접 선택할 수 있습니다",ROOM)
 
     def test_classic_scorecard_script_has_own_static_pages_binding(self):
         # The V220 declaration lives in a module script, not this classic IIFE.
@@ -23,7 +24,7 @@ class OfflineResearchImportTests(unittest.TestCase):
         self.assertIn('const isStaticPages = location.hostname.endsWith(".github.io");',scorecard_script)
 
     def test_static_pages_user_message(self):
-        self.assertIn("정적 웹 데모 · AI 서버 없음",ROOM)
+        self.assertIn("공개 연구 스냅샷 확인 중",ROOM)
         self.assertIn("refresh.title=",ROOM)
 
     def test_no_remote_code_or_trade_execution(self):
