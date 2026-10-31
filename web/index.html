@@ -16,6 +16,41 @@ strong{color:#ffd18e}
 <a class="button" href="./office_3d.html">3D 트레이딩룸 열기</a>
 <a class="button" href="./command_center.html">커맨드 센터 열기</a>
 </div>
+<div class="card"><h2>공개 시장 스냅샷 · BTC / ETH / SOL</h2>
+<p id="v223-market-status" role="status">공개 시장 데이터 확인 중…</p>
+<div id="v223-market-values"></div>
+<p>Bybit 공개 티커 · 주기적 수집값이며 실시간 시세, AI 판단, 매매 신호가 아닙니다.</p>
+</div>
+<script>
+(async function(){
+ const status=document.getElementById("v223-market-status");
+ const output=document.getElementById("v223-market-values");
+ try{
+  const response=await fetch("./market_snapshot.json",{cache:"no-store"});
+  if(!response.ok)throw Error("게시된 시장 스냅샷 없음");
+  const raw=await response.text();
+  if(raw.length>10000)throw Error("데이터 크기 초과");
+  const data=JSON.parse(raw);
+  if(data.version!=="V223.0"||data.orders_enabled!==false||
+     data.research_only!==true||data.realtime!==false||
+     data.agent_analysis_available!==false||
+     !Array.isArray(data.markets)||data.markets.length!==3)throw Error("안전 검증 실패");
+  const timestamp=Date.parse(data.captured_at_utc);
+  if(!Number.isFinite(timestamp)||timestamp>Date.now()+60000)throw Error("시각 검증 실패");
+  const age=Date.now()-timestamp;
+  status.textContent="수집 시각: "+new Date(timestamp).toLocaleString()+" · "+
+    (age>3600000?"오래된 데이터 · 참고 금지":"주기적 스냅샷 · 실시간 아님");
+  for(const symbol of ["BTCUSDT","ETHUSDT","SOLUSDT"]){
+   const item=data.markets.find(x=>x.symbol===symbol);
+   if(!item||!Number.isFinite(item.last_price)||item.last_price<=0||
+      !Number.isFinite(item.volume_24h)||item.volume_24h<0)throw Error("시세 검증 실패");
+   const p=document.createElement("p");
+   p.textContent=symbol+" · "+item.last_price.toLocaleString("en-US")+" USDT";
+   output.append(p);
+  }
+ }catch(error){output.replaceChildren();status.textContent="시장 데이터 미연결 · "+error.message;}
+})();
+</script>
 <div class="card"><h2>현재 제공 범위</h2>
 <p>화면 UI와 시각화만 정적 배포합니다. /api/v1/* 연결이 없으면 시장 데이터·에이전트 상태는 표시되지 않거나 연결 실패로 표시됩니다. 서버 연동, 인증, 실제 AI 실행은 별도의 후속 개발과 배포가 필요합니다.</p>
 <p><strong>주문 실행 비활성 · 투자 판단 근거로 사용 금지</strong></p></div>
