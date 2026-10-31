@@ -1,14 +1,92 @@
+"""Behavioral regression checks for the read-only V231 local comparison panel."""
+import json
+import re
+import subprocess
 import unittest
 from pathlib import Path
-ROOM=(Path(__file__).resolve().parent.parent/"web"/"office_3d.html").read_text(encoding="utf-8")
+
+ROOM = (Path(__file__).resolve().parent.parent / "web" / "office_3d.html").read_text(encoding="utf-8")
+SCRIPT = re.search(
+    r"/\\* V231: compare two verified local research snapshots, not trading signals\\. \\*/\\s*(.*?)</script>",
+    ROOM,
+    re.S,
+)
+NODE_RUNNER = r"""
+const vm = require('vm');
+const script = process.argv[1];
+const records = JSON.parse(process.argv[2]);
+const elements = {};
+const document = {
+  getElementById(id) {
+    if (!elements[id]) elements[id] = {
+      textContent: '', children: [],
+      replaceChildren(...children) { this.children = children; },
+      addEventListener(_event, fn) { this.handler = fn; }
+    };
+    return elements[id];
+  },
+  createElement(_tag) { return { textContent: '' }; }
+};
+const localStorage = { getItem(_key) { return JSON.stringify(records); } };
+vm.runInNewContext(script, { document, localStorage, Date });
+console.log(JSON.stringify({
+  status: elements['v231-status'].textContent,
+  rows: elements['v231-rows'].children.map(row => row.textContent)
+}));
+"""
+
+
+def snapshot(timestamp, ratio=1.0):
+    return {
+        "timestamp": timestamp,
+        "markets": [
+            {"symbol": symbol, "trend": "SMA50_ABOVE_SMA200", "ratio": ratio}
+            for symbol in ("BTCUSDT", "ETHUSDT", "SOLUSDT")
+        ],
+    }
+
+
 class LocalComparisonTests(unittest.TestCase):
- def test_comparison_reads_only_local_research_history(self):
-  for marker in ('id="v231-change-panel"','spacebar.v230.commander.research.v1',
-    'localStorage.getItem(KEY)','unique.length<2','Date.parse(a.timestamp)-Date.parse(b.timestamp)',
-    'a.trend!==b.trend','b.ratio-a.ratio','거래 신호/성과 예측 아님'):
-   self.assertIn(marker,ROOM)
- def test_fails_closed_on_invalid_or_duplicate_snapshots(self):
-  for marker in ('raw.length>30000','data.filter(valid)','match.length===1',
-    'unique[unique.length-1].timestamp===item.timestamp','rows.replaceChildren()'):
-   self.assertIn(marker,ROOM)
-if __name__=="__main__":unittest.main()
+    def run_comparison(self, records):
+        self.assertIsNotNone(SCRIPT, "V231 comparison script must exist")
+        proc = subprocess.run(
+            ["node", "-e", NODE_RUNNER, SCRIPT.group(1), json.dumps(records)],
+            check=True, capture_output=True, text=True, timeout=10,
+        )
+        return json.loads(proc.stdout)
+
+    def test_two_valid_snapshots_render_descriptive_comparison(self):
+        result = self.run_comparison([
+            snapshot("2026-10-25T00:00:00Z", 1.0),
+            snapshot("2026-10-26T00:00:00Z", 1.25),
+        ])
+        self.assertEqual(len(result["rows"]), 3)
+        self.assertIn("+0.2500", result["rows"][0])
+        self.assertNotIn("비교 불가", result["status"])
+
+    def test_invalid_record_must_not_be_silently_discarded(self):
+        result = self.run_comparison([
+            snapshot("2026-10-25T00:00:00Z"),
+            {"timestamp": "2026-10-25T12:00:00Z", "markets": []},
+            snapshot("2026-10-26T00:00:00Z"),
+        ])
+        self.assertEqual(result["rows"], [])
+        self.assertIn("비교 불가", result["status"])
+
+    def test_conflicting_duplicate_timestamp_fails_closed(self):
+        result = self.run_comparison([
+            snapshot("2026-10-25T00:00:00Z"),
+            snapshot("2026-10-26T00:00:00Z", 1.1),
+            snapshot("2026-10-26T00:00:00Z", 1.9),
+        ])
+        self.assertEqual(result["rows"], [])
+        self.assertIn("중복 기록 시각", result["status"])
+
+    def test_one_snapshot_cannot_produce_comparison(self):
+        result = self.run_comparison([snapshot("2026-10-26T00:00:00Z")])
+        self.assertEqual(result["rows"], [])
+        self.assertIn("2개 필요", result["status"])
+
+
+if __name__ == "__main__":
+    unittest.main()
