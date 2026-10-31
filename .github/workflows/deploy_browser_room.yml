@@ -8,6 +8,7 @@ on:
       - 'agents/pages_snapshot_v222.py'
       - 'reports/strategy_scorecard_latest.json'
       - 'agents/public_market_snapshot_v223.py'
+      - 'agents/public_market_diagnostics_v224.py'
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -38,6 +39,13 @@ jobs:
       - name: Collect public research-only market snapshot
         continue-on-error: true
         run: python agents/public_market_snapshot_v223.py web/market_snapshot.json
+      - name: Assess published ticker snapshot without order execution
+        run: |
+          if test -s web/market_snapshot.json; then
+            python agents/public_market_diagnostics_v224.py web/market_snapshot.json web/market_diagnostics.json
+          else
+            rm -f web/market_diagnostics.json
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

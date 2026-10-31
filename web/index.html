@@ -19,6 +19,36 @@ strong{color:#ffd18e}
 <div class="card"><h2>공개 시장 스냅샷 · BTC / ETH / SOL</h2>
 <p id="v223-market-status" role="status">공개 시장 데이터 확인 중…</p>
 <div id="v223-market-values"></div>
+<div id="v224-diagnostics" aria-live="polite">분석 상태 확인 중…</div>
+<script>
+(async function(){
+ const target=document.getElementById("v224-diagnostics");
+ try{
+  const response=await fetch("./market_diagnostics.json",{cache:"no-store"});
+  if(!response.ok)throw Error("진단 데이터 없음");
+  const raw=await response.text();
+  if(raw.length>10000)throw Error("진단 데이터 크기 초과");
+  const d=JSON.parse(raw);
+  if(d.version!=="V224.0"||d.orders_enabled!==false||d.research_only!==true||
+     d.realtime!==false||d.ai_agents_running!==false||d.trade_signals_available!==false||
+     !d.ATLAS||!d.QUANT||!d.GUARDIAN)throw Error("진단 안전 검증 실패");
+  const age=Date.now()-Date.parse(d.captured_at_utc);
+  if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("오래되거나 잘못된 진단 데이터");
+  const labels=[["ATLAS",d.ATLAS],["QUANT",d.QUANT],["GUARDIAN",d.GUARDIAN]];
+  target.replaceChildren();
+  const intro=document.createElement("p");
+  intro.textContent="규칙 기반 상태 점검 · AI 에이전트 실행 아님 · 매매 신호 없음";
+  target.append(intro);
+  for(const [name,record] of labels){
+   if(typeof record.status!=="string"||typeof record.note!=="string")throw Error("진단 형식 오류");
+   const p=document.createElement("p");
+   p.textContent=name+" · "+record.status+" · "+record.note;
+   target.append(p);
+  }
+ }catch(error){target.textContent="진단 미연결 · "+error.message;}
+})();
+</script>
+
 <p>Bybit 공개 티커 · 주기적 수집값이며 실시간 시세, AI 판단, 매매 신호가 아닙니다.</p>
 </div>
 <script>
