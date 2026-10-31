@@ -1,0 +1,22 @@
+name: SPACE BAR V224 Public Market Diagnostics
+on:
+  push:
+    paths:
+      - 'agents/public_market_diagnostics_v224.py'
+      - 'agents/test_v224_public_market_diagnostics.py'
+      - 'web/index.html'
+      - '.github/workflows/deploy_browser_room.yml'
+      - '.github/workflows/test_v224_public_market_diagnostics.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v224_public_market_diagnostics.py' -v
