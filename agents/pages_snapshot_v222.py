@@ -13,7 +13,9 @@ def stage(source, destination):
     if source.stat().st_size>MAX_BYTES:
         raise ValueError("SNAPSHOT_TOO_LARGE")
     data=json.loads(source.read_text(encoding="utf-8"))
-    if not isinstance(data,dict):\n        raise ValueError("INVALID_SNAPSHOT_OBJECT")\n    card=data.get("strategy_scorecard")
+    if not isinstance(data,dict):
+        raise ValueError("INVALID_SNAPSHOT_OBJECT")
+    card=data.get("strategy_scorecard")
     provenance=data.get("snapshot_provenance") if isinstance(data,dict) else None
     if (data.get("version")!="V105.0" or data.get("research_only") is not True
         or data.get("orders_enabled") is not False
