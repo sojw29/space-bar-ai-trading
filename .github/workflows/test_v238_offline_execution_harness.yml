@@ -1,0 +1,20 @@
+name: SPACE BAR V238 Offline Execution Harness
+on:
+  push:
+    paths:
+      - 'agents/offline_model_execution_harness_v238.py'
+      - 'agents/test_v238_offline_execution_harness.py'
+      - '.github/workflows/test_v238_offline_execution_harness.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v238_offline_execution_harness.py' -v
