@@ -1803,15 +1803,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const raw=localStorage.getItem(KEY);
    if(!raw||raw.length>30000)throw Error("유효한 로컬 기록 없음");
    const data=JSON.parse(raw);
-   if(!Array.isArray(data))throw Error("기록 형식 오류");
-   const records=data.filter(valid).sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
-   const unique=[];
-   for(const item of records){
-    if(unique.length&&unique[unique.length-1].timestamp===item.timestamp)unique[unique.length-1]=item;
-    else unique.push(item);
+   if(!Array.isArray(data)||data.length>30||!data.every(valid))throw Error("기록 형식 오류");
+   if(data.length<2)throw Error("서로 다른 시각의 기록 2개 필요");
+   const records=data.slice().sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
+   for(let i=1;i<records.length;i++){
+    if(Date.parse(records[i].timestamp)===Date.parse(records[i-1].timestamp))
+     throw Error("중복 기록 시각");
    }
-   if(unique.length<2)throw Error("서로 다른 시각의 기록 2개 필요");
-   const older=unique[unique.length-2],newer=unique[unique.length-1];
+   const older=records[records.length-2],newer=records[records.length-1];
    if(Date.parse(newer.timestamp)<=Date.parse(older.timestamp))throw Error("기록 시각 오류");
    const output=[];
    for(const symbol of ["BTCUSDT","ETHUSDT","SOLUSDT"]){
