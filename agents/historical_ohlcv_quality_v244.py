@@ -3,6 +3,7 @@ import argparse
 import csv
 import json
 import math
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,10 +16,10 @@ def validate_candles(rows, *, now=None, min_bars=MIN_BARS):
     if now.tzinfo is None:
         raise ValueError("NAIVE_NOW")
     now = now.astimezone(timezone.utc)
+    if type(min_bars) is not int or not 1 <= min_bars <= MAX_BARS:
+        raise ValueError("INVALID_MIN_BARS")
     if not isinstance(rows, list) or not min_bars <= len(rows) <= MAX_BARS:
         raise ValueError("INVALID_HISTORY_LENGTH")
-    if not 1 <= min_bars <= MAX_BARS:
-        raise ValueError("INVALID_MIN_BARS")
     normalized = []
     previous = None
     for index, row in enumerate(rows):
@@ -56,9 +57,16 @@ def main():
     parser.add_argument("csv_path")
     parser.add_argument("destination")
     args = parser.parse_args()
+    source = Path(args.csv_path)
     target = Path(args.destination)
+    # Reject aliases (including symlinks and hardlinks) BEFORE error cleanup.
+    # Otherwise a bad CSV could delete the source instead of stale output.
+    if source.resolve() == target.resolve() or (
+        source.exists() and target.exists() and os.path.samefile(source, target)
+    ):
+        raise ValueError("INPUT_OUTPUT_PATH_COLLISION")
     try:
-        with Path(args.csv_path).open(encoding="utf-8", newline="") as handle:
+        with source.open(encoding="utf-8", newline="") as handle:
             rows = list(csv.DictReader(handle))
         # CSV conversion is explicit; invalid values fail closed.
         converted = [{"timestamp_ms": int(row["timestamp_ms"]),
@@ -68,7 +76,9 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     except (ValueError, TypeError, KeyError, OSError, OverflowError):
-        target.unlink(missing_ok=True)
+        # Do not attempt to unlink a directory on a failed write.
+        if target.is_file() or target.is_symlink():
+            target.unlink(missing_ok=True)
         raise
 
 if __name__ == "__main__":
