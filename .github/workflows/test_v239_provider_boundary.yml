@@ -1,0 +1,20 @@
+name: SPACE BAR V239 Disabled Provider Boundary
+on:
+  push:
+    paths:
+      - 'agents/provider_boundary_v239.py'
+      - 'agents/test_v239_provider_boundary.py'
+      - '.github/workflows/test_v239_provider_boundary.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  provider-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v239_provider_boundary.py' -v
