@@ -24,6 +24,11 @@ class PreflightTests(unittest.TestCase):
   self.assertFalse(result["model_inference_performed"])
   self.assertFalse(result["orders_enabled"])
   self.assertEqual(result["request_count"],4)
+ def test_agent_facts_are_independent(self):
+  req=request()
+  before=req["requests"][0]["facts"]["markets"][0]["volume_ratio_20"]
+  req["requests"][2]["facts"]["markets"][0]["volume_ratio_20"]=5
+  self.assertEqual(req["requests"][0]["facts"]["markets"][0]["volume_ratio_20"],before)
  def test_rejects_divergent_facts(self):
   req=request();req["requests"][2]["facts"]["markets"][0]["volume_ratio_20"]=5
   with self.assertRaises(ValueError):preflight(req,dry_run=True,now=NOW)
