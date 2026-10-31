@@ -22,6 +22,10 @@ class OfflineResearchImportTests(unittest.TestCase):
         scorecard_script=ROOM.split("/* V200: local-only scorecard import.",1)[1]
         self.assertIn('const isStaticPages = location.hostname.endsWith(".github.io");',scorecard_script)
 
+    def test_static_pages_user_message(self):
+        self.assertIn("정적 웹 데모 · AI 서버 없음",ROOM)
+        self.assertIn("refresh.title=",ROOM)
+
     def test_no_remote_code_or_trade_execution(self):
         self.assertNotIn("eval(",ROOM)
         self.assertIn("주문",ROOM)
