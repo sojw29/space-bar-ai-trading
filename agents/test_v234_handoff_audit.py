@@ -1,5 +1,8 @@
 import copy
 import unittest
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
 from agent_research_runtime_v233 import build_research
 from agent_handoff_audit_v234 import compile_handoff
@@ -38,6 +41,29 @@ class HandoffTests(unittest.TestCase):
                                 ("QUANT","volume_ratio_20",float("nan"))):
             data=runtime();data["markets"][0][agent][key]=value
             with self.subTest(agent=agent),self.assertRaises(ValueError):compile_handoff(data,NOW)
+    def test_cli_collision_preserves_invalid_source(self):
+        from agent_handoff_audit_v234 import main
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "untrusted.json"
+            path.write_text('{"bad": true}', encoding="utf-8")
+            with patch("sys.argv", ["v234", str(path), str(path)]):
+                with self.assertRaisesRegex(ValueError, "SOURCE_DESTINATION_COLLISION"):
+                    main()
+            self.assertEqual(path.read_text(encoding="utf-8"), '{"bad": true}')
+
+    def test_cli_failure_removes_stale_distinct_output(self):
+        from agent_handoff_audit_v234 import main
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory) / "untrusted.json"
+            target_path = Path(directory) / "old.json"
+            source_path.write_text('{"bad": true}', encoding="utf-8")
+            target_path.write_text('{"stale": true}', encoding="utf-8")
+            with patch("sys.argv", ["v234", str(source_path), str(target_path)]):
+                with self.assertRaises(ValueError):
+                    main()
+            self.assertFalse(target_path.exists())
+            self.assertTrue(source_path.exists())
+
     def test_rejects_stale_or_future_data(self):
         data=runtime();data["source_generated_at_utc"]=(NOW-timedelta(hours=9)).isoformat()
         with self.assertRaises(ValueError):compile_handoff(data,NOW)
