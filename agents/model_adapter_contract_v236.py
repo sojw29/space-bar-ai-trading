@@ -1,5 +1,6 @@
 """V236 offline model-adapter boundary. No provider SDK, network, model invocation or trades."""
 import argparse
+from copy import deepcopy
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,7 +51,7 @@ def build_adapter_requests(payload, now=None):
         validated.append({"symbol": symbol, "trend": m["sma_relationship"], "volume_ratio_20": ratio})
     requests = []
     for agent in AGENTS:
-        facts = {"markets": validated, "trend_classifications_differ": commander["trend_classifications_differ"],
+        facts = {"markets": deepcopy(validated), "trend_classifications_differ": commander["trend_classifications_differ"],
                  "volume_data_availability_differs": commander["volume_data_availability_differs"]}
         request = {"agent": agent, "mode": "OFFLINE_INPUT_ONLY",
                    "instruction": "Describe only the supplied observations. Do not recommend trades, forecast returns, claim model execution, or issue orders.",
