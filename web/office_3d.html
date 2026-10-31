@@ -1479,7 +1479,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    finally{refresh.disabled=false;}
  }
  refresh.addEventListener("click",loadLocalSnapshot);
- if(location.protocol==="http:"||location.protocol==="https:")loadLocalSnapshot();
+ // V221: static Pages has no local API. Keep file-import workflow usable offline.
+ if(!isStaticPages&&(location.protocol==="http:"||location.protocol==="https:"))loadLocalSnapshot();
+ else if(isStaticPages){
+   clear("정적 웹 데모 · AI 서버 없음. 연구 결과 JSON 파일을 직접 선택하면 검증 후 비교표를 표시합니다.");
+   refresh.disabled=true;
+   refresh.title="GitHub Pages에서는 로컬 연구 API를 사용할 수 없습니다.";
+ }
 
 })();
 </script>
