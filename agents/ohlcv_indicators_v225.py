@@ -1,7 +1,9 @@
 """V225 public OHLCV indicator snapshot; historical, research-only, no orders."""
 import json
 import math
+import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -56,7 +58,26 @@ def build(fetch=None):
             "research_only":True,"orders_enabled":False,"realtime":False,
             "trade_signals_available":False,"ai_agents_running":False,
             "markets":[indicators(s,fetch) for s in SYMBOLS]}
+def publish(target, fetch=None):
+    """Replace complete snapshots atomically; discard stale output on feed failure."""
+    target = Path(target)
+    temporary = None
+    try:
+        result = build(fetch)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=target.parent,
+            prefix=f".{target.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(result, handle, ensure_ascii=False, allow_nan=False)
+        os.replace(temporary, target)
+        return result
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        target.unlink(missing_ok=True)
+        raise
+
 if __name__=="__main__":
-    output=Path(sys.argv[1]);result=build()
-    output.parent.mkdir(parents=True,exist_ok=True)
-    output.write_text(json.dumps(result,ensure_ascii=False,allow_nan=False),encoding="utf-8")
+    publish(sys.argv[1])
