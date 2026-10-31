@@ -1,0 +1,20 @@
+name: SPACE BAR V235 Research Consistency Review
+on:
+  push:
+    paths:
+      - 'agents/research_consistency_review_v235.py'
+      - 'agents/test_v235_research_consistency.py'
+      - '.github/workflows/test_v235_research_consistency.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v235_research_consistency.py' -v

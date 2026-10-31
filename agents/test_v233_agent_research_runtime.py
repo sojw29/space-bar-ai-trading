@@ -1,5 +1,8 @@
 import copy
 import unittest
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
 from agent_research_runtime_v233 import build_research, SYMBOLS
 
@@ -52,6 +55,29 @@ class RuntimeTests(unittest.TestCase):
         payload["markets"][0]["risk_status"] = "TRADE_ALLOWED"
         with self.assertRaises(ValueError):
             build_research(payload, NOW)
+
+    def test_cli_collision_preserves_source(self):
+        from agent_research_runtime_v233 import main
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source.json"
+            path.write_text('{"bad": true}', encoding="utf-8")
+            with patch("sys.argv", ["v233", str(path), str(path)]):
+                with self.assertRaisesRegex(ValueError, "SOURCE_DESTINATION_COLLISION"):
+                    main()
+            self.assertEqual(path.read_text(encoding="utf-8"), '{"bad": true}')
+
+    def test_cli_failure_removes_stale_distinct_output(self):
+        from agent_research_runtime_v233 import main
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory) / "source.json"
+            destination = Path(directory) / "stale.json"
+            source_path.write_text('{"bad": true}', encoding="utf-8")
+            destination.write_text('{"old": true}', encoding="utf-8")
+            with patch("sys.argv", ["v233", str(source_path), str(destination)]):
+                with self.assertRaises(ValueError):
+                    main()
+            self.assertFalse(destination.exists())
+            self.assertTrue(source_path.exists())
 
     def test_rejects_nonfinite_and_boolean_ratio(self):
         for value in (float("nan"), float("inf"), True, -1):
