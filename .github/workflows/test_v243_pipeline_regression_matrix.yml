@@ -1,0 +1,20 @@
+name: SPACE BAR V243 Pipeline Regression Matrix
+on:
+  push:
+    paths:
+      - 'agents/pipeline_regression_matrix_v243.py'
+      - 'agents/test_v243_pipeline_regression_matrix.py'
+      - '.github/workflows/test_v243_pipeline_regression_matrix.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v243_pipeline_regression_matrix.py' -v
