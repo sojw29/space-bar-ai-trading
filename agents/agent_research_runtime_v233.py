@@ -82,9 +82,12 @@ def main():
     parser.add_argument("source")
     parser.add_argument("destination")
     args = parser.parse_args()
+    source_path = Path(args.source)
     destination = Path(args.destination)
+    if source_path.resolve() == destination.resolve():
+        raise ValueError("SOURCE_DESTINATION_COLLISION")
     try:
-        payload = json.loads(Path(args.source).read_text(encoding="utf-8"))
+        payload = json.loads(source_path.read_text(encoding="utf-8"))
         result = build_research(payload)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2), encoding="utf-8")
