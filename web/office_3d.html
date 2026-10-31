@@ -1615,4 +1615,51 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  load();
 })();
 </script>
+<section id="v228-interpretation-panel" aria-label="지표 해석 연구" style="position:fixed;top:12px;right:12px;z-index:1002;width:min(330px,calc(100vw - 24px));max-height:28vh;overflow:auto;background:rgba(8,18,34,.95);border:1px solid #6cb8a3;border-radius:12px;padding:12px;color:#e8f4ff;font:12px/1.6 system-ui,sans-serif">
+<strong>ATLAS / QUANT / GUARDIAN · 지표 해석</strong>
+<div id="v228-status" role="status">연구 해석 확인 중…</div>
+<div id="v228-rows"></div>
+<small>규칙 기반 지표 설명 · AI 실행/예측/매매 신호 아님</small>
+</section>
+<script>
+/* V228: deterministic research interpretations; no live agent execution. */
+(async function(){
+ const status=document.getElementById("v228-status");
+ const rows=document.getElementById("v228-rows");
+ try{
+  const response=await fetch("./agent_interpretations.json",{cache:"no-store",credentials:"omit"});
+  if(!response.ok)throw Error("해석 결과 없음");
+  const raw=await response.text();
+  if(raw.length>16000)throw Error("응답 크기 초과");
+  const d=JSON.parse(raw);
+  if(d.version!=="V228.0"||d.research_only!==true||d.orders_enabled!==false||
+     d.realtime!==false||d.ai_agents_running!==false||d.trade_signals_available!==false||
+     d.analysis_type!=="DETERMINISTIC_INDICATOR_DESCRIPTION"||
+     !Array.isArray(d.markets)||d.markets.length!==3)throw Error("안전 검증 실패");
+  const age=Date.now()-Date.parse(d.source_generated_at_utc);
+  if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("원본 데이터 오래됨");
+  const output=[];
+  for(const symbol of ["BTCUSDT","ETHUSDT","SOLUSDT"]){
+   const matches=d.markets.filter(m=>m&&m.symbol===symbol);
+   if(matches.length!==1)throw Error("심볼 중복/누락");
+   const m=matches[0];
+   if(!m.ATLAS||!m.QUANT||!m.GUARDIAN||
+      !["SMA50_ABOVE_SMA200","SMA50_BELOW_SMA200","SMA_EQUAL"].includes(m.ATLAS.sma_relationship)||
+      m.QUANT.status!=="DESCRIPTIVE_ONLY_NO_BACKTEST"||
+      m.GUARDIAN.status!=="NO_TRADE_AUTHORIZATION"||
+      m.GUARDIAN.orders_enabled!==false||
+      (m.QUANT.volume_ratio_20!==null&&
+       (typeof m.QUANT.volume_ratio_20!=="number"||!Number.isFinite(m.QUANT.volume_ratio_20)||
+        m.QUANT.volume_ratio_20<0)))throw Error("해석 검증 실패");
+   const p=document.createElement("p");
+   p.textContent=symbol+" | ATLAS "+m.ATLAS.sma_relationship+
+      " | QUANT 거래량 비율 "+(m.QUANT.volume_ratio_20===null?"N/A":m.QUANT.volume_ratio_20)+
+      " | GUARDIAN 주문 금지";
+   output.push(p);
+  }
+  rows.replaceChildren(...output);
+  status.textContent="과거 캔들 지표 해석 · "+new Date(d.source_generated_at_utc).toLocaleString();
+ }catch(error){rows.replaceChildren();status.textContent="해석 미연결: "+error.message;}
+})();
+</script>
 </body></html>
