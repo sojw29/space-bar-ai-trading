@@ -1830,4 +1830,89 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  compare();
 })();
 </script>
+<details id="v232-chart-panel" style="position:fixed;top:34%;right:12px;z-index:1006;width:min(340px,calc(100vw - 24px));max-height:35vh;overflow:auto;background:rgba(8,18,34,.96);border:1px solid #86b5d0;border-radius:12px;padding:12px;color:#e8f4ff;font:12px/1.6 system-ui,sans-serif">
+<summary>COMMANDER · 로컬 거래량 비율 추이</summary>
+<div id="v232-chart-status" role="status">기록 확인 중…</div>
+<svg id="v232-chart" viewBox="0 0 320 150" role="img" aria-label="시간순 BTC ETH SOL 거래량 비율 그래프" style="width:100%;height:auto"></svg>
+<small>브라우저 저장 기록만 표시 · 시간 간격 반영 · 거래량 비율은 가격/수익률 아님</small>
+</details>
+<script>
+/* V232: historical descriptive SVG; no external libraries or order execution. */
+(function(){
+ const KEY="spacebar.v230.commander.research.v1";
+ const svg=document.getElementById("v232-chart");
+ const status=document.getElementById("v232-chart-status");
+ const NS="http://www.w3.org/2000/svg";
+ const SYMBOLS=["BTCUSDT","ETHUSDT","SOLUSDT"];
+ function node(tag,attributes){
+  const element=document.createElementNS(NS,tag);
+  for(const [k,v] of Object.entries(attributes))element.setAttribute(k,String(v));
+  return element;
+ }
+ function valid(e){
+  if(!e||typeof e.timestamp!=="string"||!Number.isFinite(Date.parse(e.timestamp))||
+     Array.isArray(e.markets)===false||e.markets.length!==3)return false;
+  return SYMBOLS.every(symbol=>{
+   const matches=e.markets.filter(m=>m&&m.symbol===symbol);
+   return matches.length===1&&
+    ["SMA50_ABOVE_SMA200","SMA50_BELOW_SMA200","SMA_EQUAL"].includes(matches[0].trend)&&
+    (matches[0].ratio===null||(typeof matches[0].ratio==="number"&&
+     Number.isFinite(matches[0].ratio)&&matches[0].ratio>=0&&matches[0].ratio<1e12));
+  });
+ }
+ function draw(){
+  svg.replaceChildren();
+  try{
+   const raw=localStorage.getItem(KEY);
+   if(!raw||raw.length>30000)throw Error("로컬 기록 없음");
+   const parsed=JSON.parse(raw);
+   if(!Array.isArray(parsed))throw Error("기록 형식 오류");
+   const sorted=parsed.filter(valid).sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
+   const records=[];
+   for(const e of sorted){
+    if(records.length&&records[records.length-1].timestamp===e.timestamp)
+      records[records.length-1]=e;
+    else records.push(e);
+   }
+   const samples=records.slice(-30);
+   if(samples.length<2)throw Error("서로 다른 시점의 기록 2개 이상 필요");
+   const start=Date.parse(samples[0].timestamp),end=Date.parse(samples[samples.length-1].timestamp);
+   if(end<=start)throw Error("시간 범위 오류");
+   const values=samples.flatMap(e=>e.markets.map(m=>m.ratio)).filter(v=>v!==null);
+   if(values.length<2)throw Error("유효한 거래량 비율 부족");
+   const ymax=Math.max(1,...values);
+   const x=t=>20+(Date.parse(t)-start)/(end-start)*280;
+   const y=v=>125-v/ymax*100;
+   svg.append(node("line",{x1:20,y1:125,x2:300,y2:125,stroke:"#9cb1c5"}));
+   svg.append(node("line",{x1:20,y1:25,x2:20,y2:125,stroke:"#9cb1c5"}));
+   const colors=["#69baff","#ffca75","#a9e4aa"];
+   SYMBOLS.forEach((symbol,index)=>{
+    let segment=[];
+    function flush(){
+     if(segment.length>1)svg.append(node("polyline",{
+      points:segment.map(p=>p.join(",")).join(" "),fill:"none",
+      stroke:colors[index],"stroke-width":2
+     }));
+     segment=[];
+    }
+    for(const e of samples){
+     const m=e.markets.find(item=>item.symbol===symbol);
+     if(m.ratio===null){flush();continue;}
+     const point=[x(e.timestamp),y(m.ratio)];
+     segment.push(point);
+     svg.append(node("circle",{cx:point[0],cy:point[1],r:2,fill:colors[index]}));
+    }
+    flush();
+    const label=node("text",{x:22+index*99,y:145,fill:colors[index],"font-size":10});
+    label.textContent=symbol.replace("USDT","");
+    svg.append(label);
+   });
+   status.textContent=samples.length+"개 시점 · "+new Date(start).toLocaleString()+" ~ "+new Date(end).toLocaleString();
+  }catch(error){svg.replaceChildren();status.textContent="그래프 미표시: "+error.message;}
+ }
+ document.getElementById("v232-chart-panel").addEventListener("toggle",event=>{
+  if(event.target.open)draw();
+ });
+})();
+</script>
 </body></html>
