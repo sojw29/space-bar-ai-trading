@@ -11,6 +11,7 @@ on:
       - 'agents/public_market_diagnostics_v224.py'
       - 'agents/ohlcv_indicators_v225.py'
       - 'agents/agent_indicator_interpretation_v228.py'
+      - 'agents/commander_research_brief_v229.py'
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -57,6 +58,13 @@ jobs:
             python agents/agent_indicator_interpretation_v228.py web/ohlcv_indicators.json web/agent_interpretations.json
           else
             rm -f web/agent_interpretations.json
+          fi
+      - name: Compile deterministic COMMANDER research brief
+        run: |
+          if test -s web/agent_interpretations.json; then
+            python agents/commander_research_brief_v229.py web/agent_interpretations.json web/commander_brief.json
+          else
+            rm -f web/commander_brief.json
           fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
