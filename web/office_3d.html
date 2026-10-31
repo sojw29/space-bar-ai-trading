@@ -1480,12 +1480,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }catch(error){clear("로컬 조회 불가: "+error.message+" · JSON 파일을 직접 선택할 수 있습니다.");}
    finally{refresh.disabled=false;}
  }
- refresh.addEventListener("click",loadLocalSnapshot);
+ if(!isStaticPages)refresh.addEventListener("click",loadLocalSnapshot);
  // V221: static Pages has no local API. Keep file-import workflow usable offline.
  if(!isStaticPages&&(location.protocol==="http:"||location.protocol==="https:"))loadLocalSnapshot();
  else if(isStaticPages){
    clear("공개 연구 스냅샷 확인 중 · 실시간 데이터 아님");
-   refresh.title="공개 연구 스냅샷 다시 확인";
+   refresh.title="공개 연구 스냅샷 다시 확인 · 실시간 아님";
    async function loadPublishedSnapshot(){
      clear("공개 연구 스냅샷 확인 중…");
      refresh.disabled=true;
