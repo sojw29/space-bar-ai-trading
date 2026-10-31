@@ -1,0 +1,20 @@
+name: SPACE BAR V241 Offline Research Integration Smoke
+on:
+  push:
+    paths:
+      - 'agents/research_pipeline_smoke_v241.py'
+      - 'agents/test_v241_research_pipeline_smoke.py'
+      - '.github/workflows/test_v241_research_pipeline_smoke.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v241_research_pipeline_smoke.py' -v
