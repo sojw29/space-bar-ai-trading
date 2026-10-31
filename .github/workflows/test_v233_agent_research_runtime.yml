@@ -1,0 +1,20 @@
+name: SPACE BAR V233 Offline Agent Research Contract
+on:
+  push:
+    paths:
+      - 'agents/agent_research_runtime_v233.py'
+      - 'agents/test_v233_agent_research_runtime.py'
+      - '.github/workflows/test_v233_agent_research_runtime.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v233_agent_research_runtime.py' -v
