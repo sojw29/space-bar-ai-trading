@@ -1568,4 +1568,51 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  load();
 })();
 </script>
+<section id="v227-agent-panel" aria-label="연구 에이전트 상태" style="position:fixed;bottom:12px;left:12px;z-index:1001;width:min(330px,calc(100vw - 24px));max-height:32vh;overflow:auto;background:rgba(8,18,34,.95);border:1px solid #9b8bc7;border-radius:12px;padding:12px;color:#e8f4ff;font:12px/1.6 system-ui,sans-serif">
+<strong>ATLAS · QUANT · GUARDIAN</strong>
+<button id="v227-refresh" type="button" style="float:right;background:#273354;color:white;border:1px solid #9b8bc7;border-radius:6px">새로고침</button>
+<div id="v227-status" role="status">연구 상태 확인 중…</div>
+<div id="v227-rows"></div>
+<small>규칙 기반 연구 상태 · 실제 AI 실행/거래 신호 아님</small>
+</section>
+<script>
+/* V227: transparent read-only diagnostic statuses, never AI execution. */
+(function(){
+ const status=document.getElementById("v227-status");
+ const rows=document.getElementById("v227-rows");
+ const refresh=document.getElementById("v227-refresh");
+ async function load(){
+  refresh.disabled=true;rows.replaceChildren();status.textContent="연구 상태 조회 중…";
+  try{
+   const response=await fetch("./market_diagnostics.json",{cache:"no-store",credentials:"omit"});
+   if(!response.ok)throw Error("연구 상태 결과 없음");
+   const raw=await response.text();
+   if(raw.length>10000)throw Error("응답 크기 초과");
+   const d=JSON.parse(raw);
+   if(d.version!=="V224.0"||d.research_only!==true||d.orders_enabled!==false||
+      d.realtime!==false||d.ai_agents_running!==false||
+      d.trade_signals_available!==false)throw Error("안전 검증 실패");
+   const age=Date.now()-Date.parse(d.captured_at_utc);
+   if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("연구 상태 오래됨");
+   const expected=[["ATLAS","DATA_PRESENT"],["QUANT","INSUFFICIENT_HISTORY"],
+                   ["GUARDIAN","NO_TRADE_AUTHORIZATION"]];
+   const output=[];
+   for(const [name,expectedStatus] of expected){
+    const record=d[name];
+    if(!record||record.status!==expectedStatus||
+       typeof record.note!=="string"||record.note.length>300)
+       throw Error(name+" 상태 검증 실패");
+    const p=document.createElement("p");
+    p.textContent=name+" · "+record.status+" · "+record.note;
+    output.push(p);
+   }
+   rows.replaceChildren(...output);
+   status.textContent="연구 상태 확인: "+new Date(d.captured_at_utc).toLocaleString();
+  }catch(error){rows.replaceChildren();status.textContent="에이전트 상태 미연결: "+error.message;}
+  finally{refresh.disabled=false;}
+ }
+ refresh.addEventListener("click",load);
+ load();
+})();
+</script>
 </body></html>
