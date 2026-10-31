@@ -1510,4 +1510,62 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 
 })();
 </script>
+<section id="v226-indicator-panel" aria-label="시장 기술적 지표" style="position:fixed;bottom:12px;right:12px;z-index:1000;width:min(340px,calc(100vw - 24px));max-height:36vh;overflow:auto;background:rgba(8,18,34,.94);border:1px solid #5f9cb4;border-radius:12px;padding:12px;color:#e8f4ff;font:12px/1.6 system-ui,sans-serif;box-shadow:0 4px 18px #0008">
+<strong>SPACE BAR · 5분봉 지표 연구</strong>
+<button id="v226-refresh" type="button" style="float:right;background:#173c58;color:white;border:1px solid #5f9cb4;border-radius:6px">새로고침</button>
+<div id="v226-status" role="status">지표 데이터 확인 중…</div>
+<div id="v226-rows"></div>
+<small>공개 과거 캔들 기반 · 실시간/AI 판단/매매 신호 아님</small>
+</section>
+<script>
+/* V226: independent read-only 3D room indicator panel. */
+(function(){
+ const status=document.getElementById("v226-status");
+ const rows=document.getElementById("v226-rows");
+ const refresh=document.getElementById("v226-refresh");
+ async function load(){
+  refresh.disabled=true;rows.replaceChildren();status.textContent="과거 지표 조회 중…";
+  try{
+   const response=await fetch("./ohlcv_indicators.json",{cache:"no-store",credentials:"omit"});
+   if(!response.ok)throw Error("공개 지표 결과 없음");
+   const raw=await response.text();
+   if(raw.length>12000)throw Error("데이터 크기 초과");
+   const data=JSON.parse(raw);
+   if(data.version!=="V225.0"||data.research_only!==true||
+      data.orders_enabled!==false||data.realtime!==false||
+      data.trade_signals_available!==false||data.ai_agents_running!==false||
+      !Array.isArray(data.markets)||data.markets.length!==3)throw Error("안전 검증 실패");
+   const generated=Date.parse(data.generated_at_utc);
+   const age=Date.now()-generated;
+   if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("지표가 오래되었거나 시각이 잘못됨");
+   const expected=["BTCUSDT","ETHUSDT","SOLUSDT"];
+   const output=[];
+   for(const symbol of expected){
+    const matches=data.markets.filter(m=>m&&m.symbol===symbol);
+    if(matches.length!==1)throw Error("심볼 중복/누락");
+    const m=matches[0];
+    if(![m.close,m.sma50,m.sma200,m.volume20,m.volume_latest].every(
+       v=>typeof v==="number"&&Number.isFinite(v)&&v>=0)||
+       m.close<=0||m.sma50<=0||m.sma200<=0||
+       !["SMA50_ABOVE_SMA200","SMA50_BELOW_SMA200","SMA_EQUAL"].includes(m.trend_label))
+       throw Error("지표 값 검증 실패");
+    const candleAge=Date.now()-Date.parse(m.last_completed_candle_utc);
+    if(!Number.isFinite(candleAge)||candleAge<0||candleAge>9*3600000)
+       throw Error("캔들 시각 검증 실패");
+    const line=document.createElement("p");
+    line.textContent=symbol+" | SMA50 "+m.sma50.toLocaleString("en-US")+
+       " / SMA200 "+m.sma200.toLocaleString("en-US")+
+       " | 거래량 "+m.volume_latest.toLocaleString("en-US")+
+       " | "+m.trend_label;
+    output.push(line);
+   }
+   rows.replaceChildren(...output);
+   status.textContent="수집: "+new Date(generated).toLocaleString()+" · 연구용";
+  }catch(error){rows.replaceChildren();status.textContent="지표 미연결: "+error.message;}
+  finally{refresh.disabled=false;}
+ }
+ refresh.addEventListener("click",load);
+ load();
+})();
+</script>
 </body></html>
