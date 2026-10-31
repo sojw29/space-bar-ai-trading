@@ -1,6 +1,9 @@
+import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from datetime import datetime, timezone, timedelta
-from agent_indicator_interpretation_v228 import interpret, SYMBOLS
+from agent_indicator_interpretation_v228 import interpret, publish, SYMBOLS
 NOW=datetime(2026,10,31,2,tzinfo=timezone.utc)
 def sample():
     return {"version":"V225.0","research_only":True,"orders_enabled":False,
@@ -24,4 +27,40 @@ class AgentInterpretationTests(unittest.TestCase):
     def test_unsafe_rejected(self):
         data=sample();data["orders_enabled"]=True
         with self.assertRaises(ValueError):interpret(data,NOW)
+    def test_invalid_input_removes_stale_public_output(self):
+        with TemporaryDirectory() as folder:
+            source=Path(folder)/"input.json"
+            target=Path(folder)/"public.json"
+            source.write_text(json.dumps({"orders_enabled":True}),encoding="utf-8")
+            target.write_text('{"old":"unsafe"}',encoding="utf-8")
+            with self.assertRaises(ValueError):
+                publish(source,target)
+            self.assertFalse(target.exists())
+    def test_missing_source_removes_stale_public_output(self):
+        with TemporaryDirectory() as folder:
+            source=Path(folder)/"missing.json"
+            target=Path(folder)/"public.json"
+            target.write_text('{"old":"unsafe"}',encoding="utf-8")
+            with self.assertRaises(FileNotFoundError):
+                publish(source,target)
+            self.assertFalse(target.exists())
+    def test_source_output_collision_preserves_source(self):
+        with TemporaryDirectory() as folder:
+            source=Path(folder)/"input.json"
+            content=json.dumps(sample())
+            source.write_text(content,encoding="utf-8")
+            with self.assertRaises(ValueError):
+                publish(source,source)
+            self.assertEqual(source.read_text(encoding="utf-8"),content)
+    def test_valid_input_publishes_research_only(self):
+        with TemporaryDirectory() as folder:
+            source=Path(folder)/"input.json"
+            target=Path(folder)/"public.json"
+            data=sample()
+            data["generated_at_utc"]=datetime.now(timezone.utc).isoformat()
+            source.write_text(json.dumps(data),encoding="utf-8")
+            publish(source,target)
+            output=json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(output["version"],"V228.0")
+            self.assertFalse(output["orders_enabled"])
 if __name__=="__main__":unittest.main()
