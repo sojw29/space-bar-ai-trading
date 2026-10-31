@@ -77,9 +77,12 @@ def main():
     parser.add_argument("source")
     parser.add_argument("destination")
     args = parser.parse_args()
+    source_path = Path(args.source)
     target = Path(args.destination)
+    if source_path.resolve() == target.resolve():
+        raise ValueError("SOURCE_DESTINATION_COLLISION")
     try:
-        source = json.loads(Path(args.source).read_text(encoding="utf-8"))
+        source = json.loads(source_path.read_text(encoding="utf-8"))
         output = compile_handoff(source)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(output, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
