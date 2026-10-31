@@ -9,6 +9,7 @@ on:
       - 'reports/strategy_scorecard_latest.json'
       - 'agents/public_market_snapshot_v223.py'
       - 'agents/public_market_diagnostics_v224.py'
+      - 'agents/ohlcv_indicators_v225.py'
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -46,6 +47,9 @@ jobs:
           else
             rm -f web/market_diagnostics.json
           fi
+      - name: Collect completed public OHLCV indicators (optional)
+        continue-on-error: true
+        run: python agents/ohlcv_indicators_v225.py web/ohlcv_indicators.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
