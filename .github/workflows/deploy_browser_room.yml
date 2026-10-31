@@ -40,8 +40,14 @@ jobs:
         run: |
           python agents/pages_snapshot_v222.py reports/strategy_scorecard_latest.json web/research_snapshot.json
       - name: Collect public research-only market snapshot
+        id: market_snapshot
         continue-on-error: true
         run: python agents/public_market_snapshot_v223.py web/market_snapshot.json
+      - name: Report unavailable optional ticker snapshot
+        if: ${{ steps.market_snapshot.outcome == 'failure' }}
+        run: |
+          echo "::warning::Public ticker collection failed; deploying without a market snapshot."
+          echo "Public ticker data unavailable for this deployment (no live market prices)." >> "$GITHUB_STEP_SUMMARY"
       - name: Assess published ticker snapshot without order execution
         run: |
           if test -s web/market_snapshot.json; then
@@ -50,8 +56,14 @@ jobs:
             rm -f web/market_diagnostics.json
           fi
       - name: Collect completed public OHLCV indicators (optional)
+        id: ohlcv_snapshot
         continue-on-error: true
         run: python agents/ohlcv_indicators_v225.py web/ohlcv_indicators.json
+      - name: Report unavailable optional OHLCV indicators
+        if: ${{ steps.ohlcv_snapshot.outcome == 'failure' }}
+        run: |
+          echo "::warning::Public OHLCV collection failed; deploying without indicator data."
+          echo "Public OHLCV indicators unavailable for this deployment (no derived agent descriptions)." >> "$GITHUB_STEP_SUMMARY"
       - name: Derive safe agent-labeled indicator descriptions
         run: |
           if test -s web/ohlcv_indicators.json; then
