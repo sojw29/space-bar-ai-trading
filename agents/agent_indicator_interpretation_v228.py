@@ -44,8 +44,18 @@ def interpret(snapshot, now=None):
             "research_only":True,"orders_enabled":False,"realtime":False,
             "ai_agents_running":False,"trade_signals_available":False,
             "analysis_type":"DETERMINISTIC_INDICATOR_DESCRIPTION","markets":out}
+def publish(source, target):
+    """Fail closed: never leave an old public interpretation after invalid input."""
+    source, target = Path(source), Path(target)
+    if source.resolve() == target.resolve():
+        raise ValueError("SOURCE_OUTPUT_PATH_COLLISION")
+    try:
+        result = interpret(json.loads(source.read_text(encoding="utf-8")))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(result, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
 if __name__=="__main__":
-    source=Path(sys.argv[1]);target=Path(sys.argv[2])
-    result=interpret(json.loads(source.read_text(encoding="utf-8")))
-    target.parent.mkdir(parents=True,exist_ok=True)
-    target.write_text(json.dumps(result,ensure_ascii=False,allow_nan=False),encoding="utf-8")
+    publish(Path(sys.argv[1]), Path(sys.argv[2]))
