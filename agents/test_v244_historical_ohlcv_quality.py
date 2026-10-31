@@ -40,7 +40,7 @@ class QualityTests(unittest.TestCase):
  def test_cli_never_deletes_source_when_input_equals_output(self):
   with TemporaryDirectory() as directory:
    source=Path(directory)/"history.csv"
-   original="timestamp_ms,open,high,low,close,volume\\nbad,1,2,1,2,3\\n"
+   original="timestamp_ms,open,high,low,close,volume\nbad,1,2,1,2,3\n"
    source.write_text(original,encoding="utf-8")
    with patch("sys.argv",["v244",str(source),str(source)]):
     with self.assertRaisesRegex(ValueError,"INPUT_OUTPUT_PATH_COLLISION"):
@@ -50,7 +50,7 @@ class QualityTests(unittest.TestCase):
   with TemporaryDirectory() as directory:
    source=Path(directory)/"history.csv"
    target=Path(directory)/"quality.json"
-   source.write_text("timestamp_ms,open,high,low,close,volume\\nbad,1,2,1,2,3\\n",encoding="utf-8")
+   source.write_text("timestamp_ms,open,high,low,close,volume\nbad,1,2,1,2,3\n",encoding="utf-8")
    target.write_text('{"quality_gate":"PASS"}',encoding="utf-8")
    with patch("sys.argv",["v244",str(source),str(target)]):
     with self.assertRaises(ValueError):
