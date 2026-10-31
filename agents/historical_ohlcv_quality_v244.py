@@ -4,6 +4,7 @@ import csv
 import json
 import math
 import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -65,6 +66,7 @@ def main():
         source.exists() and target.exists() and os.path.samefile(source, target)
     ):
         raise ValueError("INPUT_OUTPUT_PATH_COLLISION")
+    temporary = None
     try:
         with source.open(encoding="utf-8", newline="") as handle:
             rows = list(csv.DictReader(handle))
@@ -74,8 +76,18 @@ def main():
                      for row in rows]
         result = validate_candles(converted)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Atomic replacement avoids partial reports and never follows a target symlink.
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=target.parent,
+            prefix=f".{target.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(result, handle, ensure_ascii=False, indent=2)
+        os.replace(temporary, target)
+        temporary = None
     except (ValueError, TypeError, KeyError, OSError, OverflowError):
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
         # Do not attempt to unlink a directory on a failed write.
         if target.is_file() or target.is_symlink():
             target.unlink(missing_ok=True)
