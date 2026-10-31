@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -57,4 +58,15 @@ class QualityTests(unittest.TestCase):
      main()
    self.assertTrue(source.exists())
    self.assertFalse(target.exists())
+ def test_cli_never_deletes_source_hardlink_alias(self):
+  with TemporaryDirectory() as directory:
+   source=Path(directory)/"history.csv"
+   alias=Path(directory)/"quality.json"
+   source.write_text("invalid",encoding="utf-8")
+   os.link(source,alias)
+   with patch("sys.argv",["v244",str(source),str(alias)]):
+    with self.assertRaisesRegex(ValueError,"INPUT_OUTPUT_PATH_COLLISION"):
+     main()
+   self.assertEqual(source.read_text(encoding="utf-8"),"invalid")
+   self.assertEqual(alias.read_text(encoding="utf-8"),"invalid")
 if __name__=="__main__":unittest.main()
