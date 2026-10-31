@@ -1373,6 +1373,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <script>
 /* V200: local-only scorecard import. Never fetches a file or submits an order. */
 (function(){
+ // This classic script cannot access the V220 ES-module lexical binding.
+ const isStaticPages = location.hostname.endsWith(".github.io");
  const input=document.getElementById("v200-scorecard-file");
  const status=document.getElementById("v200-scorecard-status");
  const table=document.getElementById("v200-scorecard-table");
