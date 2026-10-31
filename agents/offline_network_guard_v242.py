@@ -1,26 +1,38 @@
 """V242 fail-closed offline execution guardrail.
 
-Blocks socket connection attempts during research pipeline execution.
+Blocks common socket connection and send paths during research pipeline execution.
 Not a sandbox or protection against malicious code; intended to detect
 accidental network dependencies in the offline pipeline.
 """
-from contextlib import contextmanager
+import socket
+from contextlib import ExitStack, contextmanager
 from unittest.mock import patch
 
 from research_pipeline_smoke_v241 import run_pipeline
 
+
 class UnexpectedNetworkAccess(RuntimeError):
     pass
+
 
 def deny_network(*args, **kwargs):
     raise UnexpectedNetworkAccess("OFFLINE_PIPELINE_NETWORK_BLOCKED")
 
+
 @contextmanager
 def network_guard():
-    with patch("socket.socket.connect", side_effect=deny_network), \
-         patch("socket.socket.connect_ex", side_effect=deny_network), \
-         patch("socket.create_connection", side_effect=deny_network):
+    # connect-only guards miss UDP sendto and writes on pre-connected sockets.
+    # sendmsg is not available on every Python platform (notably Windows).
+    methods = ("connect", "connect_ex", "send", "sendall", "sendto", "sendmsg")
+    with ExitStack() as stack:
+        stack.enter_context(patch("socket.create_connection", side_effect=deny_network))
+        for method in methods:
+            if hasattr(socket.socket, method):
+                stack.enter_context(
+                    patch(f"socket.socket.{method}", side_effect=deny_network)
+                )
         yield
+
 
 def run_guarded_pipeline(source, now=None):
     with network_guard():
