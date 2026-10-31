@@ -1706,4 +1706,71 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }catch(error){rows.replaceChildren();status.textContent="COMMANDER 미연결: "+error.message;}
 })();
 </script>
+<section id="v230-history-panel" aria-label="COMMANDER 로컬 분석 기록" style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:1004;width:min(330px,calc(100vw - 24px));max-height:23vh;overflow:auto;background:rgba(8,18,34,.95);border:1px solid #8a9ea6;border-radius:12px;padding:12px;color:#e8f4ff;font:12px/1.6 system-ui,sans-serif">
+<strong>COMMANDER · 기기별 연구 기록</strong>
+<button id="v230-clear" type="button" style="float:right;background:#273354;color:white;border:1px solid #8a9ea6;border-radius:6px">기록 삭제</button>
+<div id="v230-status" role="status">기록 확인 중…</div><div id="v230-rows"></div>
+<small>이 브라우저에만 저장 · 최대 30개 · 서버 동기화/백테스트 아님</small>
+</section>
+<script>
+/* V230: local-only historical research log; never enables orders. */
+(async function(){
+ const KEY="spacebar.v230.commander.research.v1";
+ const status=document.getElementById("v230-status");
+ const rows=document.getElementById("v230-rows");
+ function valid(e){
+  return e&&typeof e==="object"&&typeof e.timestamp==="string"&&
+   Number.isFinite(Date.parse(e.timestamp))&&Array.isArray(e.markets)&&e.markets.length===3&&
+   ["BTCUSDT","ETHUSDT","SOLUSDT"].every(symbol=>{
+    const matches=e.markets.filter(m=>m&&m.symbol===symbol);
+    return matches.length===1&&
+     ["SMA50_ABOVE_SMA200","SMA50_BELOW_SMA200","SMA_EQUAL"].includes(matches[0].trend)&&
+     (matches[0].ratio===null||(typeof matches[0].ratio==="number"&&
+       Number.isFinite(matches[0].ratio)&&matches[0].ratio>=0));
+   });
+ }
+ function read(){
+  try{const raw=localStorage.getItem(KEY);if(!raw||raw.length>30000)return [];
+   const list=JSON.parse(raw);return Array.isArray(list)?list.filter(valid).slice(-30):[];
+  }catch(_){return [];}
+ }
+ function show(list){
+  rows.replaceChildren();
+  for(const e of list.slice().reverse()){
+   const p=document.createElement("p");
+   p.textContent=new Date(e.timestamp).toLocaleString()+" · "+
+    e.markets.map(m=>m.symbol.replace("USDT","")+":"+m.trend.replace("SMA50_","")).join(" | ");
+   rows.append(p);
+  }
+  status.textContent=list.length+"개 기록 · 이 기기에서만 조회 가능";
+ }
+ document.getElementById("v230-clear").addEventListener("click",()=>{
+  try{localStorage.removeItem(KEY);status.textContent="로컬 기록 삭제됨";rows.replaceChildren();}
+  catch(_){status.textContent="브라우저 저장소 삭제 불가";}
+ });
+ const history=read();show(history);
+ try{
+  const response=await fetch("./commander_brief.json",{cache:"no-store",credentials:"omit"});
+  if(!response.ok)throw Error("최신 브리핑 없음");
+  const raw=await response.text();if(raw.length>12000)throw Error("응답 크기 초과");
+  const d=JSON.parse(raw);
+  if(d.version!=="V229.0"||d.report_type!=="DETERMINISTIC_COMMANDER_RESEARCH_BRIEF"||
+    d.research_only!==true||d.orders_enabled!==false||d.realtime!==false||
+    d.ai_agents_running!==false||d.trade_signals_available!==false||
+    d.backtest_verified!==false||d.commander?.status!=="COMPILED_NOT_AI"||
+    !Array.isArray(d.markets)||d.markets.length!==3)throw Error("검증 실패");
+  const age=Date.now()-Date.parse(d.source_generated_at_utc);
+  if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("오래된 원본");
+  const entry={timestamp:d.source_generated_at_utc,markets:d.markets.map(m=>({
+   symbol:m.symbol,trend:m.trend_observation,ratio:m.volume_ratio_20
+  }))};
+  if(!valid(entry)||d.markets.some(m=>m.risk_status!=="NO_TRADE_AUTHORIZATION"||
+    m.research_conclusion!=="DESCRIPTIVE_ONLY"))throw Error("항목 검증 실패");
+  if(!history.some(e=>e.timestamp===entry.timestamp)){
+   const updated=[...history,entry].slice(-30);
+   localStorage.setItem(KEY,JSON.stringify(updated));show(updated);
+  }
+ }catch(error){status.textContent=history.length+"개 로컬 기록 · 최신 저장 실패: "+error.message;}
+})();
+</script>
 </body></html>
