@@ -1,16 +1,11 @@
 """Behavioral regression checks for the read-only V231 local comparison panel."""
 import json
-import re
 import subprocess
 import unittest
 from pathlib import Path
 
 ROOM = (Path(__file__).resolve().parent.parent / "web" / "office_3d.html").read_text(encoding="utf-8")
-SCRIPT = re.search(
-    r"/\\* V231: compare two verified local research snapshots, not trading signals\\. \\*/\\s*(.*?)</script>",
-    ROOM,
-    re.S,
-)
+SCRIPT = ROOM.split("/* V231: compare two verified local research snapshots, not trading signals. */", 1)[1].split("</script>", 1)[0]
 NODE_RUNNER = r"""
 const vm = require('vm');
 const script = process.argv[1];
@@ -48,9 +43,9 @@ def snapshot(timestamp, ratio=1.0):
 
 class LocalComparisonTests(unittest.TestCase):
     def run_comparison(self, records):
-        self.assertIsNotNone(SCRIPT, "V231 comparison script must exist")
+        self.assertTrue(SCRIPT.strip(), "V231 comparison script must exist")
         proc = subprocess.run(
-            ["node", "-e", NODE_RUNNER, SCRIPT.group(1), json.dumps(records)],
+            ["node", "-e", NODE_RUNNER, SCRIPT, json.dumps(records)],
             check=True, capture_output=True, text=True, timeout=10,
         )
         return json.loads(proc.stdout)
