@@ -1,0 +1,25 @@
+"""V221 static Pages offline scorecard import contracts."""
+import unittest
+from pathlib import Path
+
+ROOM=(Path(__file__).resolve().parent.parent/"web"/"office_3d.html").read_text(encoding="utf-8")
+
+class OfflineResearchImportTests(unittest.TestCase):
+    def test_file_import_remains_validated(self):
+        self.assertIn('input.addEventListener("change",async function()',ROOM)
+        self.assertIn('file.size>2000000',ROOM)
+        self.assertIn('renderRows(validate(data),"직접 선택한 파일")',ROOM)
+        self.assertIn("data.research_only!==true",ROOM)
+        self.assertIn("data.orders_enabled!==false",ROOM)
+
+    def test_static_pages_skips_unavailable_local_api(self):
+        self.assertIn('if(!isStaticPages&&(location.protocol==="http:"||location.protocol==="https:"))loadLocalSnapshot()',ROOM)
+        self.assertIn("refresh.disabled=true",ROOM)
+        self.assertIn("연구 결과 JSON 파일을 직접 선택하면 검증 후 비교표를 표시합니다",ROOM)
+
+    def test_no_remote_code_or_trade_execution(self):
+        self.assertNotIn("eval(",ROOM)
+        self.assertIn("주문",ROOM)
+
+if __name__=="__main__":
+    unittest.main()
