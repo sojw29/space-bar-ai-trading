@@ -17,6 +17,11 @@ class OfflineResearchImportTests(unittest.TestCase):
         self.assertIn("refresh.disabled=true",ROOM)
         self.assertIn("연구 결과 JSON 파일을 직접 선택하면 검증 후 비교표를 표시합니다",ROOM)
 
+    def test_classic_scorecard_script_has_own_static_pages_binding(self):
+        # The V220 declaration lives in a module script, not this classic IIFE.
+        scorecard_script=ROOM.split("/* V200: local-only scorecard import.",1)[1]
+        self.assertIn('const isStaticPages = location.hostname.endsWith(".github.io");',scorecard_script)
+
     def test_no_remote_code_or_trade_execution(self):
         self.assertNotIn("eval(",ROOM)
         self.assertIn("주문",ROOM)
