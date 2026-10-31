@@ -1,0 +1,22 @@
+name: SPACE BAR V228 Agent Indicator Interpretation
+on:
+  push:
+    paths:
+      - 'agents/agent_indicator_interpretation_v228.py'
+      - 'agents/test_v228_agent_interpretation.py'
+      - 'web/office_3d.html'
+      - '.github/workflows/deploy_browser_room.yml'
+      - '.github/workflows/test_v228_agent_interpretation.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  interpretations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s agents -p 'test_v228_agent_interpretation.py' -v
