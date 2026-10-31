@@ -1773,4 +1773,62 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }catch(error){status.textContent=history.length+"개 로컬 기록 · 최신 저장 실패: "+error.message;}
 })();
 </script>
+<section id="v231-change-panel" aria-label="로컬 분석 변화 비교" style="position:fixed;top:34%;left:12px;z-index:1005;width:min(315px,calc(100vw - 24px));max-height:24vh;overflow:auto;background:rgba(8,18,34,.95);border:1px solid #86a5b8;border-radius:12px;padding:12px;color:#e8f4ff;font:12px/1.6 system-ui,sans-serif">
+<strong>COMMANDER · 이전 분석 대비 변화</strong>
+<button id="v231-compare" type="button" style="float:right;background:#273354;color:white;border:1px solid #86a5b8;border-radius:6px">비교</button>
+<div id="v231-status" role="status">기록 비교 준비됨</div>
+<div id="v231-rows"></div>
+<small>기기별 저장된 마지막 두 기록만 비교 · 거래 신호/성과 예측 아님</small>
+</section>
+<script>
+/* V231: compare two verified local research snapshots, not trading signals. */
+(function(){
+ const KEY="spacebar.v230.commander.research.v1";
+ const status=document.getElementById("v231-status");
+ const rows=document.getElementById("v231-rows");
+ function valid(e){
+  return e&&typeof e.timestamp==="string"&&Number.isFinite(Date.parse(e.timestamp))&&
+   Array.isArray(e.markets)&&e.markets.length===3&&
+   ["BTCUSDT","ETHUSDT","SOLUSDT"].every(symbol=>{
+    const match=e.markets.filter(m=>m&&m.symbol===symbol);
+    return match.length===1&&
+     ["SMA50_ABOVE_SMA200","SMA50_BELOW_SMA200","SMA_EQUAL"].includes(match[0].trend)&&
+     (match[0].ratio===null||(typeof match[0].ratio==="number"&&
+       Number.isFinite(match[0].ratio)&&match[0].ratio>=0));
+   });
+ }
+ function compare(){
+  rows.replaceChildren();
+  try{
+   const raw=localStorage.getItem(KEY);
+   if(!raw||raw.length>30000)throw Error("유효한 로컬 기록 없음");
+   const data=JSON.parse(raw);
+   if(!Array.isArray(data))throw Error("기록 형식 오류");
+   const records=data.filter(valid).sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
+   const unique=[];
+   for(const item of records){
+    if(unique.length&&unique[unique.length-1].timestamp===item.timestamp)unique[unique.length-1]=item;
+    else unique.push(item);
+   }
+   if(unique.length<2)throw Error("서로 다른 시각의 기록 2개 필요");
+   const older=unique[unique.length-2],newer=unique[unique.length-1];
+   if(Date.parse(newer.timestamp)<=Date.parse(older.timestamp))throw Error("기록 시각 오류");
+   const output=[];
+   for(const symbol of ["BTCUSDT","ETHUSDT","SOLUSDT"]){
+    const a=older.markets.find(m=>m.symbol===symbol),b=newer.markets.find(m=>m.symbol===symbol);
+    const changed=a.trend!==b.trend;
+    const ratioDelta=a.ratio===null||b.ratio===null?null:b.ratio-a.ratio;
+    const p=document.createElement("p");
+    p.textContent=symbol+" · 추세 분류 "+(changed?a.trend+" → "+b.trend:"변화 없음")+
+     " · 거래량 비율 변화 "+(ratioDelta===null?"N/A":(ratioDelta>=0?"+":"")+ratioDelta.toFixed(4));
+    output.push(p);
+   }
+   rows.replaceChildren(...output);
+   status.textContent=new Date(older.timestamp).toLocaleString()+" → "+new Date(newer.timestamp).toLocaleString();
+  }catch(error){rows.replaceChildren();status.textContent="비교 불가: "+error.message;}
+ }
+ document.getElementById("v231-compare").addEventListener("click",compare);
+ compare();
+})();
+</script>
 </body></html>
