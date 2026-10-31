@@ -1,7 +1,6 @@
 import socket
 import unittest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import patch
 
 from offline_network_guard_v242 import network_guard, run_guarded_pipeline, UnexpectedNetworkAccess
 from model_adapter_contract_v236 import build_adapter_requests
@@ -38,14 +37,29 @@ class GuardrailTests(unittest.TestCase):
   self.assertEqual(len(result["steps"]),6)
  def test_network_connect_is_denied_and_restored(self):
   original=socket.socket.connect
-  with network_guard():
-   with self.assertRaises(UnexpectedNetworkAccess):
-    socket.socket().connect(("127.0.0.1",80))
+  with socket.socket() as sock:
+   with network_guard():
+    with self.assertRaises(UnexpectedNetworkAccess):
+     sock.connect(("127.0.0.1",80))
   self.assertIs(socket.socket.connect,original)
  def test_network_create_connection_denied(self):
   with network_guard():
    with self.assertRaises(UnexpectedNetworkAccess):
     socket.create_connection(("127.0.0.1",80))
+ def test_udp_sendto_is_denied_and_restored(self):
+  original=socket.socket.sendto
+  with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sock:
+   with network_guard():
+    with self.assertRaises(UnexpectedNetworkAccess):
+     sock.sendto(b"no-network",("127.0.0.1",80))
+  self.assertIs(socket.socket.sendto,original)
+ def test_preconnected_socket_send_is_denied(self):
+  with socket.socket() as sock:
+   with network_guard():
+    with self.assertRaises(UnexpectedNetworkAccess):
+     sock.send(b"no-network")
+    with self.assertRaises(UnexpectedNetworkAccess):
+     sock.sendall(b"no-network")
  def test_independent_agent_facts_and_preflight_rejection(self):
   bundle=build_adapter_requests(adapter_source(),NOW-timedelta(minutes=1))
   before=bundle["requests"][0]["facts"]["markets"][0]["volume_ratio_20"]
