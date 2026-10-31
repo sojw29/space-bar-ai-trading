@@ -81,6 +81,42 @@ strong{color:#ffd18e}
  }catch(error){output.replaceChildren();status.textContent="시장 데이터 미연결 · "+error.message;}
 })();
 </script>
+<div class="card"><h2>5분봉 과거 데이터 분석 · SMA50 / SMA200</h2>
+<p id="v225-indicator-status" role="status">캔들 지표 확인 중…</p>
+<div id="v225-indicator-rows"></div>
+<p>완료된 5분봉 기반 이동평균선·거래량 통계입니다. AI 판단·매매 신호·실시간 시세가 아닙니다.</p>
+</div>
+<script>
+(async function(){
+ const status=document.getElementById("v225-indicator-status");
+ const target=document.getElementById("v225-indicator-rows");
+ try{
+  const response=await fetch("./ohlcv_indicators.json",{cache:"no-store"});
+  if(!response.ok)throw Error("공개 캔들 분석 결과 없음");
+  const raw=await response.text();
+  if(raw.length>12000)throw Error("응답 크기 초과");
+  const data=JSON.parse(raw);
+  if(data.version!=="V225.0"||data.research_only!==true||
+     data.orders_enabled!==false||data.realtime!==false||
+     data.trade_signals_available!==false||data.ai_agents_running!==false||
+     !Array.isArray(data.markets)||data.markets.length!==3)throw Error("안전 검증 실패");
+  const age=Date.now()-Date.parse(data.generated_at_utc);
+  if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("오래된 지표 데이터");
+  for(const symbol of ["BTCUSDT","ETHUSDT","SOLUSDT"]){
+   const m=data.markets.find(x=>x.symbol===symbol);
+   if(!m||![m.close,m.sma50,m.sma200,m.volume20,m.volume_latest].every(
+      x=>typeof x==="number"&&Number.isFinite(x)&&x>=0)||
+      !["SMA50_ABOVE_SMA200","SMA50_BELOW_SMA200","SMA_EQUAL"].includes(m.trend_label))
+      throw Error("지표 검증 실패");
+   const p=document.createElement("p");
+   p.textContent=symbol+" · SMA50 "+m.sma50.toLocaleString("en-US")+
+     " / SMA200 "+m.sma200.toLocaleString("en-US")+" · "+m.trend_label;
+   target.append(p);
+  }
+  status.textContent="최근 수집: "+new Date(data.generated_at_utc).toLocaleString()+" · 과거 데이터";
+ }catch(error){target.replaceChildren();status.textContent="지표 미연결 · "+error.message;}
+})();
+</script>
 <div class="card"><h2>현재 제공 범위</h2>
 <p>화면 UI와 시각화만 정적 배포합니다. /api/v1/* 연결이 없으면 시장 데이터·에이전트 상태는 표시되지 않거나 연결 실패로 표시됩니다. 서버 연동, 인증, 실제 AI 실행은 별도의 후속 개발과 배포가 필요합니다.</p>
 <p><strong>주문 실행 비활성 · 투자 판단 근거로 사용 금지</strong></p></div>
