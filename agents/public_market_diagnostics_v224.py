@@ -47,8 +47,19 @@ def assess(snapshot, now=None):
         "GUARDIAN":{"status":"NO_TRADE_AUTHORIZATION","note":"No orders; snapshot is delayed and not a risk model."},
         "symbols":list(SYMBOLS)}
 
+def publish(source, destination, now=None):
+    """Fail closed: never leave a previous public diagnostic after invalid input."""
+    source, destination = Path(source), Path(destination)
+    if source.resolve() == destination.resolve():
+        raise ValueError("DIAGNOSTIC_SOURCE_DESTINATION_SAME")
+    destination.unlink(missing_ok=True)
+    data = assess(json.loads(source.read_text(encoding="utf-8")), now=now)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(data, ensure_ascii=False, allow_nan=False), encoding="utf-8"
+    )
+    return data
+
+
 if __name__=="__main__":
-    source=Path(sys.argv[1]);dest=Path(sys.argv[2])
-    data=assess(json.loads(source.read_text(encoding="utf-8")))
-    dest.parent.mkdir(parents=True,exist_ok=True)
-    dest.write_text(json.dumps(data,ensure_ascii=False,allow_nan=False),encoding="utf-8")
+    publish(sys.argv[1], sys.argv[2])
