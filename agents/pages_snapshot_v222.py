@@ -7,8 +7,11 @@ MAX_BYTES=2_000_000
 
 def stage(source, destination):
     source,destination=Path(source),Path(destination)
+    if source.resolve()==destination.resolve():
+        raise ValueError("SNAPSHOT_SOURCE_DESTINATION_SAME")
+    # A failed validation must not leave a previous public snapshot behind.
+    destination.unlink(missing_ok=True)
     if not source.is_file():
-        destination.unlink(missing_ok=True)
         return False
     if source.stat().st_size>MAX_BYTES:
         raise ValueError("SNAPSHOT_TOO_LARGE")
