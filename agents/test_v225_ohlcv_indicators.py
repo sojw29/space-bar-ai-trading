@@ -1,7 +1,10 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from datetime import datetime, timezone
 from unittest.mock import patch
-from ohlcv_indicators_v225 import indicators, build, SYMBOLS
+from ohlcv_indicators_v225 import indicators, build, publish, SYMBOLS
 
 class IndicatorsTests(unittest.TestCase):
     def fake(self,symbol):
@@ -28,4 +31,24 @@ class IndicatorsTests(unittest.TestCase):
         self.assertEqual(len(result["markets"]),len(SYMBOLS))
         self.assertFalse(result["orders_enabled"])
         self.assertFalse(result["trade_signals_available"])
+    def test_failed_feed_removes_previous_indicators(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "ohlcv_indicators.json"
+            target.write_text('{"stale": true}', encoding="utf-8")
+            def unavailable(symbol):
+                raise OSError("HTTP 403")
+            with self.assertRaises(OSError):
+                publish(target, unavailable)
+            self.assertFalse(target.exists())
+
+    def test_success_replaces_previous_indicators(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "ohlcv_indicators.json"
+            target.write_text('{"stale": true}', encoding="utf-8")
+            publish(target, self.fake)
+            data = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["markets"]), len(SYMBOLS))
+            self.assertFalse(data["orders_enabled"])
+            self.assertNotIn("stale", data)
+
 if __name__=="__main__":unittest.main()
