@@ -2,6 +2,8 @@
 import argparse
 import copy
 import json
+import os
+import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -45,14 +47,31 @@ def main():
     parser.add_argument("source")
     parser.add_argument("destination")
     args = parser.parse_args()
+    source_path = Path(args.source)
     target = Path(args.destination)
+    # Alias checks precede cleanup so invalid input cannot delete its source.
+    if source_path.resolve() == target.resolve() or (
+        source_path.exists() and target.exists() and os.path.samefile(source_path, target)
+    ):
+        raise ValueError("INPUT_OUTPUT_PATH_COLLISION")
+    temporary = None
     try:
-        data = json.loads(Path(args.source).read_text(encoding="utf-8"))
-        result = evaluate_matrix(data)
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+        result = evaluate_matrix(source)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2), encoding="utf-8")
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=target.parent,
+            prefix=f".{target.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(result, handle, ensure_ascii=False, allow_nan=False, indent=2)
+        os.replace(temporary, target)
+        temporary = None
     except (ValueError, TypeError, KeyError, AssertionError, OSError):
-        target.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        if target.is_file() or target.is_symlink():
+            target.unlink(missing_ok=True)
         raise
 
 if __name__ == "__main__":
