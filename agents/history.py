@@ -300,6 +300,19 @@ def aggregate_candles(one_minute, timeframe):
     ]
 
 
+def count_missing_candles(one_minute, start_ts, end_ts):
+    """Count gaps inside the data and at both edges of the requested window."""
+    if not one_minute:
+        return 0, 0, max(0, (end_ts - start_ts) // 60)
+    internal = sum(
+        max(0, (current[0] - previous[0]) // 60 - 1)
+        for previous, current in zip(one_minute, one_minute[1:])
+    )
+    leading = max(0, (one_minute[0][0] - start_ts) // 60)
+    trailing = max(0, (end_ts - one_minute[-1][0] - 60) // 60)
+    return internal, leading, trailing
+
+
 # ============================================================
 # COLLECT SYMBOL
 # ============================================================
@@ -456,20 +469,10 @@ def collect_symbol(symbol, start, end):
     # DATA VALIDATION
     # ========================================================
 
-    missing = 0
-
-    for index in range(
-        1,
-        len(one_minute)
-    ):
-
-        previous = one_minute[index - 1][0]
-        current = one_minute[index][0]
-
-        missing += max(
-            0,
-            (current - previous) // 60 - 1
-        )
+    internal_missing, leading_missing, trailing_missing = count_missing_candles(
+        one_minute, start_ts, end_ts
+    )
+    missing = internal_missing + leading_missing + trailing_missing
 
     expected_total = (
         end_ts - start_ts
@@ -484,7 +487,8 @@ def collect_symbol(symbol, start, end):
         f"{symbol}: "
         f"{len(one_minute)} candles, "
         f"coverage={coverage:.2f}%, "
-        f"missing={missing}",
+        f"missing={missing} "
+        f"(internal={internal_missing}, leading={leading_missing}, trailing={trailing_missing})",
         flush=True
     )
 
