@@ -90,6 +90,36 @@ class QualityTests(unittest.TestCase):
    self.assertFalse(target.is_symlink())
    self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["quality_gate"],"PASS")
 class CliRegressionTests(unittest.TestCase):
+ def test_oversized_history_stops_before_parsing_tail(self):
+  with TemporaryDirectory() as directory:
+   source=Path(directory)/"history.csv"
+   target=Path(directory)/"quality.json"
+   header="timestamp_ms,open,high,low,close,volume\n"
+   # The oversized tail would raise csv.Error if the reader consumed it.
+   content=header + "300000,1,2,1,2,3\n" * 10001 + "1" * (csv.field_size_limit()+1)
+   source.write_text(content,encoding="utf-8")
+   original=source.read_bytes()
+   target.write_text('{"quality_gate":"PASS"}',encoding="utf-8")
+   with patch("sys.argv",["v244",str(source),str(target)]):
+    with self.assertRaisesRegex(ValueError,"INVALID_HISTORY_LENGTH"):
+     main()
+   self.assertEqual(source.read_bytes(),original)
+   self.assertFalse(target.exists())
+
+ def test_maximum_history_is_accepted(self):
+  with TemporaryDirectory() as directory:
+   source=Path(directory)/"history.csv"
+   target=Path(directory)/"quality.json"
+   end=candles()[-1]["timestamp_ms"]
+   with source.open("w",newline="",encoding="utf-8") as handle:
+    writer=csv.writer(handle)
+    writer.writerow(("timestamp_ms","open","high","low","close","volume"))
+    for i in range(10000):
+     writer.writerow((end-(9999-i)*INTERVAL_MS,100,102,99,101,200))
+   with patch("sys.argv",["v244",str(source),str(target)]):
+    main()
+   self.assertEqual(json.loads(target.read_text())["bars"],10000)
+
  def test_csv_parser_failure_removes_stale_report(self):
   with TemporaryDirectory() as directory:
    source=Path(directory)/"history.csv"

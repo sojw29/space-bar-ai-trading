@@ -7,6 +7,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from itertools import islice
 
 INTERVAL_MS = 5 * 60 * 1000
 MIN_BARS = 300
@@ -74,7 +75,10 @@ def main():
             if (reader.fieldnames is None or len(reader.fieldnames) != len(fields)
                     or set(reader.fieldnames) != fields):
                 raise ValueError("INVALID_CSV_SCHEMA")
-            rows = list(reader)
+            # Read one extra record to detect overflow without consuming the tail.
+            rows = list(islice(reader, MAX_BARS + 1))
+            if len(rows) > MAX_BARS:
+                raise ValueError("INVALID_HISTORY_LENGTH")
             if any(None in row or any(value is None for value in row.values()) for row in rows):
                 raise ValueError("INVALID_CSV_ROW")
         # CSV conversion is explicit; invalid values fail closed.
