@@ -1,6 +1,11 @@
 import unittest
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
-from pipeline_regression_matrix_v243 import evaluate_matrix
+from pipeline_regression_matrix_v243 import evaluate_matrix, main
 NOW=datetime(2026,10,31,6,tzinfo=timezone.utc)
 def source():
  return {"version":"V229.0","report_type":"DETERMINISTIC_COMMANDER_RESEARCH_BRIEF",
@@ -29,4 +34,74 @@ class MatrixTests(unittest.TestCase):
   data=source();before=data["markets"][0]["volume_ratio_20"]
   evaluate_matrix(data,NOW)
   self.assertEqual(data["markets"][0]["volume_ratio_20"],before)
+class CliFileSafetyTests(unittest.TestCase):
+ def test_input_aliases_preserve_source(self):
+  for kind in ("same", "hardlink", "symlink"):
+   with self.subTest(kind=kind), TemporaryDirectory() as directory:
+    original=Path(directory)/"source.json"
+    original.write_bytes(b"invalid JSON")
+    target=original if kind=="same" else Path(directory)/"report.json"
+    if kind=="hardlink":os.link(original,target)
+    if kind=="symlink":target.symlink_to(original)
+    with patch("sys.argv",["v243",str(original),str(target)]):
+     with self.assertRaisesRegex(ValueError,"INPUT_OUTPUT_PATH_COLLISION"):
+      main()
+    self.assertEqual(original.read_bytes(),b"invalid JSON")
+    self.assertEqual(target.read_bytes(),b"invalid JSON")
+
+ def test_atomic_output_and_replace_failure(self):
+  for fail in (False,True):
+   with self.subTest(fail=fail), TemporaryDirectory() as directory:
+    root=Path(directory)
+    original=root/"source.json"
+    original.write_text(json.dumps(source()),encoding="utf-8")
+    target=root/"report.json"
+    unrelated=root/"unrelated.json"
+    unrelated.write_bytes(b"preserve me")
+    target.symlink_to(unrelated)
+    expected=evaluate_matrix(source(),NOW)
+    real_replace=os.replace
+    def replace(temporary,destination):
+     self.assertEqual(Path(temporary).parent,root)
+     self.assertEqual(json.loads(Path(temporary).read_text(encoding="utf-8")),expected)
+     if fail:raise OSError("injected replace failure")
+     real_replace(temporary,destination)
+    with patch("sys.argv",["v243",str(original),str(target)]), patch("pipeline_regression_matrix_v243.evaluate_matrix",return_value=expected), patch("pipeline_regression_matrix_v243.os.replace",side_effect=replace):
+     if fail:
+      with self.assertRaisesRegex(OSError,"injected replace failure"):main()
+     else:main()
+    self.assertEqual(unrelated.read_bytes(),b"preserve me")
+    self.assertEqual(json.loads(original.read_text()),source())
+    self.assertFalse(target.is_symlink())
+    if fail:self.assertFalse(target.exists())
+    else:self.assertEqual(json.loads(target.read_text()),expected)
+    self.assertEqual(list(root.glob(".report.json.*.tmp")),[])
+
+ def test_invalid_input_removes_stale_report(self):
+  with TemporaryDirectory() as directory:
+   original=Path(directory)/"source.json"
+   target=Path(directory)/"report.json"
+   original.write_bytes(b"invalid JSON")
+   target.write_text('{"baseline":"PASS"}',encoding="utf-8")
+   with patch("sys.argv",["v243",str(original),str(target)]):
+    with self.assertRaises(ValueError):main()
+   self.assertEqual(original.read_bytes(),b"invalid JSON")
+   self.assertFalse(target.exists())
+
+ def test_pipeline_rejection_and_serialization_failure_cleanup(self):
+  for failure in ("pipeline", "serialization"):
+   with self.subTest(failure=failure), TemporaryDirectory() as directory:
+    root=Path(directory)
+    original=root/"source.json"
+    original.write_text(json.dumps(source()),encoding="utf-8")
+    before=original.read_bytes()
+    target=root/"report.json"
+    target.write_text('{"baseline":"PASS"}',encoding="utf-8")
+    options={"side_effect":AssertionError("UNSAFE_SCENARIO_ACCEPTED:test")} if failure=="pipeline" else {"return_value":{"invalid":float("nan")}}
+    with patch("sys.argv",["v243",str(original),str(target)]), patch("pipeline_regression_matrix_v243.evaluate_matrix",**options):
+     with self.assertRaises((AssertionError,ValueError)):main()
+    self.assertEqual(original.read_bytes(),before)
+    self.assertFalse(target.exists())
+    self.assertEqual(list(root.glob(".report.json.*.tmp")),[])
+
 if __name__=="__main__":unittest.main()
