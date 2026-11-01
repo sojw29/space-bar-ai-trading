@@ -70,7 +70,7 @@ def main():
     temporary = None
     try:
         with source.open(encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle)
+            reader = csv.DictReader(handle, strict=True)
             fields = {"timestamp_ms", "open", "high", "low", "close", "volume"}
             if (reader.fieldnames is None or len(reader.fieldnames) != len(fields)
                     or set(reader.fieldnames) != fields):

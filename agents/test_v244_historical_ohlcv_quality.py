@@ -90,6 +90,24 @@ class QualityTests(unittest.TestCase):
    self.assertFalse(target.is_symlink())
    self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["quality_gate"],"PASS")
 class CliRegressionTests(unittest.TestCase):
+ def test_malformed_quoted_csv_fails_closed(self):
+  for malformed in ('"200\n', '"200"trailing\n'):
+   with self.subTest(malformed=malformed), TemporaryDirectory() as directory:
+    source=Path(directory)/"history.csv"
+    target=Path(directory)/"quality.json"
+    self.write_history(source)
+    lines=source.read_text(encoding="utf-8").splitlines()
+    lines[-1]=lines[-1].rsplit(",",1)[0]+","+malformed
+    source.write_text("\n".join(lines),encoding="utf-8")
+    original=source.read_bytes()
+    target.write_text('{"quality_gate":"PASS"}',encoding="utf-8")
+    with patch("sys.argv",["v244",str(source),str(target)]):
+     with self.assertRaises(csv.Error):
+      main()
+    self.assertEqual(source.read_bytes(),original)
+    self.assertFalse(target.exists())
+    self.assertEqual(list(Path(directory).glob(".quality.json.*.tmp")),[])
+
  def test_oversized_history_stops_before_parsing_tail(self):
   with TemporaryDirectory() as directory:
    source=Path(directory)/"history.csv"
