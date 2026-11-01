@@ -2,6 +2,8 @@ import os
 import csv
 import json
 import unittest
+import subprocess
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -87,4 +89,104 @@ class QualityTests(unittest.TestCase):
    self.assertEqual(unrelated.read_text(encoding="utf-8"),"preserve me")
    self.assertFalse(target.is_symlink())
    self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["quality_gate"],"PASS")
+class CliRegressionTests(unittest.TestCase):
+ def write_history(self, source):
+  with source.open("w", newline="", encoding="utf-8") as handle:
+   writer=csv.DictWriter(handle,fieldnames=("timestamp_ms","open","high","low","close","volume"))
+   writer.writeheader()
+   writer.writerows(candles())
+
+ def test_source_symlink_alias_is_rejected_before_cleanup(self):
+  with TemporaryDirectory() as directory:
+   source=Path(directory)/"history.csv"
+   alias=Path(directory)/"quality.json"
+   source.write_bytes(b"invalid CSV")
+   alias.symlink_to(source)
+   with patch("sys.argv",["v244",str(source),str(alias)]):
+    with self.assertRaisesRegex(ValueError,"INPUT_OUTPUT_PATH_COLLISION"):
+     main()
+   self.assertEqual(source.read_bytes(),b"invalid CSV")
+   self.assertTrue(alias.is_symlink())
+
+ def test_replace_failure_cleans_temp_and_preserves_sources(self):
+  for symlink in (False, True):
+   with self.subTest(symlink=symlink), TemporaryDirectory() as directory:
+    root=Path(directory)
+    source=root/"history.csv"
+    target=root/"quality.json"
+    unrelated=root/"unrelated.json"
+    self.write_history(source)
+    original=source.read_bytes()
+    unrelated.write_bytes(b"preserve me")
+    if symlink:
+     target.symlink_to(unrelated)
+    else:
+     target.write_text('{"quality_gate":"PASS"}',encoding="utf-8")
+    def fail_replace(temporary, destination):
+     self.assertEqual(Path(temporary).parent,root)
+     self.assertEqual(Path(destination),target)
+     self.assertEqual(json.loads(Path(temporary).read_text())["bars"],300)
+     raise OSError("injected replace failure")
+    with patch("sys.argv",["v244",str(source),str(target)]), patch("historical_ohlcv_quality_v244.os.replace",side_effect=fail_replace) as replace:
+     with self.assertRaisesRegex(OSError,"injected replace failure"):
+      main()
+    replace.assert_called_once()
+    self.assertEqual(source.read_bytes(),original)
+    self.assertEqual(unrelated.read_bytes(),b"preserve me")
+    self.assertFalse(target.exists())
+    self.assertFalse(target.is_symlink())
+    self.assertEqual(list(root.glob(".quality.json.*.tmp")),[])
+
+ def test_csv_schema_and_row_width_fail_closed(self):
+  header="timestamp_ms,open,high,low,close,volume"
+  cases=[
+   ("", "INVALID_CSV_SCHEMA"),
+   (header+",extra\n1,1,2,1,2,3,x\n", "INVALID_CSV_SCHEMA"),
+   ("timestamp_ms,open,high,low,close,close\n1,1,2,1,2,3\n", "INVALID_CSV_SCHEMA"),
+   (header+"\n1,1,2,1,2\n", "INVALID_CSV_ROW"),
+   (header+"\n1,1,2,1,2,3,extra\n", "INVALID_CSV_ROW"),
+  ]
+  for content,error in cases:
+   with self.subTest(content=content), TemporaryDirectory() as directory:
+    source=Path(directory)/"history.csv"
+    target=Path(directory)/"quality.json"
+    source.write_text(content,encoding="utf-8")
+    target.write_text('{"quality_gate":"PASS"}',encoding="utf-8")
+    with patch("sys.argv",["v244",str(source),str(target)]):
+     with self.assertRaisesRegex(ValueError,error):
+      main()
+    self.assertEqual(source.read_text(encoding="utf-8"),content)
+    self.assertFalse(target.exists())
+
+ def test_cli_subprocess_success_and_conversion_failure(self):
+  with TemporaryDirectory() as directory:
+   source=Path(directory)/"history.csv"
+   target=Path(directory)/"quality.json"
+   self.write_history(source)
+   command=[sys.executable,str(Path(__file__).with_name("historical_ohlcv_quality_v244.py")),str(source),str(target)]
+   result=subprocess.run(command,capture_output=True,text=True,timeout=10)
+   self.assertEqual(result.returncode,0,result.stderr)
+   report=json.loads(target.read_text(encoding="utf-8"))
+   self.assertEqual(report["bars"],300)
+   self.assertEqual(report["quality_gate"],"PASS")
+   self.assertFalse(report["orders_enabled"])
+   self.assertFalse(report["backtest_performed"])
+   for column,value in (("timestamp_ms","bad"),("open","bad"),("volume","nan")):
+    with self.subTest(column=column,value=value):
+     self.write_history(source)
+     with source.open(encoding="utf-8",newline="") as handle:
+      reader=csv.DictReader(handle)
+      fields=reader.fieldnames
+      rows=list(reader)
+     rows[0][column]=value
+     with source.open("w",encoding="utf-8",newline="") as handle:
+      writer=csv.DictWriter(handle,fieldnames=fields)
+      writer.writeheader();writer.writerows(rows)
+     original=source.read_bytes()
+     target.write_text('{"quality_gate":"PASS"}',encoding="utf-8")
+     result=subprocess.run(command,capture_output=True,text=True,timeout=10)
+     self.assertNotEqual(result.returncode,0)
+     self.assertFalse(target.exists())
+     self.assertEqual(source.read_bytes(),original)
+
 if __name__=="__main__":unittest.main()
