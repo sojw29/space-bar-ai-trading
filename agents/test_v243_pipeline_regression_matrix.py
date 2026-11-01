@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
 from pipeline_regression_matrix_v243 import evaluate_matrix, main
+from offline_network_guard_v242 import UnexpectedNetworkAccess
 NOW=datetime(2026,10,31,6,tzinfo=timezone.utc)
 def source():
  return {"version":"V229.0","report_type":"DETERMINISTIC_COMMANDER_RESEARCH_BRIEF",
@@ -89,7 +90,7 @@ class CliFileSafetyTests(unittest.TestCase):
    self.assertFalse(target.exists())
 
  def test_pipeline_rejection_and_serialization_failure_cleanup(self):
-  for failure in ("pipeline", "serialization"):
+  for failure in ("pipeline", "serialization", "network"):
    with self.subTest(failure=failure), TemporaryDirectory() as directory:
     root=Path(directory)
     original=root/"source.json"
@@ -97,9 +98,11 @@ class CliFileSafetyTests(unittest.TestCase):
     before=original.read_bytes()
     target=root/"report.json"
     target.write_text('{"baseline":"PASS"}',encoding="utf-8")
-    options={"side_effect":AssertionError("UNSAFE_SCENARIO_ACCEPTED:test")} if failure=="pipeline" else {"return_value":{"invalid":float("nan")}}
+    options={"return_value":{"invalid":float("nan")}}
+    if failure=="pipeline":options={"side_effect":AssertionError("UNSAFE_SCENARIO_ACCEPTED:test")}
+    if failure=="network":options={"side_effect":UnexpectedNetworkAccess("OFFLINE_PIPELINE_NETWORK_BLOCKED")}
     with patch("sys.argv",["v243",str(original),str(target)]), patch("pipeline_regression_matrix_v243.evaluate_matrix",**options):
-     with self.assertRaises((AssertionError,ValueError)):main()
+     with self.assertRaises((AssertionError,ValueError,UnexpectedNetworkAccess)):main()
     self.assertEqual(original.read_bytes(),before)
     self.assertFalse(target.exists())
     self.assertEqual(list(root.glob(".report.json.*.tmp")),[])
