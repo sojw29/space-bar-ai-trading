@@ -69,7 +69,14 @@ def main():
     temporary = None
     try:
         with source.open(encoding="utf-8", newline="") as handle:
-            rows = list(csv.DictReader(handle))
+            reader = csv.DictReader(handle)
+            fields = {"timestamp_ms", "open", "high", "low", "close", "volume"}
+            if (reader.fieldnames is None or len(reader.fieldnames) != len(fields)
+                    or set(reader.fieldnames) != fields):
+                raise ValueError("INVALID_CSV_SCHEMA")
+            rows = list(reader)
+            if any(None in row or any(value is None for value in row.values()) for row in rows):
+                raise ValueError("INVALID_CSV_ROW")
         # CSV conversion is explicit; invalid values fail closed.
         converted = [{"timestamp_ms": int(row["timestamp_ms"]),
                       **{key: float(row[key]) for key in ("open", "high", "low", "close", "volume")}}
