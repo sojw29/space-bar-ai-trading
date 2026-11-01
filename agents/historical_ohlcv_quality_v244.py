@@ -92,7 +92,7 @@ def main():
             json.dump(result, handle, ensure_ascii=False, indent=2)
         os.replace(temporary, target)
         temporary = None
-    except (ValueError, TypeError, KeyError, OSError, OverflowError):
+    except (ValueError, TypeError, KeyError, OSError, OverflowError, csv.Error):
         if temporary is not None:
             temporary.unlink(missing_ok=True)
         # Do not attempt to unlink a directory on a failed write.
