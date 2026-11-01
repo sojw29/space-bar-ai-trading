@@ -1,5 +1,6 @@
 import socket
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
 
 from offline_network_guard_v242 import network_guard, run_guarded_pipeline, UnexpectedNetworkAccess
@@ -69,4 +70,38 @@ class GuardrailTests(unittest.TestCase):
  def test_stale_pipeline_fails_closed(self):
   data=source();data["source_generated_at_utc"]=(NOW-timedelta(hours=9)).isoformat()
   with self.assertRaises(ValueError):run_guarded_pipeline(data,NOW)
+ def test_dns_resolution_is_blocked_without_calling_resolver(self):
+  calls={
+   "getaddrinfo":("example.invalid",443),
+   "gethostbyname":("example.invalid",),
+   "gethostbyname_ex":("example.invalid",),
+   "gethostbyaddr":("192.0.2.1",),
+   "getnameinfo":(("192.0.2.1",443),0),
+  }
+  for name,args in calls.items():
+   with self.subTest(name=name), patch.object(socket,name) as resolver:
+    with network_guard():
+     with self.assertRaises(UnexpectedNetworkAccess):getattr(socket,name)(*args)
+    resolver.assert_not_called()
+    self.assertIs(getattr(socket,name),resolver)
+
+ def test_caught_network_attempt_cannot_produce_success(self):
+  safe={"network_enabled":False,"orders_enabled":False,
+        "model_inference_performed":False,"validated_for_trading":False}
+  def swallowing_pipeline(*args):
+   try:socket.create_connection(("127.0.0.1",80))
+   except UnexpectedNetworkAccess:pass
+   return safe
+  with patch("offline_network_guard_v242.run_pipeline",side_effect=swallowing_pipeline):
+   with self.assertRaisesRegex(UnexpectedNetworkAccess,"OFFLINE_PIPELINE_NETWORK_BLOCKED"):
+    run_guarded_pipeline(source(),NOW)
+
+ def test_exception_restores_all_guarded_functions(self):
+  original=socket.getaddrinfo
+  original_connect=socket.socket.connect
+  with self.assertRaisesRegex(ValueError,"injected failure"):
+   with network_guard():raise ValueError("injected failure")
+  self.assertIs(socket.getaddrinfo,original)
+  self.assertIs(socket.socket.connect,original_connect)
+
 if __name__=="__main__":unittest.main()

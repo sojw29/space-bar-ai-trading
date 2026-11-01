@@ -7,7 +7,7 @@ import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from offline_network_guard_v242 import run_guarded_pipeline
+from offline_network_guard_v242 import run_guarded_pipeline, UnexpectedNetworkAccess
 
 def evaluate_matrix(source, now=None):
     now = now or datetime.now(timezone.utc)
@@ -67,7 +67,7 @@ def main():
             json.dump(result, handle, ensure_ascii=False, allow_nan=False, indent=2)
         os.replace(temporary, target)
         temporary = None
-    except (ValueError, TypeError, KeyError, AssertionError, OSError):
+    except (ValueError, TypeError, KeyError, AssertionError, OSError, UnexpectedNetworkAccess):
         if temporary is not None:
             temporary.unlink(missing_ok=True)
         if target.is_file() or target.is_symlink():
