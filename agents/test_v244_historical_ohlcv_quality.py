@@ -225,10 +225,12 @@ class CliRegressionTests(unittest.TestCase):
     self.assertEqual(source.read_text(encoding="utf-8"),content)
     self.assertFalse(target.exists())
 
- def test_cli_subprocess_success_and_conversion_failure(self):
+ def test_cli_subprocess_unicode_paths_and_conversion_failure(self):
   with TemporaryDirectory() as directory:
-   source=Path(directory)/"history.csv"
-   target=Path(directory)/"quality.json"
+   root=Path(directory)/"한글 경로 with spaces"
+   root.mkdir()
+   source=root/"시세 데이터.csv"
+   target=root/"품질 보고서.json"
    self.write_history(source)
    command=[sys.executable,str(Path(__file__).with_name("historical_ohlcv_quality_v244.py")),str(source),str(target)]
    result=subprocess.run(command,capture_output=True,text=True,timeout=10)
