@@ -90,6 +90,25 @@ class QualityTests(unittest.TestCase):
    self.assertFalse(target.is_symlink())
    self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["quality_gate"],"PASS")
 class CliRegressionTests(unittest.TestCase):
+ def test_csv_parser_failure_removes_stale_report(self):
+  with TemporaryDirectory() as directory:
+   source=Path(directory)/"history.csv"
+   target=Path(directory)/"quality.json"
+   # csv.Error is distinct from ValueError: exercise the real parser limit.
+   content="timestamp_ms,open,high,low,close,volume\n" + "1" * 100 + ",1,2,1,2,3\n"
+   source.write_text(content,encoding="utf-8")
+   target.write_text('{"quality_gate":"PASS"}',encoding="utf-8")
+   previous=csv.field_size_limit(64)
+   try:
+    with patch("sys.argv",["v244",str(source),str(target)]):
+     with self.assertRaises(csv.Error):
+      main()
+   finally:
+    csv.field_size_limit(previous)
+   self.assertEqual(source.read_text(encoding="utf-8"),content)
+   self.assertFalse(target.exists())
+   self.assertEqual(list(Path(directory).glob(".quality.json.*.tmp")),[])
+
  def write_history(self, source):
   with source.open("w", newline="", encoding="utf-8") as handle:
    writer=csv.DictWriter(handle,fieldnames=("timestamp_ms","open","high","low","close","volume"))
