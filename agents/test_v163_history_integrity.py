@@ -27,5 +27,15 @@ class HistoryIntegrityTests(unittest.TestCase):
         self.assertTrue(all(math.isfinite(x) for x in candles[300]))
 
 
+    def test_missing_count_includes_requested_window_edges(self):
+        # Requested minutes: 60, 120, 180, 240, 300, 360.
+        # Observed: 120, 180, 300 => one leading, internal, trailing gap.
+        rows = [[120], [180], [300]]
+        self.assertEqual(history.count_missing_candles(rows, 60, 420), (1, 1, 1))
+        self.assertEqual(history.count_missing_candles([[60], [120], [180]], 60, 240), (0, 0, 0))
+        self.assertEqual(history.count_missing_candles([[60], [120]], 60, 240), (0, 0, 1))
+        self.assertEqual(history.count_missing_candles([], 60, 240), (0, 0, 3))
+
+
 if __name__ == "__main__":
     unittest.main()
