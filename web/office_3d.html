@@ -1599,7 +1599,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const status=document.getElementById("v227-status");
  const rows=document.getElementById("v227-rows");
  const refresh=document.getElementById("v227-refresh");
+ let validSince=null,validUntil=null;
+ function expire(){
+  if(validUntil===null)return;
+  const now=Date.now();
+  if(now<validSince||now>validUntil){
+   rows.replaceChildren();
+   status.textContent="에이전트 상태 만료 또는 시계 변경 · 새로고침 필요";
+   validSince=null;validUntil=null;
+  }
+ }
  async function load(){
+  validSince=null;validUntil=null;
   refresh.disabled=true;rows.replaceChildren();status.textContent="연구 상태 조회 중…";
   try{
    const response=await fetch("./market_diagnostics.json",{cache:"no-store",credentials:"omit"});
@@ -1610,7 +1621,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(d.version!=="V224.0"||d.research_only!==true||d.orders_enabled!==false||
       d.realtime!==false||d.ai_agents_running!==false||
       d.trade_signals_available!==false)throw Error("안전 검증 실패");
-   const age=Date.now()-Date.parse(d.captured_at_utc);
+   const captured=Date.parse(d.captured_at_utc);
+   const age=Date.now()-captured;
    if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("연구 상태 오래됨");
    const expected=[["ATLAS","DATA_PRESENT"],["QUANT","INSUFFICIENT_HISTORY"],
                    ["GUARDIAN","NO_TRADE_AUTHORIZATION"]];
@@ -1626,9 +1638,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }
    rows.replaceChildren(...output);
    status.textContent="연구 상태 확인: "+new Date(d.captured_at_utc).toLocaleString();
+   validSince=captured;validUntil=captured+8*3600000;expire();
   }catch(error){rows.replaceChildren();status.textContent="에이전트 상태 미연결: "+error.message;}
   finally{refresh.disabled=false;}
  }
+ setInterval(expire,60000);
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
  refresh.addEventListener("click",load);
  load();
 })();
