@@ -235,6 +235,36 @@ class HistoryIntegrityTests(unittest.TestCase):
             self.assertEqual(rows,[{"timestamp":300,"open":10.0,"high":11.0,"low":9.0,"close":10.0,"volume":2.0}])
 
 
+    def test_loader_invalid_number_aborts_instead_of_returning_partial_data(self):
+        cases=[(0,"bad"),(0,"600.5")]+[(column,value) for column in range(1,6) for value in ("bad","")]
+        for column,value in cases:
+            with self.subTest(column=column,value=value),TemporaryDirectory() as directory:
+                root=Path(directory)
+                row=[600,10,11,9,10,2];row[column]=value
+                self.write_loader_csv(root,[[300,10,11,9,10,2],row])
+                before=(root/"BTC_5m.csv").read_bytes()
+                with patch.object(tester,"DATA_DIR",directory):
+                    with self.assertRaisesRegex(RuntimeError,"INVALID_HISTORY_NUMBER"):
+                        tester.load_data("BTC","5")
+                self.assertEqual((root/"BTC_5m.csv").read_bytes(),before)
+
+    def test_loader_invalid_ohlcv_aborts_instead_of_dropping_candle(self):
+        for column,value in ((1,0),(2,0),(3,0),(4,0),(5,-1),(2,9),(3,11)):
+            with self.subTest(column=column,value=value),TemporaryDirectory() as directory:
+                row=[600,10,11,9,10,2];row[column]=value
+                self.write_loader_csv(Path(directory),[[300,10,11,9,10,2],row])
+                with patch.object(tester,"DATA_DIR",directory):
+                    with self.assertRaisesRegex(RuntimeError,"INVALID_HISTORY_OHLCV"):
+                        tester.load_data("BTC","5")
+
+    def test_loader_zero_volume_is_valid(self):
+        with TemporaryDirectory() as directory:
+            self.write_loader_csv(Path(directory),[[300,10,11,9,10,0]])
+            with patch.object(tester,"DATA_DIR",directory):rows=tester.load_data("BTC","5")
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["volume"],0.0)
+
+
 
 if __name__ == "__main__":
     unittest.main()

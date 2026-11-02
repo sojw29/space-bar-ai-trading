@@ -98,15 +98,15 @@ def load_data(symbol, timeframe):
                         candle["open"], candle["close"]
                     )
                 ):
-                    continue
+                    raise RuntimeError(f"INVALID_HISTORY_OHLCV: line={reader.line_num}")
 
                 timestamp = candle["timestamp"]
                 if timestamp in candles and candles[timestamp] != candle:
                     raise RuntimeError(f"CONFLICTING_HISTORY_CANDLE: timestamp={timestamp}")
                 candles[timestamp] = candle
 
-            except (ValueError, KeyError, TypeError):
-                continue
+            except (ValueError, KeyError, TypeError) as error:
+                raise RuntimeError(f"INVALID_HISTORY_NUMBER: line={reader.line_num}") from error
 
     return [
         candles[t]
