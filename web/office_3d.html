@@ -1659,6 +1659,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 (async function(){
  const status=document.getElementById("v228-status");
  const rows=document.getElementById("v228-rows");
+ let validSince=null,validUntil=null;
+ function expire(){
+  if(validUntil===null)return;
+  const now=Date.now();
+  if(now<validSince||now>validUntil){
+   rows.replaceChildren();
+   status.textContent="지표 해석 만료 또는 시계 변경 · 페이지 새로고침 필요";
+   validSince=null;validUntil=null;
+  }
+ }
+ setInterval(expire,60000);
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
  try{
   const response=await fetch("./agent_interpretations.json",{cache:"no-store",credentials:"omit"});
   if(!response.ok)throw Error("해석 결과 없음");
@@ -1669,7 +1681,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      d.realtime!==false||d.ai_agents_running!==false||d.trade_signals_available!==false||
      d.analysis_type!=="DETERMINISTIC_INDICATOR_DESCRIPTION"||
      !Array.isArray(d.markets)||d.markets.length!==3)throw Error("안전 검증 실패");
-  const age=Date.now()-Date.parse(d.source_generated_at_utc);
+  const captured=Date.parse(d.source_generated_at_utc);
+  const age=Date.now()-captured;
   if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("원본 데이터 오래됨");
   const output=[];
   for(const symbol of ["BTCUSDT","ETHUSDT","SOLUSDT"]){
@@ -1692,6 +1705,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   rows.replaceChildren(...output);
   status.textContent="과거 캔들 지표 해석 · "+new Date(d.source_generated_at_utc).toLocaleString();
+  validSince=captured;validUntil=captured+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="해석 미연결: "+error.message;}
 })();
 </script>
@@ -1705,6 +1719,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 (async function(){
  const status=document.getElementById("v229-status");
  const rows=document.getElementById("v229-rows");
+ let validSince=null,validUntil=null;
+ function expire(){
+  if(validUntil===null)return;
+  const now=Date.now();
+  if(now<validSince||now>validUntil){
+   rows.replaceChildren();
+   status.textContent="COMMANDER 요약 만료 또는 시계 변경 · 페이지 새로고침 필요";
+   validSince=null;validUntil=null;
+  }
+ }
+ setInterval(expire,60000);
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
  try{
   const response=await fetch("./commander_brief.json",{cache:"no-store",credentials:"omit"});
   if(!response.ok)throw Error("브리핑 없음");
@@ -1716,7 +1742,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      d.ai_agents_running!==false||d.trade_signals_available!==false||
      d.backtest_verified!==false||!d.commander||d.commander.status!=="COMPILED_NOT_AI"||
      !Array.isArray(d.markets)||d.markets.length!==3)throw Error("안전 검증 실패");
-  const age=Date.now()-Date.parse(d.source_generated_at_utc);
+  const captured=Date.parse(d.source_generated_at_utc);
+  const age=Date.now()-captured;
   if(!Number.isFinite(age)||age<0||age>8*3600000)throw Error("원본 지표 오래됨");
   const output=[];
   for(const symbol of ["BTCUSDT","ETHUSDT","SOLUSDT"]){
@@ -1736,6 +1763,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   rows.replaceChildren(...output);
   status.textContent="규칙 기반 연구 요약 · "+new Date(d.source_generated_at_utc).toLocaleString();
+  validSince=captured;validUntil=captured+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="COMMANDER 미연결: "+error.message;}
 })();
 </script>
