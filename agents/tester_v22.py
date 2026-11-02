@@ -7,6 +7,7 @@ import csv
 import hashlib
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -151,7 +152,30 @@ def compare_forward_snapshot(prior, current_last):
     return [], [], True
 
 
+def publish_evidence(report):
+    target = OUT / "evidence.json"
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=target.parent,
+            prefix=".evidence.json.", suffix=".tmp", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(report, handle, indent=2, allow_nan=False)
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def run():
+    target = OUT / "evidence.json"
+    prior_path = previous_evidence_path()
+    # Reject aliases before clearing stale output; the prior input must survive.
+    if prior_path.resolve() == target.resolve() or (
+        prior_path.exists() and target.exists() and os.path.samefile(prior_path, target)
+    ):
+        raise ValueError("INPUT_OUTPUT_PATH_COLLISION")
     # Never leave an earlier PASS report available after a failed rerun.
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "evidence.json").unlink(missing_ok=True)
@@ -165,7 +189,6 @@ def run():
     candles = inspect_candles(CANDLE_PATH, v17.CUTOFF)
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
     summaries = rows(summary_path)
-    prior_path = previous_evidence_path()
     prior = load_previous_evidence(prior_path)
     issues = []
     warnings = []
@@ -223,7 +246,7 @@ def run():
             "No live order execution, frozen external timestamp attestation, or independent OOS certification.",
         ],
     }
-    (OUT / "evidence.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    publish_evidence(report)
     print("V22 data integrity:", "PASS" if not issues else "FAIL")
     print("V22 forward evidence:", report["forward_evidence_status"])
     print("Forward candles:", candles["forward_candle_count"], "prior:", bool(prior))
