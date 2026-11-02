@@ -57,6 +57,18 @@ class HistoryIntegrityTests(unittest.TestCase):
             history.collect_symbol("BTCUSDT", start, start+timedelta(days=1))
         self.assertEqual([len(call.args[2]) for call in save.call_args_list], [1440, 288, 96])
 
+    def test_publication_window_excludes_known_unpublished_archive(self):
+        now = datetime(2026, 11, 2, 9, 20, tzinfo=timezone.utc)
+        start, end = history.collection_window(now)
+        self.assertEqual(end, datetime(2026, 10, 26, tzinfo=timezone.utc))
+        self.assertEqual(end-start, timedelta(days=365))
+        self.assertNotEqual(history.PUBLICATION_DELAY_DAYS, 0)
+        self.assertLess(end, datetime(2026, 10, 28, tzinfo=timezone.utc))
+        local = now.astimezone(timezone(timedelta(hours=9)))
+        self.assertEqual(history.collection_window(local), (start,end))
+        with self.assertRaisesRegex(ValueError,"NAIVE_NOW"):
+            history.collection_window(now.replace(tzinfo=None))
+
 
 if __name__ == "__main__":
     unittest.main()

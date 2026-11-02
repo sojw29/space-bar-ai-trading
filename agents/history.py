@@ -24,7 +24,9 @@ DATA_DIR = "data/history"
 BASE_URL = "https://data.binance.vision/data/futures/um"
 
 DAYS_TO_COLLECT = 365
-PUBLICATION_DELAY_DAYS = 3
+# Archive publication can lag by more than three days (observed 2026-10-28).
+# Keep a conservative research cutoff; completeness checks still reject gaps.
+PUBLICATION_DELAY_DAYS = 7
 MAX_RETRIES = 3
 
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -540,6 +542,15 @@ def collect_symbol(symbol, start, end):
 # MAIN
 # ============================================================
 
+def collection_window(now):
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("NAIVE_NOW")
+    now = now.astimezone(timezone.utc)
+    end_ts = (int(now.timestamp() // 86400) - PUBLICATION_DELAY_DAYS) * 86400
+    end = datetime.fromtimestamp(end_ts, tz=timezone.utc)
+    return end - timedelta(days=DAYS_TO_COLLECT), end
+
+
 def main():
 
     print(
@@ -547,22 +558,8 @@ def main():
         flush=True
     )
 
-    now = datetime.now(timezone.utc)
-
-    # Exclude the most recent 3 UTC days.
-    end_ts = (
-        int(now.timestamp() // 86400)
-        - PUBLICATION_DELAY_DAYS
-    ) * 86400
-
-    end = datetime.fromtimestamp(
-        end_ts,
-        tz=timezone.utc
-    )
-
-    start = end - timedelta(
-        days=DAYS_TO_COLLECT
-    )
+    start, end = collection_window(datetime.now(timezone.utc))
+    print(f"Archive publication delay: {PUBLICATION_DELAY_DAYS} UTC days; not realtime", flush=True)
 
     print(
         f"Period: {start} -> {end}",
