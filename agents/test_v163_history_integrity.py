@@ -1,5 +1,6 @@
 """Offline regression tests for V163 historical OHLCV ingestion."""
 import math
+import csv
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -200,6 +201,38 @@ class HistoryIntegrityTests(unittest.TestCase):
             self.write_loader_csv(Path(directory),[[600,10,11,9,10,2],[300,10,11,9,10,2],[300,10.0,11.0,9.0,10.0,2.0]])
             with patch.object(tester,"DATA_DIR",directory):rows=tester.load_data("BTC","5")
             self.assertEqual([row["timestamp"] for row in rows],[300,600])
+
+
+    def test_loader_rejects_invalid_csv_schema_and_row_width(self):
+        header="timestamp,open,high,low,close,volume"
+        cases=[("","INVALID_HISTORY_CSV_SCHEMA"),
+               (header+",extra\n300,10,11,9,10,2,x\n","INVALID_HISTORY_CSV_SCHEMA"),
+               ("timestamp,open,high,low,close,close\n300,10,11,9,10,2\n","INVALID_HISTORY_CSV_SCHEMA"),
+               (header+"\n300,10,11,9,10\n","INVALID_HISTORY_CSV_ROW"),
+               (header+"\n300,10,11,9,10,2,x\n","INVALID_HISTORY_CSV_ROW")]
+        for content,error in cases:
+            with self.subTest(error=error,content=content),TemporaryDirectory() as directory:
+                path=Path(directory)/"BTC_5m.csv"
+                path.write_text(content,encoding="utf-8")
+                with patch.object(tester,"DATA_DIR",directory):
+                    with self.assertRaisesRegex(RuntimeError,error):tester.load_data("BTC","5")
+                self.assertEqual(path.read_text(encoding="utf-8"),content)
+
+    def test_loader_rejects_unterminated_quote_without_partial_result(self):
+        with TemporaryDirectory() as directory:
+            content='timestamp,open,high,low,close,volume\n300,10,11,9,10,2\n600,10,11,9,10,"2\n'
+            path=Path(directory)/"BTC_5m.csv"
+            path.write_text(content,encoding="utf-8")
+            with patch.object(tester,"DATA_DIR",directory):
+                with self.assertRaises(csv.Error):tester.load_data("BTC","5")
+            self.assertEqual(path.read_text(encoding="utf-8"),content)
+
+    def test_loader_accepts_bom_and_reordered_exact_schema(self):
+        with TemporaryDirectory() as directory:
+            path=Path(directory)/"BTC_5m.csv"
+            path.write_text("volume,close,low,high,open,timestamp\n2,10,9,11,10,300\n",encoding="utf-8-sig")
+            with patch.object(tester,"DATA_DIR",directory):rows=tester.load_data("BTC","5")
+            self.assertEqual(rows,[{"timestamp":300,"open":10.0,"high":11.0,"low":9.0,"close":10.0,"volume":2.0}])
 
 
 
