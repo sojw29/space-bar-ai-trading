@@ -1,0 +1,120 @@
+name: SPACE BAR Manual AI Meeting Publication
+on:
+  workflow_dispatch:
+    inputs:
+      run_ai_meeting:
+        description: 'Authorize one public research meeting (up to 7 paid API calls)'
+        type: boolean
+        default: false
+      ai_model:
+        description: 'Model supporting strict Chat Completions JSON schema'
+        type: string
+        required: true
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: browser-room-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check explicit live-meeting configuration
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SPACEBAR_AI_MODEL: ${{ inputs.ai_model }}
+          SPACEBAR_REF: ${{ github.ref }}
+          SPACEBAR_AI_AUTHORIZED: ${{ inputs.run_ai_meeting }}
+        run: |
+          python - <<'PY'
+          import os, sys
+          if os.environ.get('SPACEBAR_AI_AUTHORIZED') != 'true':
+              sys.exit('Explicit paid-call and public-publication authorization is required.')
+          if os.environ.get('SPACEBAR_REF') != 'refs/heads/main':
+              sys.exit('Live meeting publication is supported from main only.')
+          if not os.environ.get('OPENAI_API_KEY', '').strip():
+              sys.exit('OPENAI_API_KEY secret is not configured; no model call made.')
+          if not os.environ.get('SPACEBAR_AI_MODEL', '').strip():
+              sys.exit('ai_model must be supplied; no model call made.')
+          PY
+      - name: Validate static room files
+        run: |
+          test -s web/index.html
+          test -s web/office_3d.html
+          test -s web/command_center.html
+          grep -q '읽기 전용 데모' web/index.html
+      - name: Publish only validated optional historical scorecard
+        run: |
+          python agents/pages_snapshot_v222.py reports/strategy_scorecard_latest.json web/research_snapshot.json
+      - name: Collect public research-only market snapshot
+        id: market_snapshot
+        continue-on-error: true
+        run: python agents/public_market_snapshot_v223.py web/market_snapshot.json
+      - name: Report unavailable optional ticker snapshot
+        if: ${{ steps.market_snapshot.outcome == 'failure' }}
+        run: |
+          echo "::warning::Public ticker collection failed; deploying without a market snapshot."
+          echo "Public ticker data unavailable for this deployment (no live market prices)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Assess published ticker snapshot without order execution
+        run: |
+          if test -s web/market_snapshot.json; then
+            python agents/public_market_diagnostics_v224.py web/market_snapshot.json web/market_diagnostics.json
+          else
+            rm -f web/market_diagnostics.json
+          fi
+      - name: Collect completed public OHLCV indicators (optional)
+        id: ohlcv_snapshot
+        continue-on-error: true
+        run: python agents/ohlcv_indicators_v225.py web/ohlcv_indicators.json
+      - name: Report unavailable optional OHLCV indicators
+        if: ${{ steps.ohlcv_snapshot.outcome == 'failure' }}
+        run: |
+          echo "::warning::Public OHLCV collection failed; deploying without indicator data."
+          echo "Public OHLCV indicators unavailable for this deployment (no derived agent descriptions)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Derive safe agent-labeled indicator descriptions
+        run: |
+          if test -s web/ohlcv_indicators.json; then
+            python agents/agent_indicator_interpretation_v228.py web/ohlcv_indicators.json web/agent_interpretations.json
+          else
+            rm -f web/agent_interpretations.json
+          fi
+      - name: Compile deterministic COMMANDER research brief
+        run: |
+          if test -s web/agent_interpretations.json; then
+            python agents/commander_research_brief_v229.py web/agent_interpretations.json web/commander_brief.json
+          else
+            rm -f web/commander_brief.json
+          fi
+      - name: Retain a previous unexpired live meeting without running any model
+        run: python agents/ai_meeting_publication.py restore web/ai_meeting.json
+      - name: Prepare fresh validated model-meeting requests
+        if: github.event_name == 'workflow_dispatch' && inputs.run_ai_meeting
+        run: |
+          python agents/agent_research_runtime_v233.py web/commander_brief.json "$RUNNER_TEMP/meeting_runtime.json"
+          python agents/agent_handoff_audit_v234.py "$RUNNER_TEMP/meeting_runtime.json" "$RUNNER_TEMP/meeting_handoff.json"
+          python agents/research_consistency_review_v235.py "$RUNNER_TEMP/meeting_handoff.json" "$RUNNER_TEMP/meeting_review.json"
+          python agents/model_adapter_contract_v236.py "$RUNNER_TEMP/meeting_review.json" "$RUNNER_TEMP/meeting_requests.json"
+      - name: Run one explicitly requested model meeting
+        if: github.event_name == 'workflow_dispatch' && inputs.run_ai_meeting
+        timeout-minutes: 6
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SPACEBAR_AI_MODEL: ${{ inputs.ai_model }}
+        run: |
+          python agents/ai_meeting_runtime.py "$RUNNER_TEMP/meeting_requests.json" "$RUNNER_TEMP/completed_meeting.json" --enable-live --model "$SPACEBAR_AI_MODEL"
+      - name: Validate completed live transcript against the exact request bundle
+        if: github.event_name == 'workflow_dispatch' && inputs.run_ai_meeting
+        run: |
+          python agents/ai_meeting_publication.py publish "$RUNNER_TEMP/completed_meeting.json" web/ai_meeting.json --bundle "$RUNNER_TEMP/meeting_requests.json"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4
