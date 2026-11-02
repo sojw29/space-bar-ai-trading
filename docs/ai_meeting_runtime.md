@@ -127,3 +127,32 @@ available (for example configuration/data preparation failed before runtime),
 the summary says so instead of inferring that no call occurred or that publication
 succeeded. On failure, an older completed transcript is not treated as this run's
 result.
+
+## Input rehearsal without model calls
+
+In Actions, run **SPACE BAR AI Meeting Input Readiness (No Model Calls)**.
+No API key or model selection is required. This manual-only, read-permission
+workflow collects public completed-candle indicators and compiles the same source
+brief used by live execution, then runs source validation → handoff → consistency
+review → model request preparation → transport preflight. All temporary files stay
+in RUNNER_TEMP; there is no Pages upload/deployment or model invocation.
+
+The Actions summary reports each preparation stage. `INPUTS_READY` means only
+that current data can produce validated requests for four roles (a live meeting
+would make up to seven calls). It does not check credentials, model access, model
+compatibility, billing, actual model quality or trade readiness. Public data can
+still be unavailable due to source/network restrictions; collection failure is
+not converted into a successful check. Missing reports show an explicit unknown
+status. Reports older than their eight-hour data window are not rendered as ready.
+
+For a local existing V229 brief:
+
+```sh
+python agents/ai_meeting_readiness.py check path/to/commander_brief.json path/to/readiness.json
+python agents/ai_meeting_readiness.py summary path/to/readiness.json path/to/summary.md
+```
+
+Invalid input returns a nonzero exit code with a sanitized blocked diagnostic.
+The input and output cannot be the same file or aliases. Exceptions and source
+text are not copied into the summary. The existing paid/publication workflow is
+unchanged and still requires explicit authorization.

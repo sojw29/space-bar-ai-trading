@@ -1,0 +1,25 @@
+name: SPACE BAR AI Meeting Input Readiness (No Model Calls)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect public completed-candle indicators
+        run: python agents/ohlcv_indicators_v225.py "$RUNNER_TEMP/readiness_indicators.json"
+      - name: Describe validated indicators
+        run: python agents/agent_indicator_interpretation_v228.py "$RUNNER_TEMP/readiness_indicators.json" "$RUNNER_TEMP/readiness_interpretations.json"
+      - name: Compile descriptive source brief
+        run: python agents/commander_research_brief_v229.py "$RUNNER_TEMP/readiness_interpretations.json" "$RUNNER_TEMP/readiness_brief.json"
+      - name: Check all meeting request preparation stages without model calls
+        run: python agents/ai_meeting_readiness.py check "$RUNNER_TEMP/readiness_brief.json" "$RUNNER_TEMP/readiness_report.json"
+      - name: Summarize input readiness even after collection or validation failure
+        if: ${{ always() }}
+        run: python agents/ai_meeting_readiness.py summary "$RUNNER_TEMP/readiness_report.json" "$GITHUB_STEP_SUMMARY"
