@@ -12,6 +12,7 @@ on:
       - 'agents/ohlcv_indicators_v225.py'
       - 'agents/agent_indicator_interpretation_v228.py'
       - 'agents/commander_research_brief_v229.py'
+      - 'agents/ai_meeting_publication.py'
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -78,6 +79,8 @@ jobs:
           else
             rm -f web/commander_brief.json
           fi
+      - name: Retain a previous unexpired live meeting without running any model
+        run: python agents/ai_meeting_publication.py restore web/ai_meeting.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

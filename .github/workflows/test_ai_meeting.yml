@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'agents/ai_meeting_runtime.py'
+      - 'agents/ai_meeting_publication.py'
+      - '.github/workflows/deploy_browser_room.yml'
+      - '.github/workflows/run_ai_meeting.yml'
       - 'agents/test_ai_meeting*.py'
       - 'web/office_3d.html'
       - '.github/workflows/test_ai_meeting.yml'

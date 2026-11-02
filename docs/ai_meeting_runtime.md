@@ -50,13 +50,51 @@ Reload after a successful new run. Existing rule-based panels remain separate.
 agents. Injected test providers are always labeled `OFFLINE_FIXTURE` with
 `model_inference_performed: false`. No generated fixture is deployed as a live meeting.
 
-The generated transcript is ignored by git. Existing GitHub Pages deployment
-does **not** execute the model or publish this local output. Thus the public room
-will say no meeting is connected until a separate server-side execution and
-publication path is configured. The browser never receives the API key.
+The generated transcript is ignored by git. Public GitHub Pages execution is
+now available through the explicit manual workflow described below. Without a
+successful manual live run the public room reports no connected meeting.
+The browser never receives the API key.
 
 Output is atomic. A failed run leaves the previous completed file intact; it is
 still a dated snapshot, never evidence of a successful new run. The room's source
 expiry prevents indefinite display. Do not run concurrent writers to one output.
 
 Provider reference: https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+
+## Manual execution and publication with GitHub Actions
+
+1. In repository **Settings → Secrets and variables → Actions**, create the
+   repository secret `OPENAI_API_KEY`. Enter the key only in GitHub's secret form.
+2. In **Actions → SPACE BAR Manual AI Meeting Publication → Run workflow**, select
+   **main**, enable **run_ai_meeting**, and enter a supported model in **ai_model**.
+   Enabling this option authorizes one meeting with up to seven paid API calls
+   and public publication of its research statements.
+3. A successful run deploys the room and transcript together. Reload
+   `https://sojw29.github.io/space-bar-ai-trading/office_3d.html` and expand
+   **별도 모델 회의 기록**.
+
+The dedicated model workflow has only a manual trigger and the default checkbox
+is off. A run without authorization fails before provider calls. The separate
+Browser Room GitHub Pages workflow handles pushes and schedules without keys or
+model calls. Missing secrets/models and non-main live runs fail before provider
+calls. The model name is passed through an environment
+variable and a quoted argument, never interpolated into shell code. No secrets or
+intermediate request bundles are uploaded as artifacts.
+
+The live path collects public completed-candle indicators, prepares the V233–V236
+request bundle, executes the meeting, then validates the entire transcript against
+that exact bundle before uploading Pages. Unavailable data, provider failures,
+partial output or failed validation stop the new deployment. The previous public
+site remains in place; no success is inferred from an old snapshot.
+
+Normal deployments fetch the previous transcript only from the fixed public Pages
+origin and keep it only while it passes live-only schema, timestamps, roles,
+seven-phase sequence and final-veto validation. Fixtures, redirects, oversized,
+expired or malformed records are not retained. Retention performs no model calls.
+The source-based eight-hour limit still applies; retaining does not refresh dates.
+This relies on the existing Pages origin as the trusted publisher, not a signature
+or independent proof of model provenance. If retrieval is unavailable, the next
+normal deployment shows no connected meeting rather than an unvalidated record.
+
+CI exercises mocked provider and carry-over paths only. A successful paid run
+and provider/model access must still be verified in the configured repository.
