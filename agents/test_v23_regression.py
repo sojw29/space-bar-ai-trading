@@ -1,5 +1,6 @@
 """Offline regression checks for V18-V22. No exchange access required."""
 import csv
+import json
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,30 @@ import tester_v22 as v22
 
 
 class RegressionTests(unittest.TestCase):
+    def test_v22_corrupt_prior_files_are_not_missing_baselines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/"evidence.json"
+            self.assertIsNone(v22.load_previous_evidence(path))
+            for content in ("null","[]","false","123",'"text"',"{}",'{"candles":[]}', '{"candles":null}',"invalid JSON"):
+                with self.subTest(content=content):
+                    path.write_text(content,encoding="utf-8")
+                    with self.assertRaisesRegex(RuntimeError,"INVALID_PRIOR_EVIDENCE"):
+                        v22.load_previous_evidence(path)
+                    self.assertEqual(path.read_text(encoding="utf-8"),content)
+
+    def test_v22_valid_legacy_and_current_prior_files_load(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/"evidence.json"
+            for prior in ({"candles":{}},{"candles":{},"history_policy":v22.history_policy()}):
+                path.write_text(json.dumps(prior),encoding="utf-8")
+                self.assertEqual(v22.load_previous_evidence(path),prior)
+
+    def test_v22_invalid_prior_shapes_fail_comparison_explicitly(self):
+        for prior in ([],False,123,"text",{}, {"candles":[]}, {"candles":None}):
+            with self.subTest(prior=prior):
+                self.assertEqual(v22.compare_forward_snapshot(prior,"2026-10-25T00:00:00+00:00"),(["INVALID_PRIOR_EVIDENCE_SCHEMA"],[],False))
+
+
     def test_v22_compares_forward_instants_not_timestamp_strings(self):
         prior={"history_policy":v22.history_policy(),"candles":{"last_forward_candle_utc":"2026-10-25T09:00:00+09:00"}}
         self.assertEqual(v22.compare_forward_snapshot(prior,"2026-10-25T00:00:00+00:00"),([], ["NO_NEW_FORWARD_CANDLES"],True))

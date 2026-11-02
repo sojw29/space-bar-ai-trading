@@ -98,10 +98,29 @@ def history_policy():
             "window_days": history.DAYS_TO_COLLECT}
 
 
+def valid_prior_shape(prior):
+    return isinstance(prior, dict) and isinstance(prior.get("candles"), dict)
+
+
+def load_previous_evidence(path):
+    """A missing artifact is optional; an existing corrupt artifact is an error."""
+    if not path.exists():
+        return None
+    try:
+        prior = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeError) as error:
+        raise RuntimeError("INVALID_PRIOR_EVIDENCE_JSON") from error
+    if not valid_prior_shape(prior):
+        raise RuntimeError("INVALID_PRIOR_EVIDENCE_SCHEMA")
+    return prior
+
+
 def compare_forward_snapshot(prior, current_last):
     """Compare only snapshots collected under the same explicit archive policy."""
-    if not prior:
+    if prior is None:
         return [], ["NO_PRIOR_FORWARD_BASELINE"], False
+    if not valid_prior_shape(prior):
+        return ["INVALID_PRIOR_EVIDENCE_SCHEMA"], [], False
     if prior.get("history_policy") != history_policy():
         return [], ["PRIOR_HISTORY_POLICY_INCOMPARABLE", "NO_PRIOR_FORWARD_BASELINE"], False
     previous_last = prior.get("candles", {}).get("last_forward_candle_utc")
@@ -145,7 +164,7 @@ def run():
     protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
     summaries = rows(summary_path)
     prior_path = previous_evidence_path()
-    prior = json.loads(prior_path.read_text(encoding="utf-8")) if prior_path.exists() else None
+    prior = load_previous_evidence(prior_path)
     issues = []
     warnings = []
     if candles["duplicate_or_unsorted_timestamps"]:
