@@ -7,6 +7,7 @@
 
 import csv
 import json
+import math
 import os
 from datetime import datetime, timezone
 
@@ -74,6 +75,9 @@ def load_data(symbol, timeframe):
                     "volume": float(row["volume"])
                 }
 
+                if not all(math.isfinite(candle[key]) for key in ("open", "high", "low", "close", "volume")):
+                    raise RuntimeError("NONFINITE_HISTORY_VALUE")
+
                 if (
                     candle["open"] <= 0
                     or candle["high"] <= 0
@@ -90,7 +94,10 @@ def load_data(symbol, timeframe):
                 ):
                     continue
 
-                candles[candle["timestamp"]] = candle
+                timestamp = candle["timestamp"]
+                if timestamp in candles and candles[timestamp] != candle:
+                    raise RuntimeError(f"CONFLICTING_HISTORY_CANDLE: timestamp={timestamp}")
+                candles[timestamp] = candle
 
             except (ValueError, KeyError, TypeError):
                 continue

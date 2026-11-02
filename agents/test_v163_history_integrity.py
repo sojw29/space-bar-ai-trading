@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history
+import tester
 
 
 class HistoryIntegrityTests(unittest.TestCase):
@@ -161,6 +162,44 @@ class HistoryIntegrityTests(unittest.TestCase):
                         history.save_csv("BTCUSDT",1,rows)
                 self.assertEqual(target.read_bytes(),b"previous complete history")
                 self.assertEqual(list(root.glob(".history-*.tmp")),[])
+
+
+    def write_loader_csv(self,root,rows):
+        import csv
+        with (root/"BTC_5m.csv").open("w",newline="",encoding="utf-8") as handle:
+            writer=csv.writer(handle)
+            writer.writerow(["timestamp","open","high","low","close","volume"])
+            writer.writerows(rows)
+
+    def test_loader_rejects_nonfinite_ohlcv(self):
+        for column in range(1,6):
+            for value in ("nan","inf","-inf"):
+                with self.subTest(column=column,value=value),TemporaryDirectory() as directory:
+                    row=[300,10,11,9,10,2]
+                    row[column]=value
+                    self.write_loader_csv(Path(directory),[row])
+                    with patch.object(tester,"DATA_DIR",directory):
+                        with self.assertRaisesRegex(RuntimeError,"NONFINITE_HISTORY_VALUE"):
+                            tester.load_data("BTC","5")
+
+    def test_loader_rejects_conflicting_duplicates(self):
+        for column,value in ((1,10.5),(2,12),(3,8),(4,10.5),(5,3)):
+            with self.subTest(column=column),TemporaryDirectory() as directory:
+                original=[300,10,11,9,10,2]
+                conflict=original.copy();conflict[column]=value
+                root=Path(directory)
+                self.write_loader_csv(root,[original,conflict])
+                before=(root/"BTC_5m.csv").read_bytes()
+                with patch.object(tester,"DATA_DIR",directory):
+                    with self.assertRaisesRegex(RuntimeError,"CONFLICTING_HISTORY_CANDLE"):
+                        tester.load_data("BTC","5")
+                self.assertEqual((root/"BTC_5m.csv").read_bytes(),before)
+
+    def test_loader_accepts_identical_duplicates_and_sorted_output(self):
+        with TemporaryDirectory() as directory:
+            self.write_loader_csv(Path(directory),[[600,10,11,9,10,2],[300,10,11,9,10,2],[300,10.0,11.0,9.0,10.0,2.0]])
+            with patch.object(tester,"DATA_DIR",directory):rows=tester.load_data("BTC","5")
+            self.assertEqual([row["timestamp"] for row in rows],[300,600])
 
 
 
