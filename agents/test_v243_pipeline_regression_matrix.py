@@ -107,4 +107,22 @@ class CliFileSafetyTests(unittest.TestCase):
     self.assertFalse(target.exists())
     self.assertEqual(list(root.glob(".report.json.*.tmp")),[])
 
+ def test_unsafe_downstream_output_invalidates_stale_cli_report(self):
+  unsafe={"research_only":True,"network_enabled":False,"orders_enabled":False,
+          "model_inference_performed":False,"validated_for_trading":False,
+          "ai_agents_running":False,"trade_signals_available":True}
+  for output in (unsafe,None):
+   with self.subTest(output=output), TemporaryDirectory() as directory:
+    root=Path(directory)
+    original=root/"source.json"
+    original.write_text(json.dumps(source()),encoding="utf-8")
+    before=original.read_bytes()
+    target=root/"report.json"
+    target.write_text('{"baseline":"PASS"}',encoding="utf-8")
+    with patch("sys.argv",["v243",str(original),str(target)]), patch("offline_network_guard_v242.run_pipeline",return_value=output):
+     with self.assertRaisesRegex(ValueError,"UNSAFE_PIPELINE_OUTPUT"):main()
+    self.assertEqual(original.read_bytes(),before)
+    self.assertFalse(target.exists())
+    self.assertEqual(list(root.glob(".report.json.*.tmp")),[])
+
 if __name__=="__main__":unittest.main()

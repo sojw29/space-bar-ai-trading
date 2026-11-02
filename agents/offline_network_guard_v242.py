@@ -48,9 +48,12 @@ def run_guarded_pipeline(source, now=None):
     # A dependency may swallow the immediate error; never certify that run offline.
     if audit["attempted"]:
         deny_network()
-    if (result.get("network_enabled") is not False
-        or result.get("orders_enabled") is not False
-        or result.get("model_inference_performed") is not False
-        or result.get("validated_for_trading") is not False):
+    required = {"research_only": True, "network_enabled": False,
+                "orders_enabled": False, "model_inference_performed": False,
+                "validated_for_trading": False, "ai_agents_running": False,
+                "trade_signals_available": False}
+    if not isinstance(result, dict) or any(
+        result.get(key) is not expected for key, expected in required.items()
+    ):
         raise ValueError("UNSAFE_PIPELINE_OUTPUT")
     return result
