@@ -16,6 +16,43 @@ import tester_v22 as v22
 
 
 class RegressionTests(unittest.TestCase):
+    def test_v22_failed_upstream_run_removes_stale_pass_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "v22"
+            out.mkdir()
+            stale = out / "evidence.json"
+            stale.write_text('{"integrity_pass": true}', encoding="utf-8")
+            with patch.object(v22, "OUT", out), \
+                 patch.object(v21, "run", side_effect=RuntimeError("UPSTREAM_FAILURE")):
+                with self.assertRaisesRegex(RuntimeError, "UPSTREAM_FAILURE"):
+                    v22.run()
+            self.assertFalse(stale.exists())
+
+    def test_v22_corrupt_prior_run_removes_stale_pass_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / "v22"
+            out.mkdir()
+            stale = out / "evidence.json"
+            stale.write_text('{"integrity_pass": true}', encoding="utf-8")
+            source = root / "v17"
+            source.mkdir()
+            (source / "protocol.json").write_text("{}", encoding="utf-8")
+            (source / "summary.csv").write_text("candidate,scenario\n", encoding="utf-8")
+            candles = root / "candles.csv"
+            candles.write_text("timestamp\n", encoding="utf-8")
+            prior = root / "prior.json"
+            prior.write_text("null", encoding="utf-8")
+            with patch.object(v22, "OUT", out), \
+                 patch.object(v22, "CANDLE_PATH", candles), \
+                 patch.object(v17, "REPORT_DIR", source), \
+                 patch.object(v21, "run", return_value=None), \
+                 patch.object(v22, "inspect_candles", return_value={}), \
+                 patch.object(v22, "previous_evidence_path", return_value=prior):
+                with self.assertRaisesRegex(RuntimeError, "INVALID_PRIOR_EVIDENCE_SCHEMA"):
+                    v22.run()
+            self.assertFalse(stale.exists())
+
     def test_v22_corrupt_prior_files_are_not_missing_baselines(self):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/"evidence.json"
