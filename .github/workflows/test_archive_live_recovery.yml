@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'agents/history.py'
+      - 'agents/tester.py'
       - 'agents/tester_v22.py'
       - 'agents/test_v23_regression.py'
       - 'agents/test_v163_history_integrity.py'
