@@ -33,6 +33,26 @@ class MeetingError(ValueError):
     pass
 
 
+SAFE_ERROR_CODES = frozenset({
+    'LIVE_PROVIDER_NOT_ENABLED', 'MODEL_REQUIRED', 'OPENAI_API_KEY_REQUIRED',
+    'SOURCE_DESTINATION_ALIAS', 'SOURCE_TOO_LARGE', 'DIAGNOSTIC_PATH_ALIAS',
+    'PROVIDER_AUTHENTICATION_FAILED', 'PROVIDER_ACCESS_DENIED',
+    'PROVIDER_MODEL_OR_ENDPOINT_NOT_FOUND', 'PROVIDER_REQUEST_REJECTED',
+    'PROVIDER_RATE_OR_QUOTA_LIMIT', 'PROVIDER_UPSTREAM_ERROR', 'PROVIDER_TIMEOUT',
+    'PROVIDER_REQUEST_FAILED', 'PROVIDER_RESPONSE_INVALID', 'PROVIDER_RESPONSE_TOO_LARGE',
+    'PROVIDER_OUTPUT_TRUNCATED', 'PROVIDER_REFUSED', 'PROVIDER_INCOMPLETE_OR_REFUSED',
+    'INVALID_STATEMENT', 'INVALID_SUMMARY', 'INVALID_CONCERNS', 'INVALID_VERDICT',
+    'CLOCK_MOVED_BACKWARD',
+})
+
+
+def safe_error_code(error):
+    # Never use an arbitrary exception string in logs or diagnostic artifacts.
+    if isinstance(error, MeetingError) and str(error) in SAFE_ERROR_CODES:
+        return str(error)
+    return 'FILE_ERROR' if isinstance(error, OSError) else 'INPUT_OR_VALIDATION_ERROR'
+
+
 def validate_statement(value):
     if not isinstance(value, dict) or set(value) != {"summary", "concerns", "verdict"}:
         raise MeetingError("INVALID_STATEMENT")
@@ -95,17 +115,32 @@ class OpenAIProvider:
             choice = data["choices"][0]
             if not isinstance(choice, dict) or not isinstance(choice.get("message"), dict):
                 raise MeetingError("PROVIDER_RESPONSE_INVALID")
-            if choice.get("finish_reason") != "stop" or choice["message"].get("refusal"):
+            if choice["message"].get("refusal"):
+                raise MeetingError("PROVIDER_REFUSED")
+            if choice.get("finish_reason") == "length":
+                raise MeetingError("PROVIDER_OUTPUT_TRUNCATED")
+            if choice.get("finish_reason") != "stop":
                 raise MeetingError("PROVIDER_INCOMPLETE_OR_REFUSED")
             return validate_statement(json.loads(choice["message"]["content"]))
-        except (HTTPError, URLError, TimeoutError, OSError):
+        except HTTPError as error:
+            codes = {400: 'PROVIDER_REQUEST_REJECTED', 401: 'PROVIDER_AUTHENTICATION_FAILED',
+                     403: 'PROVIDER_ACCESS_DENIED', 404: 'PROVIDER_MODEL_OR_ENDPOINT_NOT_FOUND',
+                     429: 'PROVIDER_RATE_OR_QUOTA_LIMIT'}
+            code = codes.get(error.code, 'PROVIDER_UPSTREAM_ERROR' if error.code >= 500 else 'PROVIDER_REQUEST_FAILED')
+            raise MeetingError(code) from None
+        except TimeoutError:
+            raise MeetingError('PROVIDER_TIMEOUT') from None
+        except URLError as error:
+            code = 'PROVIDER_TIMEOUT' if isinstance(error.reason, TimeoutError) else 'PROVIDER_REQUEST_FAILED'
+            raise MeetingError(code) from None
+        except OSError:
             # Do not expose HTTP response bodies, request headers or credentials.
             raise MeetingError("PROVIDER_REQUEST_FAILED") from None
         except (KeyError, IndexError, TypeError, UnicodeError, json.JSONDecodeError):
             raise MeetingError("PROVIDER_RESPONSE_INVALID") from None
 
 
-def run_meeting(bundle, provider, *, clock=None):
+def run_meeting(bundle, provider, *, clock=None, progress=None):
     """Injected providers are fixtures; only the concrete transport marks live inference."""
     clock = clock or (lambda: datetime.now(timezone.utc))
     bundle = deepcopy(bundle)
@@ -120,8 +155,14 @@ def run_meeting(bundle, provider, *, clock=None):
 
     def speak(agent, phase, context):
         preflight(bundle, dry_run=True, now=clock())
+        if progress:
+            progress({'agent': agent, 'phase': phase, 'event': 'CALL_STARTED',
+                      'attempted_calls': len(transcript)+1, 'validated_responses': len(transcript)})
         result = validate_statement(provider.complete(agent, phase, deepcopy(context)))
         transcript.append({"agent": agent, "phase": phase, **result})
+        if progress:
+            progress({'agent': agent, 'phase': phase, 'event': 'RESPONSE_VALIDATED',
+                      'attempted_calls': len(transcript), 'validated_responses': len(transcript)})
 
     for agent in ANALYSTS:
         speak(agent, "ANALYSIS", {"facts": facts})
@@ -175,9 +216,22 @@ def main():
     parser.add_argument("destination", help="e.g. web/ai_meeting.json")
     parser.add_argument("--enable-live", action="store_true", help="Authorize up to seven paid API calls")
     parser.add_argument("--model", required=True, help="Model supporting strict Chat Completions JSON schema")
+    parser.add_argument("--diagnostics", help="Optional sanitized execution-status JSON, outside web")
     args = parser.parse_args()
+    diagnostic = {'version': 'MEETING_DIAGNOSTICS_1', 'status': 'RUNNING', 'stage': 'INPUT',
+                  'agent': None, 'phase': None, 'attempted_calls': 0, 'validated_responses': 0,
+                  'error_code': None}
+    diagnostic_path = None
     try:
         source, destination = Path(args.source), Path(args.destination)
+        if args.diagnostics:
+            candidate = Path(args.diagnostics)
+            for protected in (source, destination):
+                if (candidate.resolve() == protected.resolve() or
+                    (candidate.exists() and protected.exists() and os.path.samefile(candidate, protected))):
+                    raise MeetingError('DIAGNOSTIC_PATH_ALIAS')
+            diagnostic_path = candidate
+            publish_report(diagnostic, diagnostic_path)
         if source.resolve() == destination.resolve() or (destination.exists() and os.path.samefile(source, destination)):
             raise MeetingError("SOURCE_DESTINATION_ALIAS")
         with source.open("rb") as stream:
@@ -186,12 +240,34 @@ def main():
             raise MeetingError("SOURCE_TOO_LARGE")
         bundle = json.loads(raw)
         preflight(bundle, dry_run=True)
+        diagnostic['stage'] = 'CONFIGURATION'
         provider = OpenAIProvider(enabled=args.enable_live, model=args.model)
-        report = run_meeting(bundle, provider)
+        diagnostic['stage'] = 'INFERENCE'
+        def progress(event):
+            diagnostic.update({k: event[k] for k in ('agent', 'phase', 'attempted_calls', 'validated_responses')})
+            if diagnostic_path:
+                publish_report(diagnostic, diagnostic_path)
+            print('Meeting progress: '+event['agent']+'/'+event['phase']+' '+event['event']+
+                  ' · validated '+str(event['validated_responses'])+'/7', flush=True)
+        report = run_meeting(bundle, provider, progress=progress)
+        diagnostic['stage'] = 'PUBLICATION'
         publish_report(report, destination)
+        diagnostic.update(status='COMPLETED', stage='COMPLETED')
+        if diagnostic_path:
+            try:
+                publish_report(diagnostic, diagnostic_path)
+            except OSError:
+                print('Diagnostic status could not be written; completed transcript is unchanged.')
         print("Research meeting completed: 7 calls; no orders. Output:", destination)
-    except (ValueError, OSError, TypeError, KeyError):
-        parser.exit(1, "Meeting not published. Check source freshness, model, opt-in and provider configuration.\n")
+    except (ValueError, OSError, TypeError, KeyError) as error:
+        code = safe_error_code(error)
+        diagnostic.update(status='FAILED', error_code=code)
+        if diagnostic_path:
+            try:
+                publish_report(diagnostic, diagnostic_path)
+            except OSError:
+                pass
+        parser.exit(1, 'Meeting not published: '+code+' (stage '+diagnostic['stage']+').\n')
 
 
 if __name__ == "__main__":
