@@ -1779,6 +1779,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const KEY="spacebar.v230.commander.research.v1";
  const status=document.getElementById("v230-status");
  const rows=document.getElementById("v230-rows");
+ let cleared=false;
  function valid(e){
   return e&&typeof e==="object"&&typeof e.timestamp==="string"&&
    Number.isFinite(Date.parse(e.timestamp))&&Array.isArray(e.markets)&&e.markets.length===3&&
@@ -1806,14 +1807,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   status.textContent=list.length+"개 기록 · 이 기기에서만 조회 가능";
  }
  document.getElementById("v230-clear").addEventListener("click",()=>{
-  try{localStorage.removeItem(KEY);status.textContent="로컬 기록 삭제됨";rows.replaceChildren();}
+  try{localStorage.removeItem(KEY);cleared=true;status.textContent="로컬 기록 삭제됨";rows.replaceChildren();}
   catch(_){status.textContent="브라우저 저장소 삭제 불가";}
  });
  const history=read();show(history);
  try{
   const response=await fetch("./commander_brief.json",{cache:"no-store",credentials:"omit"});
+  if(cleared)return;
   if(!response.ok)throw Error("최신 브리핑 없음");
-  const raw=await response.text();if(raw.length>12000)throw Error("응답 크기 초과");
+  const raw=await response.text();
+  if(cleared)return;
+  if(raw.length>12000)throw Error("응답 크기 초과");
   const d=JSON.parse(raw);
   if(d.version!=="V229.0"||d.report_type!=="DETERMINISTIC_COMMANDER_RESEARCH_BRIEF"||
     d.research_only!==true||d.orders_enabled!==false||d.realtime!==false||
@@ -1831,7 +1835,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const updated=[...history,entry].slice(-30);
    localStorage.setItem(KEY,JSON.stringify(updated));show(updated);
   }
- }catch(error){status.textContent=history.length+"개 로컬 기록 · 최신 저장 실패: "+error.message;}
+ }catch(error){if(!cleared)status.textContent=history.length+"개 로컬 기록 · 최신 저장 실패: "+error.message;}
 })();
 </script>
 <section id="v231-change-panel" aria-label="로컬 분석 변화 비교" style="position:fixed;top:34%;left:12px;z-index:1005;width:min(315px,calc(100vw - 24px));max-height:24vh;overflow:auto;background:rgba(8,18,34,.95);border:1px solid #86a5b8;border-radius:12px;padding:12px;color:#e8f4ff;font:12px/1.6 system-ui,sans-serif">

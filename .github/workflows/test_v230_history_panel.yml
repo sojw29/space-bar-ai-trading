@@ -4,6 +4,7 @@ on:
     paths:
       - 'web/office_3d.html'
       - 'agents/test_v230_history_panel.py'
+      - 'agents/test_history_clear_race.py'
       - '.github/workflows/test_v230_history_panel.yml'
   pull_request:
   workflow_dispatch:
@@ -18,3 +19,6 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s agents -p 'test_v230_history_panel.py' -v
+      - name: Require Node.js for local-history lifecycle regression
+        run: node --version
+      - run: python -m unittest discover -s agents -p 'test_history_clear_race.py' -v
