@@ -158,17 +158,15 @@ def add_rows(candles, rows, start_ts, end_ts):
             if vol < 0:
                 continue
 
-            if timestamp not in candles:
-                added += 1
-
-            candles[timestamp] = [
-                timestamp,
-                op,
-                hi,
-                lo,
-                cl,
-                vol
-            ]
+            candidate = [timestamp, op, hi, lo, cl, vol]
+            if timestamp in candles:
+                # Monthly/daily archives may overlap. Equal rows are harmless;
+                # contradictory values must never be resolved by download order.
+                if candles[timestamp] != candidate:
+                    raise RuntimeError(f"CONFLICTING_CANDLE: timestamp={timestamp}")
+                continue
+            candles[timestamp] = candidate
+            added += 1
 
         except (
             ValueError,
