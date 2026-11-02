@@ -3,11 +3,14 @@ on:
   pull_request:
     paths:
       - 'agents/history.py'
+      - 'agents/tester_v22.py'
+      - 'agents/test_v23_regression.py'
       - 'agents/test_v163_history_integrity.py'
       - '.github/workflows/test_archive_live_recovery.yml'
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   collect-and-report:
     runs-on: ubuntu-latest
@@ -21,6 +24,27 @@ jobs:
         run: python -m unittest discover -s agents -p 'test_v163_history_integrity.py' -v
       - name: Collect real contiguous archive history
         run: python agents/history.py
+      - name: Restore prior main V21/V22 snapshots (best effort)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p previous_v21 previous_v22
+          for version in v21 v22; do
+            case "$version" in
+              v21) artifact=space-bar-v21-audit; target=previous_v21 ;;
+              v22) artifact=space-bar-v22-evidence; target=previous_v22 ;;
+            esac
+            id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "backtest_${version}.yml" --branch main --status success --limit 10 --json databaseId --jq '.[0].databaseId // empty' || true)"
+            if [ -n "$id" ]; then
+              gh run download "$id" --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir "$target" ||
+                echo "WARNING: Previous $version artifact unavailable; evidence remains unverified"
+            else
+              echo "WARNING: No previous successful $version main run"
+            fi
+          done
+      - name: Snapshot comparison regressions
+        run: python agents/test_v23_regression.py
       - name: Run V17 through V25 report pipeline
         run: python agents/tester_v25.py
       - uses: actions/upload-artifact@v6

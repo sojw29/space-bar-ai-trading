@@ -15,6 +15,26 @@ import tester_v22 as v22
 
 
 class RegressionTests(unittest.TestCase):
+    def test_v22_archive_policy_change_requires_new_baseline(self):
+        prior={"candles":{"last_forward_candle_utc":"2026-10-29T00:00:00+00:00"}}
+        for policy in (None,dict(v22.history_policy(),publication_delay_days=3)):
+            with self.subTest(policy=policy):
+                prior["history_policy"]=policy
+                issues,warnings,baseline=v22.compare_forward_snapshot(prior,"2026-10-25T00:00:00+00:00")
+                self.assertEqual(issues,[])
+                self.assertIn("PRIOR_HISTORY_POLICY_INCOMPARABLE",warnings)
+                self.assertFalse(baseline)
+                candles={"forward_candle_count":2016,"nonconsecutive_intervals":0}
+                self.assertFalse(v22.forward_evidence_usable_for_research(candles,issues,warnings,baseline))
+
+    def test_v22_same_policy_still_rejects_regression(self):
+        prior={"history_policy":v22.history_policy(),"candles":{"last_forward_candle_utc":"2026-10-25T00:00:00+00:00"}}
+        issues,warnings,baseline=v22.compare_forward_snapshot(prior,"2026-10-24T00:00:00+00:00")
+        self.assertEqual(issues,["FORWARD_DATA_REGRESSION"])
+        self.assertTrue(baseline)
+        self.assertEqual(v22.compare_forward_snapshot(prior,"2026-10-25T00:00:00+00:00"),([], ["NO_NEW_FORWARD_CANDLES"],True))
+        self.assertEqual(v22.compare_forward_snapshot(prior,"2026-10-26T00:00:00+00:00"),([],[],True))
+
     def test_v17_empty_forward_window_label(self):
         before = v17.CUTOFF - 300
         label = v17.forward_window_label([{"timestamp": before}])
