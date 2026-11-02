@@ -2,6 +2,8 @@
 import math
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -35,6 +37,25 @@ class HistoryIntegrityTests(unittest.TestCase):
         self.assertEqual(history.count_missing_candles([[60], [120], [180]], 60, 240), (0, 0, 0))
         self.assertEqual(history.count_missing_candles([[60], [120]], 60, 240), (0, 0, 1))
         self.assertEqual(history.count_missing_candles([], 60, 240), (0, 0, 3))
+
+    def test_collection_rejects_even_one_missing_minute_before_save(self):
+        start = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        end = start + timedelta(days=1)
+        ts = int(start.timestamp())
+        complete = [[str((ts+i*60)*1000), "10", "11", "9", "10", "2"] for i in range(1440)]
+        for missing in (0, 720, 1439):
+            with self.subTest(missing=missing), patch.object(history, "download_zip", return_value=complete[:missing]+complete[missing+1:]), patch.object(history, "save_csv") as save:
+                with self.assertRaisesRegex(RuntimeError, "incomplete history"):
+                    history.collect_symbol("BTCUSDT", start, end)
+                save.assert_not_called()
+
+    def test_complete_collection_saves_all_timeframes(self):
+        start = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        ts = int(start.timestamp())
+        rows = [[str((ts+i*60)*1000), "10", "11", "9", "10", "2"] for i in range(1440)]
+        with patch.object(history, "download_zip", return_value=rows), patch.object(history, "save_csv") as save:
+            history.collect_symbol("BTCUSDT", start, start+timedelta(days=1))
+        self.assertEqual([len(call.args[2]) for call in save.call_args_list], [1440, 288, 96])
 
 
 if __name__ == "__main__":

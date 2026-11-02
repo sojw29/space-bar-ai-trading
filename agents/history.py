@@ -492,6 +492,14 @@ def collect_symbol(symbol, start, end):
         flush=True
     )
 
+    # Backtests require contiguous candles, including the requested window edges.
+    # A high coverage percentage can conceal an entire missing archive day.
+    if missing:
+        raise RuntimeError(
+            f"{symbol}: incomplete history: missing={missing} "
+            f"(internal={internal_missing}, leading={leading_missing}, trailing={trailing_missing})"
+        )
+
     if coverage < 99.0:
 
         raise RuntimeError(
