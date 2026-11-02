@@ -96,6 +96,41 @@ class HistoryIntegrityTests(unittest.TestCase):
         self.assertEqual(history.aggregate_candles(complete[:2]+complete[3:]+later,5),[[300,20,22,19,21,10]])
         self.assertEqual(history.aggregate_candles([],5),[])
 
+    def test_identical_archive_overlap_is_idempotent(self):
+        candles={}
+        row=["300000","10","11","9","10","2"]
+        self.assertEqual(history.add_rows(candles,[row],300,360),1)
+        before={key:list(value) for key,value in candles.items()}
+        equivalent=["300000","10.0","11.00","9.0","10.0","2.00"]
+        self.assertEqual(history.add_rows(candles,[equivalent],300,360),0)
+        self.assertEqual(candles,before)
+
+    def test_conflicting_archive_overlap_preserves_existing_candle(self):
+        row=["300000","10","11","9","10","2"]
+        for column,value in ((1,"10.5"),(2,"12"),(3,"8"),(4,"10.5"),(5,"3")):
+            with self.subTest(column=column):
+                candles={}
+                history.add_rows(candles,[row],300,360)
+                before={key:list(value) for key,value in candles.items()}
+                conflict=row.copy()
+                conflict[column]=value
+                with self.assertRaisesRegex(RuntimeError,"CONFLICTING_CANDLE"):
+                    history.add_rows(candles,[conflict],300,360)
+                self.assertEqual(candles,before)
+
+
+    def test_collection_conflict_stops_before_any_csv_save(self):
+        start=datetime(2026,1,1,tzinfo=timezone.utc)
+        end=datetime(2026,2,1,tzinfo=timezone.utc)
+        stamp=str(int(start.timestamp())*1000)
+        monthly=[[stamp,"10","11","9","10","2"]]
+        daily=[[stamp,"10","12","9","10","2"]]
+        with patch.object(history,"download_zip",side_effect=[monthly,daily]),patch.object(history,"save_csv") as save:
+            with self.assertRaisesRegex(RuntimeError,"CONFLICTING_CANDLE"):
+                history.collect_symbol("BTCUSDT",start,end)
+            save.assert_not_called()
+
+
 
 if __name__ == "__main__":
     unittest.main()
