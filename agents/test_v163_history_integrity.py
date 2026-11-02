@@ -69,6 +69,33 @@ class HistoryIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"NAIVE_NOW"):
             history.collection_window(now.replace(tzinfo=None))
 
+    def test_aggregation_rejects_duplicate_or_unsorted_minutes(self):
+        valid=[[i*60,10+i,12+i,9+i,11+i,2] for i in range(5)]
+        duplicate=[valid[0],valid[1],valid[1],valid[3],valid[4]]
+        unsorted=[valid[1],valid[0],*valid[2:]]
+        for rows in (duplicate,unsorted):
+            with self.subTest(rows=rows):
+                with self.assertRaisesRegex(ValueError,"INVALID_MINUTE_ORDER"):
+                    history.aggregate_candles(rows,5)
+
+    def test_aggregation_rejects_invalid_timeframe_and_grid(self):
+        rows=[[0,10,12,9,11,2]]
+        for timeframe in (0,-1,True,5.0,"5"):
+            with self.subTest(timeframe=timeframe):
+                with self.assertRaisesRegex(ValueError,"INVALID_TIMEFRAME"):
+                    history.aggregate_candles(rows,timeframe)
+        for timestamp in (30,-60,True,60.0,"60"):
+            with self.subTest(timestamp=timestamp):
+                with self.assertRaisesRegex(ValueError,"INVALID_MINUTE_TIMESTAMP"):
+                    history.aggregate_candles([[timestamp,10,12,9,11,2]],5)
+
+    def test_aggregation_preserves_ohlcv_and_drops_incomplete_bucket(self):
+        complete=[[i*60,10+i,12+i,9+i,11+i,i+1] for i in range(5)]
+        self.assertEqual(history.aggregate_candles(complete,5),[[0,10,16,9,15,15]])
+        later=[[300+i*60,20,22,19,21,2] for i in range(5)]
+        self.assertEqual(history.aggregate_candles(complete[:2]+complete[3:]+later,5),[[300,20,22,19,21,10]])
+        self.assertEqual(history.aggregate_candles([],5),[])
+
 
 if __name__ == "__main__":
     unittest.main()
