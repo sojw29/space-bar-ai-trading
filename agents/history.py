@@ -261,13 +261,21 @@ def save_csv(symbol, timeframe, candles):
 
 def aggregate_candles(one_minute, timeframe):
 
+    if type(timeframe) is not int or timeframe < 1:
+        raise ValueError("INVALID_TIMEFRAME")
     result = {}
+    previous_timestamp = None
 
     interval = timeframe * 60
 
     for candle in one_minute:
 
         timestamp, op, hi, lo, cl, vol = candle
+        if type(timestamp) is not int or timestamp < 0 or timestamp % 60:
+            raise ValueError("INVALID_MINUTE_TIMESTAMP")
+        if previous_timestamp is not None and timestamp <= previous_timestamp:
+            raise ValueError("INVALID_MINUTE_ORDER")
+        previous_timestamp = timestamp
 
         bucket = (
             timestamp // interval
