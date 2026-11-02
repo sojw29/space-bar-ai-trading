@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated private model discussion; never commit credentials or transcripts implicitly.
+web/ai_meeting.json

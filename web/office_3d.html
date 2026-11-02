@@ -1980,4 +1980,64 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
 })();
 </script>
+<details id="ai-meeting-panel" style="position:relative;z-index:1006;margin:18px auto;max-width:1000px;background:#101c30;color:#e8f4ff;padding:16px;border:1px solid #426482;border-radius:12px">
+<summary>별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
+<p id="ai-meeting-status" role="status">회의 결과 연결 확인 중…</p>
+<p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
+<div id="ai-meeting-rows"></div>
+</details>
+<script>
+/* Completed model meeting snapshots only. Model text is never HTML or executable code. */
+(async function(){
+ const status=document.getElementById("ai-meeting-status"),rows=document.getElementById("ai-meeting-rows");
+ const verdicts=["OBSERVATION_ONLY","REVIEW_NEEDED","INSUFFICIENT_DATA"];
+ const labels={OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
+ let validSince=null,validUntil=null;
+ function expire(){
+  if(validUntil!==null&&(Date.now()<validSince||Date.now()>validUntil)){
+   rows.replaceChildren();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
+   validSince=null;validUntil=null;
+  }
+ }
+ setInterval(expire,60000);
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
+ try{
+  const response=await fetch("./ai_meeting.json",{cache:"no-store",credentials:"omit"});
+  if(!response.ok)throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
+  const raw=await response.text();if(raw.length>65536)throw Error("회의 기록 크기 초과");
+  const d=JSON.parse(raw),live=d.execution_mode==="LIVE_PROVIDER";
+  if(d.version!=="AI_MEETING_1"||d.status!=="COMPLETED"||
+     !["LIVE_PROVIDER","OFFLINE_FIXTURE"].includes(d.execution_mode)||
+     d.model_inference_performed!==live||d.ai_agents_running!==false||
+     d.research_only!==true||d.orders_enabled!==false||d.trade_authorization!=="DENIED"||
+     d.call_count!==7||!verdicts.includes(d.final_verdict)||
+     typeof d.model!=="string"||!d.model.trim()||d.model.length>120||
+     typeof d.request_sha256!=="string"||!/^[a-f0-9]{64}$/.test(d.request_sha256)||
+     !Array.isArray(d.transcript)||d.transcript.length!==7)throw Error("회의 형식 검증 실패");
+  const source=Date.parse(d.source_generated_at_utc),started=Date.parse(d.started_at_utc),finished=Date.parse(d.generated_at_utc);
+  if(![source,started,finished].every(Number.isFinite)||source>started||started>finished||
+     finished>Date.now()||Date.now()-source>8*3600000)throw Error("회의 원본 오래됨 또는 시각 오류");
+  const output=[],order=["ATLAS","QUANT","GUARDIAN","ATLAS","QUANT","GUARDIAN","COMMANDER"];
+  for(let i=0;i<7;i++){
+   const t=d.transcript[i],phase=i<3?"ANALYSIS":i<6?"PEER_REVIEW":"CONCLUSION";
+   if(!t||t.agent!==order[i]||t.phase!==phase||!verdicts.includes(t.verdict)||
+      typeof t.summary!=="string"||!t.summary.trim()||t.summary.length>1600||
+      !Array.isArray(t.concerns)||t.concerns.length>8||
+      t.concerns.some(c=>typeof c!=="string"||!c.trim()||c.length>400))throw Error("회의 발언 검증 실패");
+   const item=document.createElement("p");
+   item.textContent=t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
+    t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):"");
+   item.style.whiteSpace="pre-wrap";output.push(item);
+  }
+  const insufficient=d.transcript.some(t=>t.verdict==="INSUFFICIENT_DATA");
+  const guardian=d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED");
+  const expected=insufficient?"INSUFFICIENT_DATA":guardian?"REVIEW_NEEDED":d.transcript[6].verdict;
+  if(d.final_verdict!==expected)throw Error("최종 검토 상태 불일치");
+  rows.replaceChildren(...output);
+  status.textContent=(live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님")+
+   " · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
+  validSince=source;validUntil=source+8*3600000;expire();
+ }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+error.message;}
+})();
+</script>
 </body></html>

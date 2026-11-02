@@ -1,0 +1,22 @@
+name: SPACE BAR AI Meeting Runtime
+on:
+  push:
+    paths:
+      - 'agents/ai_meeting_runtime.py'
+      - 'agents/test_ai_meeting*.py'
+      - 'web/office_3d.html'
+      - '.github/workflows/test_ai_meeting.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  meeting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: node --version
+      - run: python -m unittest discover -s agents -p 'test_ai_meeting*.py' -v
