@@ -139,7 +139,7 @@ class TransportTests(unittest.TestCase):
     def test_http_failure_redacts_provider_body_and_never_retries(self):
         with patch('ai_meeting_runtime.build_opener') as opener:
             opener.return_value.open.side_effect = HTTPError('url', 401, 'test-key', {}, None)
-            with self.assertRaisesRegex(MeetingError, '^PROVIDER_REQUEST_FAILED$'):
+            with self.assertRaisesRegex(MeetingError, '^PROVIDER_AUTHENTICATION_FAILED$'):
                 self.provider().complete('ATLAS', 'ANALYSIS', {})
             self.assertEqual(opener.return_value.open.call_count, 1)
 

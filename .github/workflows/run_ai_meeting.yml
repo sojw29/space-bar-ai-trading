@@ -107,7 +107,11 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SPACEBAR_AI_MODEL: ${{ inputs.ai_model }}
         run: |
-          python agents/ai_meeting_runtime.py "$RUNNER_TEMP/meeting_requests.json" "$RUNNER_TEMP/completed_meeting.json" --enable-live --model "$SPACEBAR_AI_MODEL"
+          python agents/ai_meeting_runtime.py "$RUNNER_TEMP/meeting_requests.json" "$RUNNER_TEMP/completed_meeting.json" --enable-live --model "$SPACEBAR_AI_MODEL" --diagnostics "$RUNNER_TEMP/meeting_diagnostics.json"
+      - name: Summarize sanitized meeting execution status
+        if: ${{ always() }}
+        run: |
+          python agents/ai_meeting_diagnostics.py "$RUNNER_TEMP/meeting_diagnostics.json" "$GITHUB_STEP_SUMMARY"
       - name: Validate completed live transcript against the exact request bundle
         if: github.event_name == 'workflow_dispatch' && inputs.run_ai_meeting
         run: |

@@ -98,3 +98,32 @@ normal deployment shows no connected meeting rather than an unvalidated record.
 
 CI exercises mocked provider and carry-over paths only. A successful paid run
 and provider/model access must still be verified in the configured repository.
+
+## Execution diagnostics
+
+The manual workflow now appends an **AI 회의 실행 진단** section to its Actions
+job summary, even after an earlier step fails. During model execution, logs show
+the current role/phase and validated response count. A bounded status JSON in
+`RUNNER_TEMP` is atomically updated before and after each attempted call; it is
+not uploaded with the public site. An interrupted run may leave `RUNNING` status,
+which never means the meeting completed.
+
+The CLI also supports `--diagnostics path/to/status.json`. This path must differ
+from both source and transcript output (including symlink/hardlink aliases).
+Only allowlisted status fields and error codes are recorded; raw HTTP bodies,
+exception messages, API keys, prompts, model text and model names are excluded.
+The summary renderer rejects malformed, oversized and unexpected fields.
+
+Codes distinguish authentication/access failures, model-or-endpoint lookup,
+request rejection, rate-or-quota limits, upstream errors, timeouts, output
+truncation, refusals and input/configuration errors. HTTP categories are hints,
+not a definitive diagnosis of billing or model compatibility. No automatic
+retry is added. Attempts and validated responses are separate counters and do
+not prove how many calls were billed.
+
+A `COMPLETED` runtime status means the local transcript was created. Exact-bundle
+public validation and Pages deployment remain later steps. If no valid status is
+available (for example configuration/data preparation failed before runtime),
+the summary says so instead of inferring that no call occurred or that publication
+succeeded. On failure, an older completed transcript is not treated as this run's
+result.
