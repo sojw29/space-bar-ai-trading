@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import history
 import tester_v21 as v21
 import tester_v17 as v17
 
@@ -91,6 +92,28 @@ def previous_evidence_path():
     return configured
 
 
+def history_policy():
+    return {"source": "BINANCE_USDT_FUTURES_ARCHIVES",
+            "publication_delay_days": history.PUBLICATION_DELAY_DAYS,
+            "window_days": history.DAYS_TO_COLLECT}
+
+
+def compare_forward_snapshot(prior, current_last):
+    """Compare only snapshots collected under the same explicit archive policy."""
+    if not prior:
+        return [], ["NO_PRIOR_FORWARD_BASELINE"], False
+    if prior.get("history_policy") != history_policy():
+        return [], ["PRIOR_HISTORY_POLICY_INCOMPARABLE", "NO_PRIOR_FORWARD_BASELINE"], False
+    previous_last = prior.get("candles", {}).get("last_forward_candle_utc")
+    if not previous_last:
+        return [], ["NO_PRIOR_FORWARD_BASELINE"], False
+    if not current_last or current_last < previous_last:
+        return ["FORWARD_DATA_REGRESSION"], [], True
+    if current_last == previous_last:
+        return [], ["NO_NEW_FORWARD_CANDLES"], True
+    return [], [], True
+
+
 def run():
     v21.run()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -126,17 +149,15 @@ def run():
             break
     previous_last = prior.get("candles", {}).get("last_forward_candle_utc") if prior else None
     current_last = candles["last_forward_candle_utc"]
-    if prior and previous_last and (not current_last or current_last < previous_last):
-        issues.append("FORWARD_DATA_REGRESSION")
-    if prior and previous_last == current_last:
-        warnings.append("NO_NEW_FORWARD_CANDLES")
-    baseline_available = bool(previous_last)
-    if not baseline_available:
-        warnings.append("NO_PRIOR_FORWARD_BASELINE")
+    comparison_issues, comparison_warnings, baseline_available = compare_forward_snapshot(prior, current_last)
+    issues.extend(comparison_issues)
+    warnings.extend(comparison_warnings)
     if prior and prior.get("cutoff_utc") != protocol.get("cutoff_utc"):
         issues.append("PRIOR_CUTOFF_MISMATCH")
     report = {
         "version": "V22.0",
+        "history_policy": history_policy(),
+        "prior_evidence_comparable": baseline_available,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "cutoff_utc": protocol.get("cutoff_utc"),
         "candles": candles,
