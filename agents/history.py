@@ -10,6 +10,8 @@ import io
 import math
 import os
 import time
+import tempfile
+from pathlib import Path
 import zipfile
 
 from datetime import datetime, timedelta, timezone
@@ -227,25 +229,21 @@ def save_csv(symbol, timeframe, candles):
         f"{short_symbol}_{timeframe}m.csv"
     )
 
-    with open(
-        path,
-        "w",
-        newline="",
-        encoding="utf-8"
-    ) as file:
-
-        writer = csv.writer(file)
-
-        writer.writerow([
-            "timestamp",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume"
-        ])
-
-        writer.writerows(candles)
+    temporary = None
+    try:
+        # Complete the file beside its destination before replacing any old data.
+        with tempfile.NamedTemporaryFile(
+            mode="w", newline="", encoding="utf-8", dir=DATA_DIR,
+            prefix=".history-", suffix=".tmp", delete=False
+        ) as file:
+            temporary = Path(file.name)
+            writer = csv.writer(file)
+            writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
+            writer.writerows(candles)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
     print(
         f"Saved {path}: {len(candles)} candles",
