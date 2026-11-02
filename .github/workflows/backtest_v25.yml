@@ -15,7 +15,7 @@ permissions:
   actions: read
 
 jobs:
-  evidence-readiness:
+  offline-regression:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -30,6 +30,20 @@ jobs:
           python agents/test_v23_regression.py
           python agents/test_v24_report.py
           python agents/test_v25_readiness.py
+      - name: Offline history completeness tests
+        run: python -m unittest discover -s agents -p 'test_v163_history_integrity.py' -v
+
+  evidence-readiness:
+    name: Live-data research (main / schedule / manual)
+    if: github.event_name != 'pull_request'
+    needs: offline-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
       - name: Collect market history
         run: python agents/history.py
       - name: Restore prior main V21/V22 snapshots (best effort)

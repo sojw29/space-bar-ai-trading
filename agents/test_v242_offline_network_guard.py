@@ -104,4 +104,26 @@ class GuardrailTests(unittest.TestCase):
   self.assertIs(socket.getaddrinfo,original)
   self.assertIs(socket.socket.connect,original_connect)
 
+ def test_all_output_safety_flags_are_required_exact_booleans(self):
+  baseline=run_guarded_pipeline(source(),NOW)
+  expected={"research_only":True,"network_enabled":False,"orders_enabled":False,
+            "model_inference_performed":False,"validated_for_trading":False,
+            "ai_agents_running":False,"trade_signals_available":False}
+  missing=object()
+  for field,safe in expected.items():
+   for bad in (missing,not safe,None,int(safe),str(safe)):
+    with self.subTest(field=field,bad=repr(bad)):
+     result=dict(baseline)
+     if bad is missing:result.pop(field)
+     else:result[field]=bad
+     with patch("offline_network_guard_v242.run_pipeline",return_value=result):
+      with self.assertRaisesRegex(ValueError,"UNSAFE_PIPELINE_OUTPUT"):
+       run_guarded_pipeline(source(),NOW)
+
+ def test_nonmapping_output_is_rejected_with_contract_error(self):
+  for result in (None,[],"PASS",True):
+   with self.subTest(result=result), patch("offline_network_guard_v242.run_pipeline",return_value=result):
+    with self.assertRaisesRegex(ValueError,"UNSAFE_PIPELINE_OUTPUT"):
+     run_guarded_pipeline(source(),NOW)
+
 if __name__=="__main__":unittest.main()
