@@ -5,6 +5,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history
@@ -129,6 +130,37 @@ class HistoryIntegrityTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,"CONFLICTING_CANDLE"):
                 history.collect_symbol("BTCUSDT",start,end)
             save.assert_not_called()
+
+
+    def test_atomic_csv_save_replaces_symlink_not_its_target(self):
+        with TemporaryDirectory() as directory:
+            root=Path(directory)
+            unrelated=root/"unrelated.csv"
+            unrelated.write_bytes(b"preserve me")
+            target=root/"BTC_1m.csv"
+            target.symlink_to(unrelated)
+            with patch.object(history,"DATA_DIR",directory):
+                history.save_csv("BTCUSDT",1,[[60,10,11,9,10,2]])
+            self.assertEqual(unrelated.read_bytes(),b"preserve me")
+            self.assertFalse(target.is_symlink())
+            self.assertEqual(target.read_text().splitlines(),["timestamp,open,high,low,close,volume","60,10,11,9,10,2"])
+            self.assertEqual(list(root.glob(".history-*.tmp")),[])
+
+    def test_failed_csv_save_preserves_existing_data_and_cleans_temp(self):
+        for failure in ("rows","replace"):
+            with self.subTest(failure=failure),TemporaryDirectory() as directory:
+                root=Path(directory)
+                target=root/"BTC_1m.csv"
+                target.write_bytes(b"previous complete history")
+                def failing_rows():
+                    yield [60,10,11,9,10,2]
+                    raise OSError("injected row write failure")
+                rows=failing_rows() if failure=="rows" else [[60,10,11,9,10,2]]
+                with patch.object(history,"DATA_DIR",directory),patch.object(history.os,"replace",side_effect=OSError("injected replace failure")):
+                    with self.assertRaisesRegex(OSError,"injected"):
+                        history.save_csv("BTCUSDT",1,rows)
+                self.assertEqual(target.read_bytes(),b"previous complete history")
+                self.assertEqual(list(root.glob(".history-*.tmp")),[])
 
 
 
