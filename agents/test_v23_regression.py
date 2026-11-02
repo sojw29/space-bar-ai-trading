@@ -38,9 +38,9 @@ class RegressionTests(unittest.TestCase):
             source = root / "v17"
             source.mkdir()
             (source / "protocol.json").write_text("{}", encoding="utf-8")
-            (source / "summary.csv").write_text("candidate,scenario\\n", encoding="utf-8")
+            (source / "summary.csv").write_text("candidate,scenario\n", encoding="utf-8")
             candles = root / "candles.csv"
-            candles.write_text("timestamp\\n", encoding="utf-8")
+            candles.write_text("timestamp\n", encoding="utf-8")
             prior = root / "prior.json"
             prior.write_text("null", encoding="utf-8")
             with patch.object(v22, "OUT", out), \
