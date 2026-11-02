@@ -152,8 +152,10 @@ def compare_forward_snapshot(prior, current_last):
 
 
 def run():
-    v21.run()
+    # Never leave an earlier PASS report available after a failed rerun.
     OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "evidence.json").unlink(missing_ok=True)
+    v21.run()
     source = Path(v17.REPORT_DIR)
     protocol_path = source / "protocol.json"
     trades_path = source / "trades.csv"
