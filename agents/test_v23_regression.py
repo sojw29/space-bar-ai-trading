@@ -1,6 +1,7 @@
 """Offline regression checks for V18-V22. No exchange access required."""
 import csv
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,45 @@ import tester_v22 as v22
 
 
 class RegressionTests(unittest.TestCase):
+    def test_v22_previous_output_alias_rejected_before_deletion(self):
+        for kind in ("same","hardlink","symlink"):
+            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                target=root/"evidence.json"
+                target.write_bytes(b"preserve prior evidence")
+                prior=target if kind=="same" else root/"prior.json"
+                if kind=="hardlink":os.link(target,prior)
+                if kind=="symlink":prior.symlink_to(target)
+                with patch.object(v22,"OUT",root),patch.object(v22,"previous_evidence_path",return_value=prior),patch.object(v22.v21,"run",side_effect=RuntimeError("upstream failed")) as upstream:
+                    with self.assertRaisesRegex(ValueError,"INPUT_OUTPUT_PATH_COLLISION"):v22.run()
+                upstream.assert_not_called()
+                self.assertEqual(target.read_bytes(),b"preserve prior evidence")
+                self.assertEqual(prior.read_bytes(),b"preserve prior evidence")
+
+    def test_v22_atomic_publication_preserves_symlink_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            unrelated=root/"unrelated.json"
+            unrelated.write_bytes(b"preserve me")
+            target=root/"evidence.json"
+            target.symlink_to(unrelated)
+            with patch.object(v22,"OUT",root):v22.publish_evidence({"integrity_pass":True})
+            self.assertEqual(unrelated.read_bytes(),b"preserve me")
+            self.assertFalse(target.is_symlink())
+            self.assertEqual(json.loads(target.read_text()),{"integrity_pass":True})
+            self.assertEqual(list(root.glob(".evidence.json.*.tmp")),[])
+
+    def test_v22_publication_failure_cleans_temporary_output(self):
+        for serialization in (False,True):
+            with self.subTest(serialization=serialization),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                report={"invalid":float("nan")} if serialization else {"integrity_pass":True}
+                with patch.object(v22,"OUT",root),patch.object(v22.os,"replace",side_effect=OSError("injected replace failure")):
+                    with self.assertRaises((OSError,ValueError)):v22.publish_evidence(report)
+                self.assertFalse((root/"evidence.json").exists())
+                self.assertEqual(list(root.glob(".evidence.json.*.tmp")),[])
+
+
     def test_v22_failed_upstream_run_removes_stale_pass_report(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory) / "v22"
