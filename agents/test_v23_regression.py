@@ -15,6 +15,26 @@ import tester_v22 as v22
 
 
 class RegressionTests(unittest.TestCase):
+    def test_v22_compares_forward_instants_not_timestamp_strings(self):
+        prior={"history_policy":v22.history_policy(),"candles":{"last_forward_candle_utc":"2026-10-25T09:00:00+09:00"}}
+        self.assertEqual(v22.compare_forward_snapshot(prior,"2026-10-25T00:00:00+00:00"),([], ["NO_NEW_FORWARD_CANDLES"],True))
+        self.assertEqual(v22.compare_forward_snapshot(prior,"2026-10-25T01:00:00+00:00"),([],[],True))
+        prior["candles"]["last_forward_candle_utc"]="2026-10-25T00:00:00+00:00"
+        self.assertEqual(v22.compare_forward_snapshot(prior,"2026-10-25T08:00:00+09:00"),(["FORWARD_DATA_REGRESSION"],[],True))
+
+    def test_v22_rejects_malformed_comparable_timestamps(self):
+        for bad in ("garbage","2026-10-25T00:00:00",123,True):
+            with self.subTest(bad=bad):
+                prior={"history_policy":v22.history_policy(),"candles":{"last_forward_candle_utc":bad}}
+                issues,warnings,baseline=v22.compare_forward_snapshot(prior,"2026-10-25T00:00:00+00:00")
+                self.assertEqual(issues,["INVALID_PRIOR_FORWARD_TIMESTAMP"])
+                self.assertFalse(baseline)
+                prior["candles"]["last_forward_candle_utc"]="2026-10-25T00:00:00+00:00"
+                issues,warnings,baseline=v22.compare_forward_snapshot(prior,bad)
+                self.assertEqual(issues,["INVALID_CURRENT_FORWARD_TIMESTAMP"])
+                self.assertFalse(baseline)
+
+
     def test_v22_archive_policy_change_requires_new_baseline(self):
         prior={"candles":{"last_forward_candle_utc":"2026-10-29T00:00:00+00:00"}}
         for policy in (None,dict(v22.history_policy(),publication_delay_days=3)):

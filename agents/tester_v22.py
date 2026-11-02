@@ -107,9 +107,27 @@ def compare_forward_snapshot(prior, current_last):
     previous_last = prior.get("candles", {}).get("last_forward_candle_utc")
     if not previous_last:
         return [], ["NO_PRIOR_FORWARD_BASELINE"], False
-    if not current_last or current_last < previous_last:
+    try:
+        if not isinstance(previous_last, str):
+            raise ValueError("INVALID_TIMESTAMP_TYPE")
+        previous_time = datetime.fromisoformat(previous_last)
+        if previous_time.utcoffset() is None:
+            raise ValueError("NAIVE_TIMESTAMP")
+    except (ValueError, TypeError):
+        return ["INVALID_PRIOR_FORWARD_TIMESTAMP"], [], False
+    if not current_last:
         return ["FORWARD_DATA_REGRESSION"], [], True
-    if current_last == previous_last:
+    try:
+        if not isinstance(current_last, str):
+            raise ValueError("INVALID_TIMESTAMP_TYPE")
+        current_time = datetime.fromisoformat(current_last)
+        if current_time.utcoffset() is None:
+            raise ValueError("NAIVE_TIMESTAMP")
+    except (ValueError, TypeError):
+        return ["INVALID_CURRENT_FORWARD_TIMESTAMP"], [], False
+    if current_time < previous_time:
+        return ["FORWARD_DATA_REGRESSION"], [], True
+    if current_time == previous_time:
         return [], ["NO_NEW_FORWARD_CANDLES"], True
     return [], [], True
 
