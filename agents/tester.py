@@ -61,9 +61,15 @@ def load_data(symbol, timeframe):
         encoding="utf-8-sig"
     ) as file:
 
-        reader = csv.DictReader(file)
+        reader = csv.DictReader(file, strict=True)
+        fields = {"timestamp", "open", "high", "low", "close", "volume"}
+        if (reader.fieldnames is None or len(reader.fieldnames) != len(fields)
+                or set(reader.fieldnames) != fields):
+            raise RuntimeError("INVALID_HISTORY_CSV_SCHEMA")
 
         for row in reader:
+            if None in row or any(value is None for value in row.values()):
+                raise RuntimeError("INVALID_HISTORY_CSV_ROW")
 
             try:
                 candle = {
