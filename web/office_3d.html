@@ -1991,6 +1991,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 </script>
 <details id="ai-meeting-panel" style="position:relative;z-index:1006;margin:18px auto;max-width:1000px;background:#101c30;color:#e8f4ff;padding:16px;border:1px solid #426482;border-radius:12px">
 <summary>별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
+<button id="ai-meeting-refresh" type="button" style="padding:6px 12px;margin:8px 0;background:#25435e;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">회의 기록 다시 확인</button>
 <p id="ai-meeting-status" role="status">회의 결과 연결 확인 중…</p>
 <p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
 <div id="ai-meeting-rows"></div>
@@ -1999,6 +2000,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 /* Completed model meeting snapshots only. Model text is never HTML or executable code. */
 (async function(){
  const status=document.getElementById("ai-meeting-status"),rows=document.getElementById("ai-meeting-rows");
+ const refreshButton=document.getElementById("ai-meeting-refresh");
+ let loading=false;
  const verdicts=["OBSERVATION_ONLY","REVIEW_NEEDED","INSUFFICIENT_DATA"];
  const labels={OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
  let validSince=null,validUntil=null;
@@ -2010,6 +2013,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  setInterval(expire,60000);
  document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
+ async function loadMeeting(){
+  if(loading)return;
+  loading=true;refreshButton.disabled=true;
+  rows.replaceChildren();validSince=null;validUntil=null;
+  status.textContent="회의 기록 확인 중…";
  try{
   const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit"});
   if(!response.ok)throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
@@ -2049,6 +2057,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   validSince=source;validUntil=source+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+error.message;}
+ finally{loading=false;refreshButton.disabled=false;}
+ }
+ refreshButton.addEventListener("click",loadMeeting);
+ await loadMeeting();
 })();
 </script>
 </body></html>
