@@ -130,7 +130,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm');
 const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 (async()=>{for(const mode of ['okx','unknown']){
  const data=structuredClone(input.report);data.version='AI_MEETING_TRANSCRIPT_VIEW_1';if(mode==='unknown')data.market_source='untrusted';
- const elements={};for(const id of ['ai-meeting-status','ai-meeting-rows'])elements[id]={children:[],replaceChildren(...x){this.children=x}};
+ const elements={};for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh'])elements[id]={children:[],disabled:false,addEventListener(){},replaceChildren(...x){this.children=x}};
  const document={getElementById:id=>elements[id],createElement:()=>({style:{}}),addEventListener:()=>{}};
  vm.runInNewContext(input.script,{document,Date,setInterval:()=>{},fetch:async()=>({ok:true,text:async()=>JSON.stringify(data)})});
  await new Promise(setImmediate);
