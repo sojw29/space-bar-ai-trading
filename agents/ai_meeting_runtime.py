@@ -134,7 +134,8 @@ class OpenAIProvider:
                 raise MeetingError("PROVIDER_INCOMPLETE_OR_REFUSED")
             return validate_statement(json.loads(choice["message"]["content"]))
         except HTTPError as error:
-            codes = {400: 'PROVIDER_REQUEST_REJECTED', 401: 'PROVIDER_AUTHENTICATION_FAILED',
+            codes = {400: 'PROVIDER_REQUEST_REJECTED', 408: 'PROVIDER_TIMEOUT',
+                     504: 'PROVIDER_TIMEOUT', 401: 'PROVIDER_AUTHENTICATION_FAILED',
                      403: 'PROVIDER_ACCESS_DENIED', 404: 'PROVIDER_MODEL_OR_ENDPOINT_NOT_FOUND',
                      429: 'PROVIDER_RATE_OR_QUOTA_LIMIT'}
             code = codes.get(error.code, 'PROVIDER_UPSTREAM_ERROR' if error.code >= 500 else 'PROVIDER_REQUEST_FAILED')
