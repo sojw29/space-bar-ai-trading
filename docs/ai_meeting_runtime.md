@@ -194,6 +194,16 @@ being treated as validated data. No OpenAI key is used by public candle collecti
 
 Source contract: https://www.okx.com/docs-v5/en/#order-book-trading-market-data-get-candlesticks
 
+All three symbols now use one collection-start cutoff for completed bars, so a
+5-minute boundary during sequential requests does not advance only part of the
+batch. Their final completed-candle timestamps must match exactly. An off-grid,
+fractional or boolean candle epoch is rejected rather than silently coerced.
+Before publication, the collector rechecks freshness against completion time
+and rejects backward clock movement. Source-marked snapshots receive the same
+timestamp alignment/completion/freshness validation again during interpretation.
+A lagging symbol blocks publication; retry a new readiness run after the data
+source has caught up. There is no automatic retry or padding of missing candles.
+
 ## Input rehearsal without model calls
 
 In Actions, run **SPACE BAR AI Meeting Input Readiness (No Model Calls)**.
