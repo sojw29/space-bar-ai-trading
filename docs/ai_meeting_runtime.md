@@ -246,3 +246,26 @@ Public candle requests reject HTTP redirects, including redirects on the same ho
 A redirect fails collection without retries or venue fallback; no redirected response
 is published with the selected exchange's provenance. The fixed official endpoint
 must return its own successful response.
+
+## Runtime transcript versus 3D meeting status
+
+Two distinct research artifacts currently exist; **they are not automatically
+connected**:
+
+1. `agents/ai_meeting_runtime.py` runs an explicitly authorized, bounded
+   seven-call model meeting. Its CLI writes a transcript to the caller-selected
+   destination (for example `web/ai_meeting.json`) only after successful
+   validation and completion. It never submits orders.
+2. `GET /api/v1/meeting` in `agents/dashboard_api_v28.py` builds an
+   **offline quality-gate snapshot** from `reports/v65/quality.json`. The
+   3D room uses this endpoint to show ATLAS / GUARDIAN / COMMANDER
+   verification status, not the seven-call model transcript. A successful
+   quality-gate status does **not** establish that a paid model meeting ran.
+
+Opening or refreshing the 3D room does not start inference. The dashboard
+rejects POST requests with HTTP 405 and has no order endpoint. A missing
+quality report returns HTTP 503 with a blocked, non-trading state. Do not
+describe the room as live model-connected until a separately tested,
+read-only transcript transport with explicit provenance, freshness checks,
+safe size limits, and failure states is implemented. Do not expose API keys
+or untrusted model output as executable HTML.
