@@ -165,6 +165,39 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn("secret_extra", result)
         self.assertNotIn("secret_extra", result["transcript"][0])
 
+    def test_transcript_rejects_expired_source_even_if_completed(self):
+        target = Path(self.temp.name) / "expired.json"
+        now = datetime.now(timezone.utc)
+        entries = [{"agent": a, "phase": p, "summary": "No trade",
+                    "concerns": [], "verdict": "INSUFFICIENT_DATA"}
+                   for a, p in [("ATLAS", "ANALYSIS"), ("QUANT", "ANALYSIS"),
+                                ("GUARDIAN", "ANALYSIS"), ("ATLAS", "PEER_REVIEW"),
+                                ("QUANT", "PEER_REVIEW"), ("GUARDIAN", "PEER_REVIEW"),
+                                ("COMMANDER", "CONCLUSION")]]
+        payload = {"version": "AI_MEETING_1", "status": "COMPLETED",
+                   "research_only": True, "orders_enabled": False,
+                   "trade_authorization": "DENIED", "ai_agents_running": False,
+                   "execution_mode": "OFFLINE_FIXTURE",
+                   "model_inference_performed": False, "call_count": 7,
+                   "transcript": entries, "market_source": "BYBIT_USDT_PERPETUAL_5M",
+                   "model": "fixture", "request_sha256": "a" * 64,
+                   "source_generated_at_utc": (now - timedelta(hours=9)).isoformat(),
+                   "started_at_utc": (now - timedelta(minutes=4)).isoformat(),
+                   "generated_at_utc": (now - timedelta(minutes=3)).isoformat(),
+                   "final_verdict": "INSUFFICIENT_DATA"}
+        target.write_text(json.dumps(payload), encoding="utf-8")
+        with patch.object(v28, "MEETING_TRANSCRIPT_PATH", target):
+            with self.assertRaises(HTTPError) as error:
+                self.get("/api/v1/meeting/transcript")
+        self.assertEqual(error.exception.code, 503)
+        self.assertFalse(json.load(error.exception)["orders_enabled"])
+
+    def test_transcript_post_rejected(self):
+        with self.assertRaises(HTTPError) as error:
+            urlopen(Request(self.base + "/api/v1/meeting/transcript",
+                            data=b"{}", method="POST"), timeout=3)
+        self.assertEqual(error.exception.code, 405)
+
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/orders")
