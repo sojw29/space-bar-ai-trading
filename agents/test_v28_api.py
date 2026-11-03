@@ -1,5 +1,6 @@
 """V28 local API tests: ephemeral loopback HTTP, no external network."""
 import csv
+from datetime import datetime, timedelta, timezone
 import json
 import sys
 import tempfile
@@ -147,6 +148,13 @@ class LocalApiTests(unittest.TestCase):
                    "execution_mode": "OFFLINE_FIXTURE",
                    "model_inference_performed": False, "call_count": 7,
                    "transcript": entries, "secret_extra": "must not leak"}
+        now = datetime.now(timezone.utc)
+        payload.update({"market_source": "BYBIT_USDT_PERPETUAL_5M",
+                        "model": "fixture", "request_sha256": "a" * 64,
+                        "source_generated_at_utc": (now - timedelta(minutes=5)).isoformat(),
+                        "started_at_utc": (now - timedelta(minutes=4)).isoformat(),
+                        "generated_at_utc": (now - timedelta(minutes=3)).isoformat(),
+                        "final_verdict": "INSUFFICIENT_DATA"})
         target.write_text(json.dumps(payload), encoding="utf-8")
         with patch.object(v28, "MEETING_TRANSCRIPT_PATH", target):
             status, result = self.get("/api/v1/meeting/transcript")

@@ -2011,13 +2011,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  setInterval(expire,60000);
  document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
  try{
-  const response=await fetch("./ai_meeting.json",{cache:"no-store",credentials:"omit"});
+  const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit"});
   if(!response.ok)throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
   const raw=await response.text();if(raw.length>65536)throw Error("회의 기록 크기 초과");
   const d=JSON.parse(raw),live=d.execution_mode==="LIVE_PROVIDER";
   const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
   if(marketLabel===null)throw Error("데이터 출처 검증 실패");
-  if(d.version!=="AI_MEETING_1"||d.status!=="COMPLETED"||
+  if(d.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||
      !["LIVE_PROVIDER","OFFLINE_FIXTURE"].includes(d.execution_mode)||
      d.model_inference_performed!==live||d.ai_agents_running!==false||
      d.research_only!==true||d.orders_enabled!==false||d.trade_authorization!=="DENIED"||
