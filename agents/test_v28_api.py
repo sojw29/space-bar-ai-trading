@@ -2,6 +2,8 @@
 import csv
 from datetime import datetime, timedelta, timezone
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -161,6 +163,10 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertFalse(result["model_inference_performed"])
         self.assertFalse(result["orders_enabled"])
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertEqual(result["call_count"], 7)
+        self.assertEqual(result["trade_authorization"], "DENIED")
+        self.assertFalse(result["ai_agents_running"])
         self.assertEqual(len(result["transcript"]), 7)
         self.assertNotIn("secret_extra", result)
         self.assertNotIn("secret_extra", result["transcript"][0])
@@ -197,6 +203,60 @@ class LocalApiTests(unittest.TestCase):
             urlopen(Request(self.base + "/api/v1/meeting/transcript",
                             data=b"{}", method="POST"), timeout=3)
         self.assertEqual(error.exception.code, 405)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js required for room script test")
+    def test_offline_meeting_report_reaches_actual_room_script(self):
+        # Full offline boundary: stored report -> loopback HTTP -> actual room JS.
+        from ai_meeting_runtime import run_meeting
+        from test_ai_meeting_runtime import Fixture
+        from test_v240_provider_transport_preflight import request, NOW
+        from copy import deepcopy
+        bundle = deepcopy(request())
+        # Runtime fixture does not use the network or any model provider.
+        report = run_meeting(bundle, Fixture(), clock=lambda: NOW)
+        now = datetime.now(timezone.utc)
+        report["source_generated_at_utc"] = (now - timedelta(minutes=5)).isoformat()
+        report["started_at_utc"] = (now - timedelta(minutes=4)).isoformat()
+        report["generated_at_utc"] = (now - timedelta(minutes=3)).isoformat()
+        report["market_source"] = "BYBIT_USDT_PERPETUAL_5M"
+        target = Path(self.temp.name) / "meeting.json"
+        target.write_text(json.dumps(report), encoding="utf-8")
+        with patch.object(v28, "MEETING_TRANSCRIPT_PATH", target):
+            status, payload = self.get("/api/v1/meeting/transcript")
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["model_inference_performed"])
+        self.assertFalse(payload["orders_enabled"])
+        self.assertEqual(payload["status"], "COMPLETED")
+        self.assertEqual(payload["call_count"], 7)
+        self.assertEqual(payload["trade_authorization"], "DENIED")
+        self.assertFalse(payload["ai_agents_running"])
+        html = (Path(__file__).resolve().parent.parent / "web" /
+                "office_3d.html").read_text(encoding="utf-8")
+        script = html.split('id="ai-meeting-panel"', 1)[1].split("<script>", 1)[1].split("</script>", 1)[0]
+        harness = r"""
+const assert=require('node:assert/strict'),vm=require('node:vm');
+const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+const elements={};
+for(const id of ['ai-meeting-status','ai-meeting-rows'])
+ elements[id]={children:[],replaceChildren(...items){this.children=items}};
+let requested=null;
+const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
+ createElement:()=>({style:{},set innerHTML(_){throw Error('unsafe HTML')}})};
+vm.runInNewContext(data.script,{document,Date,setInterval:()=>{},
+ fetch:async url=>{requested=url;return {ok:true,text:async()=>JSON.stringify(data.payload)}}});
+setImmediate(()=>{
+ try{
+  assert.equal(requested,'/api/v1/meeting/transcript');
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.match(elements['ai-meeting-status'].textContent,/실제 AI 실행 아님/);
+  assert.ok(elements['ai-meeting-rows'].children.every(x=>typeof x.textContent==='string'));
+ }catch(e){console.error(e);process.exitCode=1}
+});
+"""
+        result = subprocess.run([shutil.which("node"), "-e", harness],
+                                input=json.dumps({"script": script, "payload": payload}),
+                                text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
