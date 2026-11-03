@@ -137,6 +137,23 @@ async function smoke(){
   assert.equal(transcriptCalls,1);
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
+  // Verify a real user click reloads the completed meeting rather than
+  // retaining old rows; a failed second reload must fail closed.
+  await meetingPage.locator("#ai-meeting-refresh").click();
+  await meetingPage.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7);
+  assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
+  assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
+  await meetingPage.route("**/api/v1/meeting/transcript",route=>{
+   transcriptCalls++;
+   return route.fulfill({status:503,contentType:"application/json",
+    body:JSON.stringify({error:"unavailable"})});
+  });
+  await meetingPage.locator("#ai-meeting-refresh").click();
+  await meetingPage.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
+  assert.equal(transcriptCalls,3);
+  assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
  // Malformed meeting data must not appear as a valid completed session.
