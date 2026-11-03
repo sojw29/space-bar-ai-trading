@@ -143,6 +143,17 @@ class TransportTests(unittest.TestCase):
                 self.provider().complete('ATLAS', 'ANALYSIS', {})
             self.assertEqual(opener.return_value.open.call_count, 1)
 
+    def test_http_timeout_statuses_are_sanitized_without_retry(self):
+        for status in (408, 504):
+            with self.subTest(status=status), patch('ai_meeting_runtime.build_opener') as opener:
+                opener.return_value.open.side_effect = HTTPError(
+                    'https://api.openai.com/v1/chat/completions', status,
+                    'sensitive upstream detail', {}, None)
+                with self.assertRaises(MeetingError) as caught:
+                    self.provider().complete('ATLAS', 'ANALYSIS', {})
+                self.assertEqual(str(caught.exception), 'PROVIDER_TIMEOUT')
+                self.assertEqual(opener.return_value.open.call_count, 1)
+
     def test_refusal_truncation_oversize_and_invalid_json_fail_closed(self):
         for raw in (self.response(finish='length'), self.response(refusal='no'),
                     self.response(content='not json'), b'x'*65537, b'{}', b'[]',
