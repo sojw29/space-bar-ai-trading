@@ -149,23 +149,9 @@ class TransportTests(unittest.TestCase):
                 opener.return_value.open.side_effect = HTTPError(
                     'https://api.openai.com/v1/chat/completions', status,
                     'sensitive upstream detail', {}, None)
-                with self.assertRaisesRegex(MeetingError, '^PROVIDER_TIMEOUT
-        for raw in (self.response(finish='length'), self.response(refusal='no'),
-                    self.response(content='not json'), b'x'*65537, b'{}', b'[]',
-                    b'{"choices":["unexpected"]}', b'{"choices":[{"message":[]}]}'):
-            with self.subTest(raw=raw[:80]), patch('ai_meeting_runtime.build_opener') as opener:
-                opener.return_value.open.return_value.__enter__.return_value.read.return_value = raw
-                with self.assertRaises(MeetingError):
+                with self.assertRaises(MeetingError) as caught:
                     self.provider().complete('ATLAS', 'ANALYSIS', {})
-
-    def test_redirects_are_not_followed(self):
-        self.assertIsNone(NoRedirect().redirect_request(None, None, 302, '', {}, 'https://other.example'))
-
-
-if __name__ == '__main__':
-    unittest.main()
-):
-                    self.provider().complete('ATLAS', 'ANALYSIS', {})
+                self.assertEqual(str(caught.exception), 'PROVIDER_TIMEOUT')
                 self.assertEqual(opener.return_value.open.call_count, 1)
 
     def test_refusal_truncation_oversize_and_invalid_json_fail_closed(self):
