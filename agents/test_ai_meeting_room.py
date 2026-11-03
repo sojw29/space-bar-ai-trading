@@ -23,6 +23,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
  for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','malformed','timer','foreground','rollback','text-only']){
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
+  data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
   for(const id of ['ai-meeting-status','ai-meeting-rows'])elements[id]={children:[],replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
