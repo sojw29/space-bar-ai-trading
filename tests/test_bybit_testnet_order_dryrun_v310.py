@@ -25,7 +25,8 @@ class TestBybitTestnetDryRun(unittest.TestCase):
     def test_disallowed_fields_and_market_orders(self):
         for change in ({"apiKey":"secret"},{"orderType":"Market"},{"reduceOnly":False},
                        {"symbol":"DOGEUSDT"},{"side":"SHORT"},{"qty":"NaN"},
-                       {"qty":"-1"},{"price":"0"},{"clientOrderId":"bad"}):
+                       {"qty":"-1"},{"price":"0"},{"clientOrderId":"bad"},{"symbol":[]},{"symbol":None},{"side":[]},{"orderType":{}},
+                       {"qty":True},{"price":1.5}):
             with self.subTest(change=change),self.assertRaises(OrderBlocked):
                 prepare_testnet_order({**intent(),**change},dry_run=True)
     def test_size_limits(self):
