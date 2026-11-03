@@ -128,6 +128,20 @@ the summary says so instead of inferring that no call occurred or that publicati
 succeeded. On failure, an older completed transcript is not treated as this run's
 result.
 
+Execution diagnostics use the `MEETING_DIAGNOSTICS_2` schema with an execution ID,
+start timestamp and last-update timestamp. Local CLI runs generate a new UUID;
+`--execution-id` can supply a bounded workflow `run_id-run_attempt` identifier.
+The manual workflow passes that same ID to runtime and summary renderer. Its
+summary rejects a different run or retry, even if that record says COMPLETED.
+The renderer also rejects timestamps in the future, reversed timestamp order,
+records more than eight hours since the last update, and old diagnostics without
+identity/time fields. These records produce an unknown-status notice.
+
+For local summaries, `--expected-execution-id` is optional. Without it the summary
+describes the selected dated record and is not proof it belongs to a current run.
+IDs provide correlation, not cryptographic authentication. Neither runtime
+completion nor matching identity proves Pages deployment succeeded.
+
 ## Input rehearsal without model calls
 
 In Actions, run **SPACE BAR AI Meeting Input Readiness (No Model Calls)**.
