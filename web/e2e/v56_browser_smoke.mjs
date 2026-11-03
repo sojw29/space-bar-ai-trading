@@ -99,6 +99,58 @@ async function smoke(){
  assert.match(await page.locator("#perf-state").textContent(),/렌더링 중/);
  await page.screenshot({path:path.join(output,"v56-working-3d.png"),fullPage:true});
 
+ // Real Chromium DOM rendering of a safe offline seven-stage meeting,
+ // including a narrow mobile viewport. No provider calls or trading.
+ const phases=["ANALYSIS","ANALYSIS","ANALYSIS","PEER_REVIEW","PEER_REVIEW","PEER_REVIEW","CONCLUSION"];
+ const names=["ATLAS","QUANT","GUARDIAN","ATLAS","QUANT","GUARDIAN","COMMANDER"];
+ const finished=new Date(Date.now()-60000).toISOString();
+ const started=new Date(Date.now()-120000).toISOString();
+ const source=new Date(Date.now()-180000).toISOString();
+ const transcript={
+  version:"AI_MEETING_TRANSCRIPT_VIEW_1",status:"COMPLETED",
+  execution_mode:"OFFLINE_FIXTURE",model_inference_performed:false,
+  ai_agents_running:false,research_only:true,orders_enabled:false,
+  trade_authorization:"DENIED",call_count:7,model:"fixture",
+  market_source:"BYBIT_USDT_PERPETUAL_5M",request_sha256:"a".repeat(64),
+  source_generated_at_utc:source,started_at_utc:started,generated_at_utc:finished,
+  final_verdict:"OBSERVATION_ONLY",
+  transcript:names.map((agent,i)=>({agent,phase:phases[i],
+   summary:"Offline fixture stage "+(i+1),concerns:[],verdict:"OBSERVATION_ONLY"}))
+ };
+ for(const viewport of [{width:1360,height:900},{width:390,height:844}]){
+  const meetingPage=await context.newPage();
+  meetingPage.on("pageerror",e=>errors.push(String(e)));
+  await meetingPage.setViewportSize(viewport);
+  await serveThree(meetingPage);
+  let transcriptCalls=0;
+  await meetingPage.route("**/api/v1/meeting/transcript",route=>{
+   transcriptCalls++;
+   return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
+  });
+  await meetingPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+  await meetingPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
+  await meetingPage.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
+  await meetingPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+  assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
+  assert.equal(transcriptCalls,1);
+  const label=viewport.width<500?"mobile":"desktop";
+  await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
+  await meetingPage.close();
+ }
+ // Malformed meeting data must not appear as a valid completed session.
+ const badMeeting=await context.newPage();
+ await serveThree(badMeeting);
+ await badMeeting.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+  status:200,contentType:"application/json",
+  body:JSON.stringify({...transcript,orders_enabled:true})
+ }));
+ await badMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ await badMeeting.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),{timeout:12000});
+ assert.equal(await badMeeting.locator("#ai-meeting-rows p").count(),0);
+ await badMeeting.close();
+
  // Block a research request: the next navigation must not preserve old votes
  // or a fabricated market chart.
  const disconnected=await context.newPage();
