@@ -112,6 +112,51 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(json.load(error.exception).get("orders_enabled", False))
         live.assert_not_called()
 
+    def test_transcript_endpoint_missing_fails_closed(self):
+        with patch.object(v28, "MEETING_TRANSCRIPT_PATH",
+                          Path(self.temp.name) / "absent.json"):
+            with self.assertRaises(HTTPError) as error:
+                self.get("/api/v1/meeting/transcript")
+        self.assertEqual(error.exception.code, 503)
+        payload = json.load(error.exception)
+        self.assertFalse(payload["orders_enabled"])
+
+    def test_transcript_endpoint_rejects_untrusted_payload(self):
+        target = Path(self.temp.name) / "meeting.json"
+        target.write_text(json.dumps({"version": "AI_MEETING_1",
+                                      "status": "COMPLETED", "orders_enabled": True}),
+                          encoding="utf-8")
+        with patch.object(v28, "MEETING_TRANSCRIPT_PATH", target):
+            with self.assertRaises(HTTPError) as error:
+                self.get("/api/v1/meeting/transcript")
+        self.assertEqual(error.exception.code, 503)
+
+    def test_transcript_endpoint_projects_only_safe_fields(self):
+        target = Path(self.temp.name) / "meeting.json"
+        entries = [{"agent": agent, "phase": phase, "summary": "Research only",
+                    "concerns": [], "verdict": "INSUFFICIENT_DATA",
+                    "secret_extra": "must not leak"}
+                   for agent, phase in [
+                       ("ATLAS", "ANALYSIS"), ("QUANT", "ANALYSIS"),
+                       ("GUARDIAN", "ANALYSIS"), ("ATLAS", "PEER_REVIEW"),
+                       ("QUANT", "PEER_REVIEW"), ("GUARDIAN", "PEER_REVIEW"),
+                       ("COMMANDER", "CONCLUSION")]]
+        payload = {"version": "AI_MEETING_1", "status": "COMPLETED",
+                   "research_only": True, "orders_enabled": False,
+                   "trade_authorization": "DENIED", "ai_agents_running": False,
+                   "execution_mode": "OFFLINE_FIXTURE",
+                   "model_inference_performed": False, "call_count": 7,
+                   "transcript": entries, "secret_extra": "must not leak"}
+        target.write_text(json.dumps(payload), encoding="utf-8")
+        with patch.object(v28, "MEETING_TRANSCRIPT_PATH", target):
+            status, result = self.get("/api/v1/meeting/transcript")
+        self.assertEqual(status, 200)
+        self.assertFalse(result["model_inference_performed"])
+        self.assertFalse(result["orders_enabled"])
+        self.assertEqual(len(result["transcript"]), 7)
+        self.assertNotIn("secret_extra", result)
+        self.assertNotIn("secret_extra", result["transcript"][0])
+
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/orders")
