@@ -146,7 +146,7 @@ async function smoke(){
   body:JSON.stringify({...transcript,orders_enabled:true})
  }));
  await badMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
- await badMeeting.locator("#ai-meeting-status").getByText(/회의 미연결/).waitFor({timeout:12000});
+ await badMeeting.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),{timeout:12000});
  assert.equal(await badMeeting.locator("#ai-meeting-rows p").count(),0);
  await badMeeting.close();
 
