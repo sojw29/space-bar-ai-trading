@@ -217,6 +217,9 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     if raw.get("final_verdict") != expected_final:
                         raise ValueError("invalid_final_verdict")
                     self.reply(200, {"version": "AI_MEETING_TRANSCRIPT_VIEW_1",
+                                     "status": "COMPLETED", "call_count": 7,
+                                     "ai_agents_running": False,
+                                     "trade_authorization": "DENIED",
                                      "execution_mode": raw["execution_mode"],
                                      "model_inference_performed": raw["model_inference_performed"],
                                      "generated_at_utc": finished_time,
