@@ -258,6 +258,28 @@ setImmediate(()=>{
                                 text=True, capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_office3d_served_over_http_with_mobile_and_meeting_contract(self):
+        # Verify the real dashboard server delivers the 3D room rather than a
+        # local file:// page, with a responsive viewport and same-origin API.
+        with urlopen(self.base + "/office3d", timeout=3) as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn("text/html", response.headers.get("Content-Type", ""))
+            html = response.read().decode("utf-8")
+        self.assertIn('name="viewport"', html)
+        self.assertIn("width=device-width", html)
+        self.assertIn("@media", html)
+        self.assertIn('id="ai-meeting-panel"', html)
+        self.assertIn('id="ai-meeting-rows"', html)
+        self.assertIn('fetch("/api/v1/meeting/transcript"', html)
+        self.assertIn("WebGLRenderer", html)
+        self.assertIn("touch-action", html)
+        self.assertNotIn("OPENAI_API_KEY", html)
+
+    def test_office3d_query_string_keeps_same_origin_route(self):
+        with urlopen(self.base + "/office3d?view=mobile", timeout=3) as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn(b"ai-meeting-panel", response.read())
+
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/orders")
