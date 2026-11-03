@@ -8,8 +8,10 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
+import uuid
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -43,6 +45,7 @@ SAFE_ERROR_CODES = frozenset({
     'PROVIDER_OUTPUT_TRUNCATED', 'PROVIDER_REFUSED', 'PROVIDER_INCOMPLETE_OR_REFUSED',
     'INVALID_STATEMENT', 'INVALID_SUMMARY', 'INVALID_CONCERNS', 'INVALID_VERDICT',
     'CLOCK_MOVED_BACKWARD',
+    'INVALID_EXECUTION_ID',
 })
 
 
@@ -51,6 +54,11 @@ def safe_error_code(error):
     if isinstance(error, MeetingError) and str(error) in SAFE_ERROR_CODES:
         return str(error)
     return 'FILE_ERROR' if isinstance(error, OSError) else 'INPUT_OR_VALIDATION_ERROR'
+
+
+def valid_execution_id(value):
+    return isinstance(value, str) and re.fullmatch(
+        r'(?:[a-f0-9]{32}|[1-9][0-9]{0,19}-[1-9][0-9]{0,5})', value) is not None
 
 
 def validate_statement(value):
@@ -217,12 +225,25 @@ def main():
     parser.add_argument("--enable-live", action="store_true", help="Authorize up to seven paid API calls")
     parser.add_argument("--model", required=True, help="Model supporting strict Chat Completions JSON schema")
     parser.add_argument("--diagnostics", help="Optional sanitized execution-status JSON, outside web")
+    parser.add_argument("--execution-id", help="Optional workflow run-attempt ID; otherwise a local UUID is generated")
     args = parser.parse_args()
-    diagnostic = {'version': 'MEETING_DIAGNOSTICS_1', 'status': 'RUNNING', 'stage': 'INPUT',
+    started_at = datetime.now(timezone.utc).isoformat()
+    diagnostic = {'version': 'MEETING_DIAGNOSTICS_2', 'status': 'RUNNING', 'stage': 'INPUT',
+                  'execution_id': uuid.uuid4().hex, 'started_at_utc': started_at, 'updated_at_utc': started_at,
                   'agent': None, 'phase': None, 'attempted_calls': 0, 'validated_responses': 0,
                   'error_code': None}
     diagnostic_path = None
+
+    def save_diagnostic():
+        diagnostic['updated_at_utc'] = datetime.now(timezone.utc).isoformat()
+        if diagnostic_path:
+            publish_report(diagnostic, diagnostic_path)
+
     try:
+        if args.execution_id is not None:
+            if not valid_execution_id(args.execution_id):
+                raise MeetingError('INVALID_EXECUTION_ID')
+            diagnostic['execution_id'] = args.execution_id
         source, destination = Path(args.source), Path(args.destination)
         if args.diagnostics:
             candidate = Path(args.diagnostics)
@@ -231,7 +252,7 @@ def main():
                     (candidate.exists() and protected.exists() and os.path.samefile(candidate, protected))):
                     raise MeetingError('DIAGNOSTIC_PATH_ALIAS')
             diagnostic_path = candidate
-            publish_report(diagnostic, diagnostic_path)
+            save_diagnostic()
         if source.resolve() == destination.resolve() or (destination.exists() and os.path.samefile(source, destination)):
             raise MeetingError("SOURCE_DESTINATION_ALIAS")
         with source.open("rb") as stream:
@@ -245,8 +266,7 @@ def main():
         diagnostic['stage'] = 'INFERENCE'
         def progress(event):
             diagnostic.update({k: event[k] for k in ('agent', 'phase', 'attempted_calls', 'validated_responses')})
-            if diagnostic_path:
-                publish_report(diagnostic, diagnostic_path)
+            save_diagnostic()
             print('Meeting progress: '+event['agent']+'/'+event['phase']+' '+event['event']+
                   ' · validated '+str(event['validated_responses'])+'/7', flush=True)
         report = run_meeting(bundle, provider, progress=progress)
@@ -255,7 +275,7 @@ def main():
         diagnostic.update(status='COMPLETED', stage='COMPLETED')
         if diagnostic_path:
             try:
-                publish_report(diagnostic, diagnostic_path)
+                save_diagnostic()
             except OSError:
                 print('Diagnostic status could not be written; completed transcript is unchanged.')
         print("Research meeting completed: 7 calls; no orders. Output:", destination)
@@ -264,7 +284,7 @@ def main():
         diagnostic.update(status='FAILED', error_code=code)
         if diagnostic_path:
             try:
-                publish_report(diagnostic, diagnostic_path)
+                save_diagnostic()
             except OSError:
                 pass
         parser.exit(1, 'Meeting not published: '+code+' (stage '+diagnostic['stage']+').\n')

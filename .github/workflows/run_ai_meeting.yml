@@ -106,12 +106,15 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SPACEBAR_AI_MODEL: ${{ inputs.ai_model }}
+          SPACEBAR_MEETING_EXECUTION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          python agents/ai_meeting_runtime.py "$RUNNER_TEMP/meeting_requests.json" "$RUNNER_TEMP/completed_meeting.json" --enable-live --model "$SPACEBAR_AI_MODEL" --diagnostics "$RUNNER_TEMP/meeting_diagnostics.json"
+          python agents/ai_meeting_runtime.py "$RUNNER_TEMP/meeting_requests.json" "$RUNNER_TEMP/completed_meeting.json" --enable-live --model "$SPACEBAR_AI_MODEL" --diagnostics "$RUNNER_TEMP/meeting_diagnostics.json" --execution-id "$SPACEBAR_MEETING_EXECUTION_ID"
       - name: Summarize sanitized meeting execution status
         if: ${{ always() }}
+        env:
+          SPACEBAR_MEETING_EXECUTION_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          python agents/ai_meeting_diagnostics.py "$RUNNER_TEMP/meeting_diagnostics.json" "$GITHUB_STEP_SUMMARY"
+          python agents/ai_meeting_diagnostics.py "$RUNNER_TEMP/meeting_diagnostics.json" "$GITHUB_STEP_SUMMARY" --expected-execution-id "$SPACEBAR_MEETING_EXECUTION_ID"
       - name: Validate completed live transcript against the exact request bundle
         if: github.event_name == 'workflow_dispatch' && inputs.run_ai_meeting
         run: |

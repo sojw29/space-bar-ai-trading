@@ -1,14 +1,16 @@
 """Render bounded, allowlisted execution status into a GitHub job summary."""
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 
-from ai_meeting_runtime import ANALYSTS, SAFE_ERROR_CODES
+from ai_meeting_runtime import ANALYSTS, SAFE_ERROR_CODES, valid_execution_id
+from agent_research_runtime_v233 import utc_time
 
 STAGES = {'INPUT', 'CONFIGURATION', 'INFERENCE', 'PUBLICATION', 'COMPLETED'}
 CODES = SAFE_ERROR_CODES | {'FILE_ERROR', 'INPUT_OR_VALIDATION_ERROR'}
 FIELDS = {'version', 'status', 'stage', 'agent', 'phase', 'attempted_calls',
-          'validated_responses', 'error_code'}
+          'validated_responses', 'error_code', 'execution_id', 'started_at_utc', 'updated_at_utc'}
 HINTS = {
     'OPENAI_API_KEY_REQUIRED': 'GitHub Actions의 OPENAI_API_KEY secret 설정을 확인하세요.',
     'MODEL_REQUIRED': '지원되는 모델 이름을 지정하세요.',
@@ -27,9 +29,18 @@ HINTS = {
 }
 
 
-def render_status(value):
-    if not isinstance(value, dict) or set(value) != FIELDS or value['version'] != 'MEETING_DIAGNOSTICS_1':
+def render_status(value, *, expected_execution_id=None, now=None):
+    if not isinstance(value, dict) or set(value) != FIELDS or value['version'] != 'MEETING_DIAGNOSTICS_2':
         raise ValueError('INVALID_DIAGNOSTICS')
+    if not valid_execution_id(value['execution_id']):
+        raise ValueError('INVALID_EXECUTION_ID')
+    if expected_execution_id is not None and (
+            not valid_execution_id(expected_execution_id) or value['execution_id'] != expected_execution_id):
+        raise ValueError('DIAGNOSTICS_FROM_DIFFERENT_EXECUTION')
+    now = now or datetime.now(timezone.utc)
+    started, updated = utc_time(value['started_at_utc']), utc_time(value['updated_at_utc'])
+    if not started <= updated <= now or not 0 <= (now-updated).total_seconds() <= 8*3600:
+        raise ValueError('STALE_OR_INVALID_DIAGNOSTIC_TIME')
     if value['status'] not in ('RUNNING', 'FAILED', 'COMPLETED') or value['stage'] not in STAGES:
         raise ValueError('INVALID_DIAGNOSTIC_STATE')
     if value['agent'] not in (*ANALYSTS, 'COMMANDER', None) or value['phase'] not in ('ANALYSIS', 'PEER_REVIEW', 'CONCLUSION', None):
@@ -45,6 +56,7 @@ def render_status(value):
     if value['status'] == 'COMPLETED' and (value['stage'] != 'COMPLETED' or validated != 7):
         raise ValueError('INCOMPLETE_MEETING_STATUS')
     lines = ['## AI 회의 실행 진단', '',
+             '- 기록 실행 ID: '+value['execution_id'], '- 마지막 기록 시각: '+updated.isoformat(),
              '- 상태: '+value['status'], '- 실행 단계: '+value['stage'],
              '- 마지막 관측 역할/단계: '+(value['agent'] or '없음')+' / '+(value['phase'] or '없음'),
              '- 호출 시도: '+str(attempted)+'/7', '- 검증된 응답: '+str(validated)+'/7']
@@ -58,13 +70,13 @@ def render_status(value):
     return '\n'.join(lines)
 
 
-def read_summary(path):
+def read_summary(path, *, expected_execution_id=None, now=None):
     try:
         with Path(path).open('rb') as stream:
             raw = stream.read(8193)
         if len(raw) > 8192:
             raise ValueError('DIAGNOSTICS_TOO_LARGE')
-        return render_status(json.loads(raw))
+        return render_status(json.loads(raw), expected_execution_id=expected_execution_id, now=now)
     except (ValueError, TypeError, KeyError, OSError):
         return ('## AI 회의 실행 진단\n\n유효한 실행 진단 없음. 설정 검사·데이터 준비·작업 취소 로그를 확인하세요. '
                 '실제 호출이나 게시 성공 여부를 이 요약만으로 판단할 수 없습니다.\n')
@@ -74,12 +86,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('diagnostics')
     parser.add_argument('summary')
+    parser.add_argument('--expected-execution-id', help='Reject a status from any other workflow run or attempt')
     args = parser.parse_args()
     source, target = Path(args.diagnostics), Path(args.summary)
     if source.resolve() == target.resolve() or (source.exists() and target.exists() and source.samefile(target)):
         parser.exit(1, 'Diagnostic input and summary output must differ.\n')
     with target.open('a', encoding='utf-8') as stream:
-        stream.write('\n'+read_summary(source))
+        stream.write('\n'+read_summary(source, expected_execution_id=args.expected_execution_id))
 
 
 if __name__ == '__main__':
