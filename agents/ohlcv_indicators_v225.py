@@ -9,12 +9,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import Request, HTTPRedirectHandler, build_opener
 from market_source_provenance import SOURCES, validate_candle_batch
 
 SYMBOLS=("BTCUSDT","ETHUSDT","SOLUSDT")
 API="https://api.bybit.com/v5/market/kline?"
 PROVIDERS = {'bybit': 'BYBIT_USDT_PERPETUAL_5M', 'okx': 'OKX_USDT_PERPETUAL_5M'}
+
+class NoMarketRedirect(HTTPRedirectHandler):
+    """Never label another endpoint's response as the selected exchange."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# Keep the transport injectable while disabling urllib's implicit redirect following.
+urlopen = build_opener(NoMarketRedirect()).open
+
 
 def fetch_public(symbol, provider):
     if symbol not in SYMBOLS or provider not in PROVIDERS:

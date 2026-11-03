@@ -241,3 +241,8 @@ the start time. The exact eight-hour boundary remains inclusive; consumers must
 still revalidate the timestamp when displaying an older report. An explicit
 `now` argument remains available for deterministic local replays/tests; live CLI
 checks do not freeze the clock at file-read time.
+
+Public candle requests reject HTTP redirects, including redirects on the same host.
+A redirect fails collection without retries or venue fallback; no redirected response
+is published with the selected exchange's provenance. The fixed official endpoint
+must return its own successful response.
