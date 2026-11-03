@@ -151,6 +151,34 @@ async function smoke(){
  assert.equal(await badMeeting.locator("#ai-meeting-rows p").count(),0);
  await badMeeting.close();
 
+ // A provider outage and hostile text must never be mistaken for a live
+ // meeting or executed as HTML in the actual Chromium document.
+ const unavailableMeeting=await context.newPage();
+ await serveThree(unavailableMeeting);
+ await unavailableMeeting.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+  status:503,contentType:"application/json",
+  body:JSON.stringify({error:"meeting_unavailable",orders_enabled:false})
+ }));
+ await unavailableMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ await unavailableMeeting.waitForFunction(()=>
+  document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+ assert.equal(await unavailableMeeting.locator("#ai-meeting-rows p").count(),0);
+ await unavailableMeeting.close();
+
+ const textMeeting=await context.newPage();
+ await serveThree(textMeeting);
+ await textMeeting.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+  status:200,contentType:"application/json",
+  body:JSON.stringify({...transcript,transcript:transcript.transcript.map((entry,i)=>
+   i===0?{...entry,summary:'<img src=x onerror=alert(1)>'}:entry)})
+ }));
+ await textMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ await textMeeting.waitForFunction(()=>
+  document.querySelectorAll("#ai-meeting-rows p").length===7);
+ assert.equal(await textMeeting.locator("#ai-meeting-rows img").count(),0);
+ assert.match(await textMeeting.locator("#ai-meeting-rows p").first().textContent(),/<img src=x/);
+ await textMeeting.close();
+
  // Block a research request: the next navigation must not preserve old votes
  // or a fabricated market chart.
  const disconnected=await context.newPage();
