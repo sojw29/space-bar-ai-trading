@@ -3,6 +3,7 @@
 Produces a provider-agnostic dry-run envelope only. Deliberately excludes
 secrets and URLs to avoid accidental network execution.
 """
+from market_source_provenance import with_market_source
 import argparse
 import hashlib
 import json
@@ -47,6 +48,10 @@ def preflight(bundle, *, dry_run=False, now=None):
         facts = request.get("facts")
         if not isinstance(facts, dict) or not isinstance(facts.get("markets"), list) or len(facts["markets"]) != 3:
             raise ValueError("INVALID_FACTS")
+        with_market_source(bundle, {})
+        with_market_source(facts, {})
+        if bundle.get('market_source') != facts.get('market_source'):
+            raise ValueError('INCONSISTENT_MARKET_SOURCE')
         if type(facts.get("trend_classifications_differ")) is not bool or type(facts.get("volume_data_availability_differs")) is not bool:
             raise ValueError("INVALID_COMPARISON")
         import math
@@ -60,14 +65,14 @@ def preflight(bundle, *, dry_run=False, now=None):
             common_facts = canonical(facts)
         elif canonical(facts) != common_facts:
             raise ValueError("INCONSISTENT_AGENT_FACTS")
-    return {"version": "V240.0", "type": "PROVIDER_TRANSPORT_DRY_RUN_PREFLIGHT",
+    return with_market_source(bundle, {"version": "V240.0", "type": "PROVIDER_TRANSPORT_DRY_RUN_PREFLIGHT",
             "created_at_utc": now.isoformat(), "source_generated_at_utc": source.isoformat(),
             "request_sha256": hashlib.sha256(canonical(bundle)).hexdigest(),
             "agent_order": list(AGENTS), "request_count": len(requests),
             "research_only": True, "orders_enabled": False, "network_enabled": False,
             "model_inference_performed": False, "trade_signals_available": False,
             "provider_configured": False, "credentials_included": False,
-            "status": "VALIDATED_NOT_DISPATCHED"}
+            "status": "VALIDATED_NOT_DISPATCHED"})
 
 def main():
     parser = argparse.ArgumentParser()

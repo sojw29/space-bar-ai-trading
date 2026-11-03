@@ -1,4 +1,5 @@
 """V235: deterministic cross-symbol research disagreement review; no model or trades."""
+from market_source_provenance import with_market_source
 import argparse
 import json
 from datetime import datetime, timezone
@@ -57,7 +58,7 @@ def review(payload, now=None):
     trends = {r["sma_relationship"] for r in rows}
     trend_disagreement = len(trends) > 1
     volume_availability_disagreement = len({r["volume_ratio_20"] is None for r in rows}) > 1
-    return {
+    return with_market_source(payload, {
         "version": "V235.0", "review_type": "DETERMINISTIC_CROSS_SYMBOL_CONSISTENCY",
         "generated_at_utc": now.isoformat(), "source_generated_at_utc": ts.isoformat(),
         "source_input_event_sha256": payload["input_event_sha256"],
@@ -69,7 +70,7 @@ def review(payload, now=None):
                       "trade_authorization": "DENIED",
                       "note": "Cross-symbol differences are not conflicting agent opinions or trade signals."},
         "markets": rows
-    }
+    })
 
 def main():
     parser = argparse.ArgumentParser()

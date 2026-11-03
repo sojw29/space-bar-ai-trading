@@ -1,4 +1,5 @@
 """V234 offline auditable agent handoff; deterministic, not a model or trading engine."""
+from market_source_provenance import with_market_source
 import argparse
 import hashlib
 import json
@@ -65,12 +66,12 @@ def compile_handoff(payload, now=None):
             events.append({"symbol": symbol, "agent": agent, "observation": observation,
                            "source_generated_at_utc": source_time.isoformat()})
     digest = hashlib.sha256(canonical({"source": payload, "events": events})).hexdigest()
-    return {"version": "V234.0", "process": "DETERMINISTIC_AGENT_HANDOFF_AUDIT",
+    return with_market_source(payload, {"version": "V234.0", "process": "DETERMINISTIC_AGENT_HANDOFF_AUDIT",
             "generated_at_utc": now.isoformat(), "source_generated_at_utc": source_time.isoformat(),
             "research_only": True, "orders_enabled": False, "ai_agents_running": False,
             "model_inference_performed": False, "trade_signals_available": False,
             "backtest_verified": False, "event_count": len(events), "events": events,
-            "input_event_sha256": digest, "integrity_note": "SHA256 detects accidental changes, not authenticated signatures"}
+            "input_event_sha256": digest, "integrity_note": "SHA256 detects accidental changes, not authenticated signatures"})
 
 def main():
     parser = argparse.ArgumentParser()

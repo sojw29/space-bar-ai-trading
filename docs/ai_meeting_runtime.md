@@ -159,6 +159,41 @@ validated response counts, and does not replace a previous completed transcript.
 A failed first call does not create a completed output. The diagnostic does not
 establish whether a provider billed an interrupted request.
 
+## Public candle source selection after the Bybit 403 failure
+
+The confirmed readiness run 41558873829 failed on Bybit public OHLCV HTTP 403,
+before any OpenAI call. A key replacement cannot repair that market-data request.
+
+The readiness and paid meeting workflows now expose `market_provider` (`okx` or
+`bybit`), defaulting explicitly to `okx`. Choose `main` and start a **new Run
+workflow** to use this code; re-running an old failure keeps its old commit.
+Scheduled Pages indicator collection explicitly uses OKX too. The CLI retains
+Bybit as its backwards-compatible default and accepts `--provider okx`.
+There is no automatic fallback, proxy, regional mirror, mixed-venue dataset or
+change to trading permissions.
+
+OKX uses the official public `/api/v5/market/candles` endpoint with BTC-USDT-SWAP,
+ETH-USDT-SWAP and SOL-USDT-SWAP at 5m. Only `confirm=1` rows are used; `volCcy`
+(base-currency volume for derivatives) is selected, not contract-count `vol`.
+The existing OHLC consistency, finite values, candle continuity, freshness and
+minimum completed-history checks remain active. Responses are size bounded.
+
+The allowlisted `market_source` ID is propagated through interpretation, brief,
+audit, adapter requests, preflight, actual model context and completed transcript.
+Preflight rejects divergent source IDs; publication compares the report's source
+against the exact request bundle. Room panels and readiness summaries display the
+venue. Historical local records retain source; cross-venue or known-vs-unrecorded
+comparisons/charts are blocked. Clear older local history if you want to begin a
+new consistent history for one venue. Legacy fixtures without a source remain
+supported but are labeled unrecorded rather than relabeled as Bybit or OKX.
+
+An OKX observation is not a Bybit observation. Independent exchange prices and
+volumes can differ. Source access still depends on the execution environment;
+collection errors stop readiness/live preparation before model calls, rather than
+being treated as validated data. No OpenAI key is used by public candle collection.
+
+Source contract: https://www.okx.com/docs-v5/en/#order-book-trading-market-data-get-candlesticks
+
 ## Input rehearsal without model calls
 
 In Actions, run **SPACE BAR AI Meeting Input Readiness (No Model Calls)**.

@@ -16,6 +16,7 @@ from agent_research_runtime_v233 import utc_time
 from ai_meeting_runtime import (ANALYSTS, VERDICTS, MeetingError, NoRedirect,
                                 publish_report, validate_statement)
 from provider_transport_preflight_v240 import preflight
+from market_source_provenance import with_market_source
 
 PUBLIC_URL = 'https://sojw29.github.io/space-bar-ai-trading/ai_meeting.json'
 MAX_BYTES = 262144
@@ -29,8 +30,9 @@ def validate_public_report(report, *, bundle=None, now=None):
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
         raise MeetingError('NAIVE_NOW')
-    if not isinstance(report, dict) or set(report) != FIELDS:
+    if not isinstance(report, dict) or set(report) not in (FIELDS, FIELDS | {'market_source'}):
         raise MeetingError('INVALID_REPORT_FIELDS')
+    with_market_source(report, {})
     for key, expected in {'version': 'AI_MEETING_1', 'status': 'COMPLETED',
                           'execution_mode': 'LIVE_PROVIDER', 'model_inference_performed': True,
                           'ai_agents_running': False, 'research_only': True, 'orders_enabled': False,
@@ -66,7 +68,8 @@ def validate_public_report(report, *, bundle=None, now=None):
     if bundle is not None:
         envelope = preflight(bundle, dry_run=True, now=now)
         if (envelope['request_sha256'] != report['request_sha256'] or
-                utc_time(envelope['source_generated_at_utc']) != source):
+                utc_time(envelope['source_generated_at_utc']) != source or
+                bundle.get('market_source') != report.get('market_source')):
             raise MeetingError('REQUEST_PROVENANCE_MISMATCH')
     return deepcopy(report)
 

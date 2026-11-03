@@ -1,4 +1,5 @@
 """V229 deterministic COMMANDER research briefing; no AI, orders or recommendations."""
+from market_source_provenance import with_market_source
 import json
 import sys
 from datetime import datetime, timezone
@@ -36,13 +37,13 @@ def summarize(data,now=None):
         summary.append({"symbol":symbol,"trend_observation":atlas["sma_relationship"],
                         "volume_ratio_20":ratio,"risk_status":"NO_TRADE_AUTHORIZATION",
                         "research_conclusion":"DESCRIPTIVE_ONLY"})
-    return {"version":"V229.0","report_type":"DETERMINISTIC_COMMANDER_RESEARCH_BRIEF",
+    return with_market_source(data, {"version":"V229.0","report_type":"DETERMINISTIC_COMMANDER_RESEARCH_BRIEF",
             "generated_at_utc":now.isoformat(),"source_generated_at_utc":data["source_generated_at_utc"],
             "research_only":True,"orders_enabled":False,"realtime":False,
             "ai_agents_running":False,"trade_signals_available":False,
             "backtest_verified":False,"commander":{"status":"COMPILED_NOT_AI",
                 "note":"Descriptive indicator aggregation only; no strategy validation or trade decision."},
-            "markets":summary}
+            "markets":summary})
 if __name__=="__main__":
     source=Path(sys.argv[1]);target=Path(sys.argv[2])
     report=summarize(json.loads(source.read_text(encoding="utf-8")))

@@ -3,6 +3,7 @@
 No keys in artifacts, no tools or orders, no automatic/background model calls.
 The existing offline V236-V240 contracts retain their original meaning.
 """
+from market_source_provenance import with_market_source
 import argparse
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -164,6 +165,7 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
     facts = {"source_generated_at_utc": envelope["source_generated_at_utc"],
              "markets": [{k: m[k] for k in ("symbol", "trend", "volume_ratio_20")}
                          for m in source["markets"]]}
+    with_market_source(bundle, facts)
     transcript = []
 
     def speak(agent, phase, context):
@@ -194,7 +196,7 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
     elif any(t["agent"] == "GUARDIAN" and t["verdict"] == "REVIEW_NEEDED" for t in transcript):
         final = "REVIEW_NEEDED"
     live = type(provider) is OpenAIProvider
-    return {"version": "AI_MEETING_1", "status": "COMPLETED",
+    return with_market_source(bundle, {"version": "AI_MEETING_1", "status": "COMPLETED",
             "execution_mode": "LIVE_PROVIDER" if live else "OFFLINE_FIXTURE",
             "model_inference_performed": live, "ai_agents_running": False,
             "research_only": True, "orders_enabled": False, "trade_authorization": "DENIED",
@@ -202,7 +204,7 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
             "started_at_utc": started.isoformat(), "generated_at_utc": finished.isoformat(),
             "request_sha256": envelope["request_sha256"],
             "model": provider.model if live else "fixture",
-            "call_count": len(transcript), "final_verdict": final, "transcript": transcript}
+            "call_count": len(transcript), "final_verdict": final, "transcript": transcript})
 
 
 def publish_report(report, destination):
