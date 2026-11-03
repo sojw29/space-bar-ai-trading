@@ -9,6 +9,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dashboard_api_v28 as v28
@@ -62,6 +63,29 @@ class LocalApiTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/agents")
         self.assertEqual(error.exception.code, 503)
+
+    def test_meeting_unavailable_fails_closed_without_orders(self):
+        with patch("meeting_quality_report_v166.build_report",
+                   side_effect=FileNotFoundError("missing snapshot")):
+            with self.assertRaises(HTTPError) as error:
+                self.get("/api/v1/meeting")
+            self.assertEqual(error.exception.code, 503)
+            payload = json.load(error.exception)
+            self.assertEqual(payload["error"], "meeting_snapshot_unavailable")
+            self.assertFalse(payload["orders_enabled"])
+            self.assertFalse(payload["live_trading_approved"])
+            self.assertFalse(payload["contract_validation"]["verified"])
+
+    def test_meeting_snapshot_reports_contract_validation(self):
+        with patch("meeting_quality_report_v166.build_report",
+                   return_value={"status": "RESEARCH_ONLY"}) as report:
+            with patch("meeting_contract_validator_v186.validate_meeting_snapshot",
+                       return_value={"verified": False, "status": "BLOCKED"}) as validate:
+                status, payload = self.get("/api/v1/meeting")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["contract_validation"]["status"], "BLOCKED")
+        report.assert_called_once()
+        validate.assert_called_once()
 
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
