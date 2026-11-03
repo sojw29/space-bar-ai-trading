@@ -15,7 +15,7 @@ _ALLOWED_KEYS = frozenset({"symbol", "side", "orderType", "qty", "price", "reduc
 _ID = re.compile(r"^[A-Za-z0-9_-]{8,36}$")
 
 def _positive_decimal(value, field):
-    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+(?:\\.[0-9]+)?", value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value):
         raise OrderBlocked("INVALID_" + field)
     try:
         number = Decimal(value)
