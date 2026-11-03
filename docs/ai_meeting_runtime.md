@@ -156,3 +156,12 @@ Invalid input returns a nonzero exit code with a sanitized blocked diagnostic.
 The input and output cannot be the same file or aliases. Exceptions and source
 text are not copied into the summary. The existing paid/publication workflow is
 unchanged and still requires explicit authorization.
+
+Readiness uses the current clock before every preparation stage and once more
+before returning a ready result. Data expiring mid-check or immediately after
+the last stage produces a blocked report, and backward clock movement is labeled
+`CLOCK_CHANGED`. The report timestamp is the final observation time rather than
+the start time. The exact eight-hour boundary remains inclusive; consumers must
+still revalidate the timestamp when displaying an older report. An explicit
+`now` argument remains available for deterministic local replays/tests; live CLI
+checks do not freeze the clock at file-read time.

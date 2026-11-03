@@ -15,7 +15,7 @@ from provider_transport_preflight_v240 import preflight
 from ai_meeting_runtime import publish_report
 
 STAGES = ('SOURCE_VALIDATION', 'HANDOFF', 'CONSISTENCY_REVIEW', 'MODEL_REQUESTS', 'PREFLIGHT')
-ERRORS = ('VALIDATION_FAILED', 'INPUT_UNAVAILABLE', 'INPUT_TOO_LARGE', 'INVALID_JSON')
+ERRORS = ('VALIDATION_FAILED', 'INPUT_UNAVAILABLE', 'INPUT_TOO_LARGE', 'INVALID_JSON', 'CLOCK_CHANGED')
 
 
 def empty_report(now):
@@ -27,32 +27,57 @@ def empty_report(now):
             'research_only': True, 'orders_enabled': False}
 
 
-def assess_readiness(brief, *, now=None):
-    now = now or datetime.now(timezone.utc)
-    if now.tzinfo is None:
+def assess_readiness(brief, *, now=None, clock=None):
+    if now is not None and clock is not None:
+        raise ValueError('SPECIFY_NOW_OR_CLOCK')
+    if clock is None:
+        clock = (lambda: now) if now is not None else (lambda: datetime.now(timezone.utc))
+    started = clock()
+    if started.tzinfo is None:
         raise ValueError('NAIVE_NOW')
-    result = empty_report(now)
+    result = empty_report(started)
+    previous = started
+
+    def current_time():
+        nonlocal previous
+        value = clock()
+        if value.tzinfo is None:
+            raise ValueError('CLOCK_CHANGED')
+        result['generated_at_utc'] = value.isoformat()
+        if value < previous:
+            raise ValueError('CLOCK_CHANGED')
+        previous = value
+        return value
+
     current = brief
     steps = (build_research, compile_handoff, review, build_adapter_requests,
              lambda value, now: preflight(value, dry_run=True, now=now))
     for stage, execute in zip(STAGES, steps):
         result['stage'] = stage
         try:
-            current = execute(current, now=now)
-        except (ValueError, TypeError, KeyError):
+            current = execute(current, now=current_time())
+        except (ValueError, TypeError, KeyError) as error:
             result['checks'].append({'stage': stage, 'status': 'FAIL'})
-            result['error_code'] = 'VALIDATION_FAILED'
+            result['error_code'] = 'CLOCK_CHANGED' if str(error) == 'CLOCK_CHANGED' else 'VALIDATION_FAILED'
             return result
         result['checks'].append({'stage': stage, 'status': 'PASS'})
         if stage == 'SOURCE_VALIDATION':
             result['source_generated_at_utc'] = current['source_generated_at_utc']
+    try:
+        finished = current_time()
+        source = utc_time(result['source_generated_at_utc'])
+        if not 0 <= (finished-source).total_seconds() <= 8*3600:
+            raise ValueError('SOURCE_EXPIRED_BEFORE_READY')
+    except (ValueError, TypeError, KeyError) as error:
+        result['checks'][-1]['status'] = 'FAIL'
+        result['error_code'] = 'CLOCK_CHANGED' if str(error) == 'CLOCK_CHANGED' else 'VALIDATION_FAILED'
+        return result
     result.update(status='INPUTS_READY', prepared_agent_count=current['request_count'])
     return result
 
 
 def check_file(source, *, now=None):
-    now = now or datetime.now(timezone.utc)
-    result = empty_report(now)
+    result = empty_report(now or datetime.now(timezone.utc))
     try:
         with Path(source).open('rb') as stream:
             raw = stream.read(65537)
@@ -111,7 +136,7 @@ def render_summary(report, *, now=None):
             if checks or report['error_code'] == 'VALIDATION_FAILED':
                 raise ValueError('INVALID_INPUT_FAILURE')
         elif (not checks or checks[-1] != {'stage': report['stage'], 'status': 'FAIL'}
-              or any(c['status'] != 'PASS' for c in checks[:-1]) or report['error_code'] != 'VALIDATION_FAILED'):
+              or any(c['status'] != 'PASS' for c in checks[:-1]) or report['error_code'] not in ('VALIDATION_FAILED', 'CLOCK_CHANGED')):
             raise ValueError('INVALID_PIPELINE_FAILURE')
     else:
         raise ValueError('INVALID_STATUS')
