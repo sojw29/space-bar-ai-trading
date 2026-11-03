@@ -1524,8 +1524,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const rows=document.getElementById("v226-rows");
  const refresh=document.getElementById("v226-refresh");
  let validSince=null,validUntil=null;
- const refreshButton=document.getElementById("ai-meeting-refresh");
- let loading=false;
  function expire(){
   if(validUntil===null)return;
   const now=Date.now();
@@ -2002,6 +2000,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 /* Completed model meeting snapshots only. Model text is never HTML or executable code. */
 (async function(){
  const status=document.getElementById("ai-meeting-status"),rows=document.getElementById("ai-meeting-rows");
+ const refreshButton=document.getElementById("ai-meeting-refresh");
+ let loading=false;
  const verdicts=["OBSERVATION_ONLY","REVIEW_NEEDED","INSUFFICIENT_DATA"];
  const labels={OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
  let validSince=null,validUntil=null;
