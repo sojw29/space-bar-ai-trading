@@ -179,6 +179,25 @@ async function smoke(){
  assert.match(await textMeeting.locator("#ai-meeting-rows p").first().textContent(),/<img src=x/);
  await textMeeting.close();
 
+ // Old or contradictory meeting snapshots must be rejected in the actual
+ // browser, even when the HTTP endpoint returns 200.
+ for(const [reason,mutate] of [
+  ["stale-source",d=>({...d,source_generated_at_utc:new Date(Date.now()-9*3600000).toISOString()})],
+  ["future-finish",d=>({...d,generated_at_utc:new Date(Date.now()+600000).toISOString()})],
+  ["contradictory-verdict",d=>({...d,final_verdict:"REVIEW_NEEDED"})]
+ ]){
+  const invalid=await context.newPage();
+  await serveThree(invalid);
+  await invalid.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+   status:200,contentType:"application/json",body:JSON.stringify(mutate(transcript))
+  }));
+  await invalid.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+  await invalid.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+  assert.equal(await invalid.locator("#ai-meeting-rows p").count(),0,reason);
+  await invalid.close();
+ }
+
  // Block a research request: the next navigation must not preserve old votes
  // or a fabricated market chart.
  const disconnected=await context.newPage();
