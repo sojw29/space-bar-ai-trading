@@ -87,6 +87,31 @@ class LocalApiTests(unittest.TestCase):
         report.assert_called_once()
         validate.assert_called_once()
 
+    def test_meeting_get_never_invokes_live_model_or_orders(self):
+        # A dashboard refresh must only read a stored research snapshot.
+        with patch("meeting_quality_report_v166.build_report",
+                   return_value={"research_only": True, "orders_enabled": False,
+                                 "live_trading_approved": False}):
+            with patch("meeting_contract_validator_v186.validate_meeting_snapshot",
+                       return_value={"verified": False, "status": "BLOCKED"}):
+                with patch("ai_meeting_runtime.OpenAIProvider.complete",
+                           side_effect=AssertionError("live model invoked")) as live:
+                    status, payload = self.get("/api/v1/meeting")
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["orders_enabled"])
+        self.assertFalse(payload["live_trading_approved"])
+        live.assert_not_called()
+
+    def test_meeting_post_is_rejected_without_running_model(self):
+        with patch("ai_meeting_runtime.OpenAIProvider.complete",
+                   side_effect=AssertionError("live model invoked")) as live:
+            with self.assertRaises(HTTPError) as error:
+                urlopen(Request(self.base + "/api/v1/meeting", data=b"{}",
+                                method="POST"), timeout=3)
+        self.assertEqual(error.exception.code, 405)
+        self.assertFalse(json.load(error.exception).get("orders_enabled", False))
+        live.assert_not_called()
+
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/orders")
