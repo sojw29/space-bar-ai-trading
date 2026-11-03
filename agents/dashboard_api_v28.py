@@ -185,10 +185,46 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         statement = validate_statement({k: item.get(k) for k in
                                                         ("summary", "concerns", "verdict")})
                         entries.append({"agent": agent, "phase": phase, **statement})
+                    from datetime import datetime, timezone
+                    source_time = raw.get("source_generated_at_utc")
+                    started_time = raw.get("started_at_utc")
+                    finished_time = raw.get("generated_at_utc")
+                    times = []
+                    for value in (source_time, started_time, finished_time):
+                        if not isinstance(value, str):
+                            raise ValueError("invalid_time")
+                        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                        if parsed.tzinfo is None:
+                            raise ValueError("naive_time")
+                        times.append(parsed.astimezone(timezone.utc))
+                    now = datetime.now(timezone.utc)
+                    if not (times[0] <= times[1] <= times[2] <= now and
+                            (now - times[0]).total_seconds() <= 28800):
+                        raise ValueError("stale_transcript")
+                    if (raw.get("market_source") not in
+                            ("BYBIT_USDT_PERPETUAL_5M", "OKX_USDT_PERPETUAL_5M") or
+                            not isinstance(raw.get("model"), str) or
+                            not 1 <= len(raw["model"].strip()) <= 120 or
+                            not isinstance(raw.get("request_sha256"), str) or
+                            len(raw["request_sha256"]) != 64 or
+                            any(c not in "0123456789abcdef" for c in raw["request_sha256"])):
+                        raise ValueError("invalid_metadata")
+                    expected_final = entries[-1]["verdict"]
+                    if any(e["verdict"] == "INSUFFICIENT_DATA" for e in entries):
+                        expected_final = "INSUFFICIENT_DATA"
+                    elif any(e["agent"] == "GUARDIAN" and e["verdict"] == "REVIEW_NEEDED" for e in entries):
+                        expected_final = "REVIEW_NEEDED"
+                    if raw.get("final_verdict") != expected_final:
+                        raise ValueError("invalid_final_verdict")
                     self.reply(200, {"version": "AI_MEETING_TRANSCRIPT_VIEW_1",
                                      "execution_mode": raw["execution_mode"],
                                      "model_inference_performed": raw["model_inference_performed"],
-                                     "generated_at_utc": raw.get("generated_at_utc"),
+                                     "generated_at_utc": finished_time,
+                                     "source_generated_at_utc": source_time,
+                                     "started_at_utc": started_time,
+                                     "market_source": raw["market_source"],
+                                     "model": raw["model"],
+                                     "request_sha256": raw["request_sha256"],
                                      "final_verdict": raw.get("final_verdict"),
                                      "transcript": entries, "research_only": True,
                                      "orders_enabled": False, "live_trading_approved": False})
