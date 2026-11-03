@@ -148,6 +148,54 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     self.reply(200, {"state": "HISTORICAL", "ready": False, "orders_enabled": False})
                 else:
                     self.reply(200, live_store.status())
+            elif path == "/api/v1/meeting/transcript":
+                # Separate from the offline quality gate. Never starts inference.
+                transcript_path = (Path(__file__).resolve().parent.parent /
+                                   "reports" / "ai_meeting" / "latest.json")
+                try:
+                    if (not transcript_path.is_file() or
+                            transcript_path.stat().st_size > 65536):
+                        raise ValueError("transcript_unavailable")
+                    raw = json.loads(transcript_path.read_text(encoding="utf-8"))
+                    if (not isinstance(raw, dict) or
+                            raw.get("version") != "AI_MEETING_1" or
+                            raw.get("status") != "COMPLETED" or
+                            raw.get("research_only") is not True or
+                            raw.get("orders_enabled") is not False or
+                            raw.get("trade_authorization") != "DENIED" or
+                            raw.get("ai_agents_running") is not False or
+                            raw.get("execution_mode") not in
+                            ("LIVE_PROVIDER", "OFFLINE_FIXTURE") or
+                            type(raw.get("model_inference_performed")) is not bool or
+                            raw["model_inference_performed"] !=
+                            (raw["execution_mode"] == "LIVE_PROVIDER") or
+                            raw.get("call_count") != 7 or
+                            not isinstance(raw.get("transcript"), list) or
+                            len(raw["transcript"]) != 7):
+                        raise ValueError("invalid_transcript")
+                    expected = [("ATLAS", "ANALYSIS"), ("QUANT", "ANALYSIS"),
+                                ("GUARDIAN", "ANALYSIS"), ("ATLAS", "PEER_REVIEW"),
+                                ("QUANT", "PEER_REVIEW"), ("GUARDIAN", "PEER_REVIEW"),
+                                ("COMMANDER", "CONCLUSION")]
+                    from ai_meeting_runtime import validate_statement
+                    entries = []
+                    for item, (agent, phase) in zip(raw["transcript"], expected):
+                        if not isinstance(item, dict) or item.get("agent") != agent or item.get("phase") != phase:
+                            raise ValueError("invalid_transcript_entry")
+                        statement = validate_statement({k: item.get(k) for k in
+                                                        ("summary", "concerns", "verdict")})
+                        entries.append({"agent": agent, "phase": phase, **statement})
+                    self.reply(200, {"version": "AI_MEETING_TRANSCRIPT_VIEW_1",
+                                     "execution_mode": raw["execution_mode"],
+                                     "model_inference_performed": raw["model_inference_performed"],
+                                     "generated_at_utc": raw.get("generated_at_utc"),
+                                     "final_verdict": raw.get("final_verdict"),
+                                     "transcript": entries, "research_only": True,
+                                     "orders_enabled": False, "live_trading_approved": False})
+                except (OSError, ValueError, TypeError, KeyError):
+                    self.reply(503, {"error": "meeting_transcript_unavailable_or_invalid",
+                                     "research_only": True, "orders_enabled": False,
+                                     "live_trading_approved": False})
             elif path == "/api/v1/meeting":
                 from meeting_quality_report_v166 import build_report
                 from meeting_contract_validator_v186 import validate_meeting_snapshot
