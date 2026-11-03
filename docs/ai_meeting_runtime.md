@@ -151,6 +151,14 @@ does not mean the transcript was published. Inconsistent records fall back to
 unknown status; legitimate between-call freshness failures and interrupted calls
 remain valid diagnostics.
 
+Partial HTTP reads, disconnected HTTP responses and malformed HTTP status lines
+are converted to `PROVIDER_CONNECTION_INTERRUPTED`. Their raw exception text and
+partial response content are not emitted in CLI errors, diagnostics or summaries.
+An interruption stops subsequent calls without retrying, records attempted versus
+validated response counts, and does not replace a previous completed transcript.
+A failed first call does not create a completed output. The diagnostic does not
+establish whether a provider billed an interrupted request.
+
 ## Input rehearsal without model calls
 
 In Actions, run **SPACE BAR AI Meeting Input Readiness (No Model Calls)**.

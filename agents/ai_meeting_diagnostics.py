@@ -22,6 +22,7 @@ HINTS = {
     'PROVIDER_RATE_OR_QUOTA_LIMIT': '호출 제한 또는 사용량·결제 한도를 확인하세요. 자동 재시도하지 않습니다.',
     'PROVIDER_UPSTREAM_ERROR': '제공자 서버 오류입니다. 자동 재시도하지 않습니다.',
     'PROVIDER_TIMEOUT': '요청 시간이 초과됐습니다. 호출 시도는 과금 여부를 확정하지 않습니다.',
+    'PROVIDER_CONNECTION_INTERRUPTED': '연결 또는 응답 수신이 중단돼 회의를 완료하지 않았습니다. 자동 재시도하지 않으며 과금 여부를 이 기록만으로 판단할 수 없습니다.',
     'PROVIDER_OUTPUT_TRUNCATED': '출력이 잘려 완료된 회의로 게시하지 않았습니다.',
     'PROVIDER_REFUSED': '모델이 응답을 거절해 회의를 완료하지 않았습니다.',
     'INPUT_OR_VALIDATION_ERROR': '원본 데이터의 최신성·형식과 이전 준비 단계 로그를 확인하세요.',

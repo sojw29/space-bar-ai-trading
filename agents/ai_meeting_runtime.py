@@ -6,6 +6,7 @@ The existing offline V236-V240 contracts retain their original meaning.
 import argparse
 from copy import deepcopy
 from datetime import datetime, timezone
+from http.client import HTTPException
 import json
 import os
 import re
@@ -46,6 +47,7 @@ SAFE_ERROR_CODES = frozenset({
     'INVALID_STATEMENT', 'INVALID_SUMMARY', 'INVALID_CONCERNS', 'INVALID_VERDICT',
     'CLOCK_MOVED_BACKWARD',
     'INVALID_EXECUTION_ID',
+    'PROVIDER_CONNECTION_INTERRUPTED',
 })
 
 
@@ -141,6 +143,9 @@ class OpenAIProvider:
         except URLError as error:
             code = 'PROVIDER_TIMEOUT' if isinstance(error.reason, TimeoutError) else 'PROVIDER_REQUEST_FAILED'
             raise MeetingError(code) from None
+        except HTTPException:
+            # Includes partial reads and malformed status lines; never emit their raw text.
+            raise MeetingError('PROVIDER_CONNECTION_INTERRUPTED') from None
         except OSError:
             # Do not expose HTTP response bodies, request headers or credentials.
             raise MeetingError("PROVIDER_REQUEST_FAILED") from None
