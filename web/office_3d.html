@@ -1542,6 +1542,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const raw=await response.text();
    if(raw.length>12000)throw Error("데이터 크기 초과");
    const data=JSON.parse(raw);
+  const marketLabel=data.market_source===undefined?"출처 미기록":data.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":data.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
+  if(marketLabel===null)throw Error("데이터 출처 검증 실패");
    if(data.version!=="V225.0"||data.research_only!==true||
       data.orders_enabled!==false||data.realtime!==false||
       data.trade_signals_available!==false||data.ai_agents_running!==false||
@@ -1575,7 +1577,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     output.push(line);
    }
    rows.replaceChildren(...output);
-   status.textContent="수집: "+new Date(generated).toLocaleString()+" · 연구용";
+   status.textContent=marketLabel+" · 수집: "+new Date(generated).toLocaleString()+" · 연구용";
    validSince=since;validUntil=expires;expire();
   }catch(error){rows.replaceChildren();status.textContent="지표 미연결: "+error.message;}
   finally{refresh.disabled=false;}
@@ -1677,6 +1679,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const raw=await response.text();
   if(raw.length>16000)throw Error("응답 크기 초과");
   const d=JSON.parse(raw);
+  const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
+  if(marketLabel===null)throw Error("데이터 출처 검증 실패");
   if(d.version!=="V228.0"||d.research_only!==true||d.orders_enabled!==false||
      d.realtime!==false||d.ai_agents_running!==false||d.trade_signals_available!==false||
      d.analysis_type!=="DETERMINISTIC_INDICATOR_DESCRIPTION"||
@@ -1704,7 +1708,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    output.push(p);
   }
   rows.replaceChildren(...output);
-  status.textContent="과거 캔들 지표 해석 · "+new Date(d.source_generated_at_utc).toLocaleString();
+  status.textContent=marketLabel+" · 과거 캔들 지표 해석 · "+new Date(d.source_generated_at_utc).toLocaleString();
   validSince=captured;validUntil=captured+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="해석 미연결: "+error.message;}
 })();
@@ -1737,6 +1741,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const raw=await response.text();
   if(raw.length>12000)throw Error("응답 크기 초과");
   const d=JSON.parse(raw);
+  const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
+  if(marketLabel===null)throw Error("데이터 출처 검증 실패");
   if(d.version!=="V229.0"||d.report_type!=="DETERMINISTIC_COMMANDER_RESEARCH_BRIEF"||
      d.research_only!==true||d.orders_enabled!==false||d.realtime!==false||
      d.ai_agents_running!==false||d.trade_signals_available!==false||
@@ -1762,7 +1768,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    output.push(p);
   }
   rows.replaceChildren(...output);
-  status.textContent="규칙 기반 연구 요약 · "+new Date(d.source_generated_at_utc).toLocaleString();
+  status.textContent=marketLabel+" · 규칙 기반 연구 요약 · "+new Date(d.source_generated_at_utc).toLocaleString();
   validSince=captured;validUntil=captured+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="COMMANDER 미연결: "+error.message;}
 })();
@@ -1781,7 +1787,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const rows=document.getElementById("v230-rows");
  let cleared=false;
  function valid(e){
-  return e&&typeof e==="object"&&typeof e.timestamp==="string"&&
+  return e&&(e.market_source===undefined||["BYBIT_USDT_PERPETUAL_5M","OKX_USDT_PERPETUAL_5M"].includes(e.market_source))&&typeof e==="object"&&typeof e.timestamp==="string"&&
    Number.isFinite(Date.parse(e.timestamp))&&Array.isArray(e.markets)&&e.markets.length===3&&
    ["BTCUSDT","ETHUSDT","SOLUSDT"].every(symbol=>{
     const matches=e.markets.filter(m=>m&&m.symbol===symbol);
@@ -1800,7 +1806,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   rows.replaceChildren();
   for(const e of list.slice().reverse()){
    const p=document.createElement("p");
-   p.textContent=new Date(e.timestamp).toLocaleString()+" · "+
+   p.textContent=(e.market_source||"출처 미기록")+" · "+new Date(e.timestamp).toLocaleString()+" · "+
     e.markets.map(m=>m.symbol.replace("USDT","")+":"+m.trend.replace("SMA50_","")).join(" | ");
    rows.append(p);
   }
@@ -1829,9 +1835,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const entry={timestamp:d.source_generated_at_utc,markets:d.markets.map(m=>({
    symbol:m.symbol,trend:m.trend_observation,ratio:m.volume_ratio_20
   }))};
+  if(d.market_source!==undefined)entry.market_source=d.market_source;
   if(!valid(entry)||d.markets.some(m=>m.risk_status!=="NO_TRADE_AUTHORIZATION"||
     m.research_conclusion!=="DESCRIPTIVE_ONLY"))throw Error("항목 검증 실패");
-  if(!history.some(e=>e.timestamp===entry.timestamp)){
+  if(!history.some(e=>e.timestamp===entry.timestamp&&e.market_source===entry.market_source)){
    const updated=[...history,entry].slice(-30);
    localStorage.setItem(KEY,JSON.stringify(updated));show(updated);
   }
@@ -1852,7 +1859,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const status=document.getElementById("v231-status");
  const rows=document.getElementById("v231-rows");
  function valid(e){
-  return e&&typeof e.timestamp==="string"&&Number.isFinite(Date.parse(e.timestamp))&&
+  return e&&(e.market_source===undefined||["BYBIT_USDT_PERPETUAL_5M","OKX_USDT_PERPETUAL_5M"].includes(e.market_source))&&typeof e.timestamp==="string"&&Number.isFinite(Date.parse(e.timestamp))&&
    Array.isArray(e.markets)&&e.markets.length===3&&
    ["BTCUSDT","ETHUSDT","SOLUSDT"].every(symbol=>{
     const match=e.markets.filter(m=>m&&m.symbol===symbol);
@@ -1870,6 +1877,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const data=JSON.parse(raw);
    if(!Array.isArray(data)||data.length>30||!data.every(valid))throw Error("기록 형식 오류");
    if(data.length<2)throw Error("서로 다른 시각의 기록 2개 필요");
+   if(new Set(data.map(e=>e.market_source)).size>1)throw Error("서로 다른 거래소 또는 출처 미기록 자료는 비교하지 않습니다");
    const records=data.slice().sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
    for(let i=1;i<records.length;i++){
     if(Date.parse(records[i].timestamp)===Date.parse(records[i-1].timestamp))
@@ -1915,7 +1923,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return element;
  }
  function valid(e){
-  if(!e||typeof e.timestamp!=="string"||!Number.isFinite(Date.parse(e.timestamp))||
+  if(!e||(e.market_source!==undefined&&!["BYBIT_USDT_PERPETUAL_5M","OKX_USDT_PERPETUAL_5M"].includes(e.market_source))||typeof e.timestamp!=="string"||!Number.isFinite(Date.parse(e.timestamp))||
      Array.isArray(e.markets)===false||e.markets.length!==3)return false;
   return SYMBOLS.every(symbol=>{
    const matches=e.markets.filter(m=>m&&m.symbol===symbol);
@@ -1933,6 +1941,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const parsed=JSON.parse(raw);
    if(!Array.isArray(parsed))throw Error("기록 형식 오류");
    const sorted=parsed.filter(valid).sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
+   if(new Set(sorted.map(e=>e.market_source)).size>1)throw Error("서로 다른 거래소 또는 출처 미기록 자료는 함께 그리지 않습니다");
    const records=[];
    for(const e of sorted){
     if(records.length&&records[records.length-1].timestamp===e.timestamp)
@@ -2006,6 +2015,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!response.ok)throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
   const raw=await response.text();if(raw.length>65536)throw Error("회의 기록 크기 초과");
   const d=JSON.parse(raw),live=d.execution_mode==="LIVE_PROVIDER";
+  const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
+  if(marketLabel===null)throw Error("데이터 출처 검증 실패");
   if(d.version!=="AI_MEETING_1"||d.status!=="COMPLETED"||
      !["LIVE_PROVIDER","OFFLINE_FIXTURE"].includes(d.execution_mode)||
      d.model_inference_performed!==live||d.ai_agents_running!==false||
@@ -2035,7 +2046,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(d.final_verdict!==expected)throw Error("최종 검토 상태 불일치");
   rows.replaceChildren(...output);
   status.textContent=(live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님")+
-   " · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
+   " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   validSince=source;validUntil=source+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+error.message;}
 })();

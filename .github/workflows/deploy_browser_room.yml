@@ -59,7 +59,7 @@ jobs:
       - name: Collect completed public OHLCV indicators (optional)
         id: ohlcv_snapshot
         continue-on-error: true
-        run: python agents/ohlcv_indicators_v225.py web/ohlcv_indicators.json
+        run: python agents/ohlcv_indicators_v225.py web/ohlcv_indicators.json --provider okx
       - name: Report unavailable optional OHLCV indicators
         if: ${{ steps.ohlcv_snapshot.outcome == 'failure' }}
         run: |

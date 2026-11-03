@@ -1,4 +1,5 @@
 """V236 offline model-adapter boundary. No provider SDK, network, model invocation or trades."""
+from market_source_provenance import with_market_source
 import argparse
 from copy import deepcopy
 import json
@@ -53,18 +54,19 @@ def build_adapter_requests(payload, now=None):
     for agent in AGENTS:
         facts = {"markets": deepcopy(validated), "trend_classifications_differ": commander["trend_classifications_differ"],
                  "volume_data_availability_differs": commander["volume_data_availability_differs"]}
+        with_market_source(payload, facts)
         request = {"agent": agent, "mode": "OFFLINE_INPUT_ONLY",
                    "instruction": "Describe only the supplied observations. Do not recommend trades, forecast returns, claim model execution, or issue orders.",
                    "facts": facts, "trade_authorization": "DENIED"}
         if len(request["instruction"]) > MAX_PROMPT_CHARS:
             raise ValueError("PROMPT_TOO_LONG")
         requests.append(request)
-    return {"version": "V236.0", "type": "UNEXECUTED_MODEL_ADAPTER_REQUESTS",
+    return with_market_source(payload, {"version": "V236.0", "type": "UNEXECUTED_MODEL_ADAPTER_REQUESTS",
             "generated_at_utc": now.isoformat(), "source_generated_at_utc": source_time.isoformat(),
             "research_only": True, "orders_enabled": False, "model_inference_performed": False,
             "ai_agents_running": False, "trade_signals_available": False,
             "network_access_required": False, "requests": requests,
-            "note": "Adapter inputs only; no model provider configured or called."}
+            "note": "Adapter inputs only; no model provider configured or called."})
 
 def main():
     parser = argparse.ArgumentParser()

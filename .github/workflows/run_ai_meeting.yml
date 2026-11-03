@@ -2,6 +2,11 @@ name: SPACE BAR Manual AI Meeting Publication
 on:
   workflow_dispatch:
     inputs:
+      market_provider:
+        description: 'Public USDT perpetual candle venue (recorded with the meeting)'
+        type: choice
+        options: [okx, bybit]
+        default: okx
       run_ai_meeting:
         description: 'Authorize one public research meeting (up to 7 paid API calls)'
         type: boolean
@@ -71,7 +76,11 @@ jobs:
       - name: Collect completed public OHLCV indicators (optional)
         id: ohlcv_snapshot
         continue-on-error: true
-        run: python agents/ohlcv_indicators_v225.py web/ohlcv_indicators.json
+        env:
+          SPACEBAR_MARKET_PROVIDER: ${{ inputs.market_provider }}
+        run: |
+          echo "Public candle provider: $SPACEBAR_MARKET_PROVIDER" >> "$GITHUB_STEP_SUMMARY"
+          python agents/ohlcv_indicators_v225.py web/ohlcv_indicators.json --provider "$SPACEBAR_MARKET_PROVIDER"
       - name: Report unavailable optional OHLCV indicators
         if: ${{ steps.ohlcv_snapshot.outcome == 'failure' }}
         run: |

@@ -13,5 +13,5 @@ class HistoryPanelTests(unittest.TestCase):
     'age>8*3600000','matches.length===1','d.markets.some(m=>m.risk_status'):
    self.assertIn(marker,ROOM)
  def test_no_duplicate_timestamps(self):
-  self.assertIn('history.some(e=>e.timestamp===entry.timestamp)',ROOM)
+  self.assertIn('history.some(e=>e.timestamp===entry.timestamp&&e.market_source===entry.market_source)',ROOM)
 if __name__=="__main__":unittest.main()

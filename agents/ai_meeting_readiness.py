@@ -13,6 +13,7 @@ from research_consistency_review_v235 import review
 from model_adapter_contract_v236 import build_adapter_requests
 from provider_transport_preflight_v240 import preflight
 from ai_meeting_runtime import publish_report
+from market_source_provenance import SOURCES, with_market_source
 
 STAGES = ('SOURCE_VALIDATION', 'HANDOFF', 'CONSISTENCY_REVIEW', 'MODEL_REQUESTS', 'PREFLIGHT')
 ERRORS = ('VALIDATION_FAILED', 'INPUT_UNAVAILABLE', 'INPUT_TOO_LARGE', 'INVALID_JSON', 'CLOCK_CHANGED')
@@ -24,7 +25,7 @@ def empty_report(now):
             'checks': [], 'error_code': None, 'prepared_agent_count': 0,
             'planned_model_calls': 7, 'model_calls_performed': 0,
             'provider_verified': False, 'model_inference_performed': False,
-            'research_only': True, 'orders_enabled': False}
+            'research_only': True, 'orders_enabled': False, 'market_source': None}
 
 
 def assess_readiness(brief, *, now=None, clock=None):
@@ -63,6 +64,7 @@ def assess_readiness(brief, *, now=None, clock=None):
         result['checks'].append({'stage': stage, 'status': 'PASS'})
         if stage == 'SOURCE_VALIDATION':
             result['source_generated_at_utc'] = current['source_generated_at_utc']
+            result['market_source'] = current.get('market_source')
     try:
         finished = current_time()
         source = utc_time(result['source_generated_at_utc'])
@@ -101,6 +103,8 @@ def render_summary(report, *, now=None):
     if not isinstance(report, dict) or set(report) != expected or report['version'] != 'MEETING_READINESS_1':
         raise ValueError('INVALID_READINESS_REPORT')
     now = now or datetime.now(timezone.utc)
+    if report['market_source'] is not None:
+        with_market_source(report, {})
     generated = utc_time(report['generated_at_utc'])
     if not 0 <= (now-generated).total_seconds() <= 8*3600:
         raise ValueError('STALE_READINESS_REPORT')
@@ -141,6 +145,7 @@ def render_summary(report, *, now=None):
     else:
         raise ValueError('INVALID_STATUS')
     lines = ['## AI 회의 입력 준비 점검', '', '- 결과: '+report['status'],
+             '- 시장 데이터: '+SOURCES.get(report['market_source'], '출처 미기록'),
              '- 점검 시각: '+generated.isoformat(),
              '- 마지막 점검 단계: '+report['stage'], '- 실제 모델 호출: 0회',
              '- 실제 모델 실행 시 예정 호출: 최대 7회', '']

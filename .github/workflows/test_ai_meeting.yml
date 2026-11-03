@@ -3,6 +3,17 @@ on:
   push:
     paths:
       - 'agents/ai_meeting_runtime.py'
+      - 'agents/ohlcv_indicators_v225.py'
+      - 'agents/market_source_provenance.py'
+      - 'agents/ai_meeting_publication.py'
+      - 'agents/ai_meeting_readiness.py'
+      - 'agents/agent_indicator_interpretation_v228.py'
+      - 'agents/commander_research_brief_v229.py'
+      - 'agents/agent_research_runtime_v233.py'
+      - 'agents/agent_handoff_audit_v234.py'
+      - 'agents/research_consistency_review_v235.py'
+      - 'agents/model_adapter_contract_v236.py'
+      - 'agents/provider_transport_preflight_v240.py'
       - 'agents/ai_meeting_readiness.py'
       - '.github/workflows/check_ai_meeting_readiness.yml'
       - 'agents/ai_meeting_diagnostics.py'

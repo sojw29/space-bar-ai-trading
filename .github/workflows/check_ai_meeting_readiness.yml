@@ -1,6 +1,12 @@
 name: SPACE BAR AI Meeting Input Readiness (No Model Calls)
 on:
   workflow_dispatch:
+    inputs:
+      market_provider:
+        description: 'Public USDT perpetual candles; venue is recorded (no automatic fallback)'
+        type: choice
+        options: [okx, bybit]
+        default: okx
 permissions:
   contents: read
 jobs:
@@ -13,7 +19,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Collect public completed-candle indicators
-        run: python agents/ohlcv_indicators_v225.py "$RUNNER_TEMP/readiness_indicators.json"
+        env:
+          SPACEBAR_MARKET_PROVIDER: ${{ inputs.market_provider }}
+        run: |
+          echo "Public candle provider: $SPACEBAR_MARKET_PROVIDER" >> "$GITHUB_STEP_SUMMARY"
+          python agents/ohlcv_indicators_v225.py "$RUNNER_TEMP/readiness_indicators.json" --provider "$SPACEBAR_MARKET_PROVIDER"
       - name: Describe validated indicators
         run: python agents/agent_indicator_interpretation_v228.py "$RUNNER_TEMP/readiness_indicators.json" "$RUNNER_TEMP/readiness_interpretations.json"
       - name: Compile descriptive source brief

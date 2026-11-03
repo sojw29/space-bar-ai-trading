@@ -1,4 +1,5 @@
 """V228 deterministic agent-labeled indicator interpretations; not AI inference."""
+from market_source_provenance import with_market_source
 import json
 import math
 import sys
@@ -39,11 +40,11 @@ def interpret(snapshot, now=None):
             "QUANT":{"volume_ratio_20":round(ratio,4) if ratio is not None else None,
                      "status":"DESCRIPTIVE_ONLY_NO_BACKTEST"},
             "GUARDIAN":{"status":"NO_TRADE_AUTHORIZATION","orders_enabled":False}})
-    return {"version":"V228.0","generated_at_utc":now.isoformat(),
+    return with_market_source(snapshot, {"version":"V228.0","generated_at_utc":now.isoformat(),
             "source_generated_at_utc":snapshot["generated_at_utc"],
             "research_only":True,"orders_enabled":False,"realtime":False,
             "ai_agents_running":False,"trade_signals_available":False,
-            "analysis_type":"DETERMINISTIC_INDICATOR_DESCRIPTION","markets":out}
+            "analysis_type":"DETERMINISTIC_INDICATOR_DESCRIPTION","markets":out})
 def publish(source, target):
     """Fail closed: never leave an old public interpretation after invalid input."""
     source, target = Path(source), Path(target)

@@ -1,4 +1,5 @@
 """V233: offline, deterministic agent runtime contract. NO network, model calls or orders."""
+from market_source_provenance import with_market_source
 import argparse
 import json
 import math
@@ -66,7 +67,7 @@ def build_research(payload, now=None):
             "GUARDIAN": {"status": "NO_TRADE_AUTHORIZATION", "orders_enabled": False},
             "COMMANDER": {"status": "COMPILED_NOT_AI", "recommendation": None}
         })
-    return {
+    return with_market_source(payload, {
         "version": "V233.0", "engine": "OFFLINE_DETERMINISTIC_AGENT_CONTRACT",
         "generated_at_utc": now.isoformat(),
         "source_generated_at_utc": source_time.isoformat(),
@@ -75,7 +76,7 @@ def build_research(payload, now=None):
         "ai_agents_running": False, "model_inference_performed": False,
         "trade_signals_available": False, "backtest_verified": False,
         "markets": result
-    }
+    })
 
 def main():
     parser = argparse.ArgumentParser()
