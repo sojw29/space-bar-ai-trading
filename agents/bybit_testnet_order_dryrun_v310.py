@@ -35,9 +35,9 @@ def prepare_testnet_order(intent, *, dry_run=False):
         raise OrderBlocked("DRY_RUN_REQUIRED")
     if not isinstance(intent, dict) or set(intent) != _ALLOWED_KEYS:
         raise OrderBlocked("INVALID_FIELDS")
-    if intent["symbol"] not in _ALLOWED_SYMBOLS:
+    if type(intent["symbol"]) is not str or intent["symbol"] not in _ALLOWED_SYMBOLS:
         raise OrderBlocked("SYMBOL_NOT_ALLOWED")
-    if intent["side"] not in ("Buy", "Sell") or intent["orderType"] != "Limit":
+    if type(intent["side"]) is not str or type(intent["orderType"]) is not str or intent["side"] not in ("Buy", "Sell") or intent["orderType"] != "Limit":
         raise OrderBlocked("LIMIT_ONLY")
     if intent["reduceOnly"] is not True:
         raise OrderBlocked("REDUCE_ONLY_REQUIRED")
