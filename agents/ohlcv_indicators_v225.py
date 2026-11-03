@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-from market_source_provenance import SOURCES
+from market_source_provenance import SOURCES, validate_candle_batch
 
 SYMBOLS=("BTCUSDT","ETHUSDT","SOLUSDT")
 API="https://api.bybit.com/v5/market/kline?"
@@ -29,7 +29,7 @@ def fetch_public(symbol, provider):
     if len(raw)>262144: raise ValueError('OHLCV_RESPONSE_TOO_LARGE')
     return json.loads(raw)
 
-def indicators(symbol, fetch=None, *, provider='bybit'):
+def indicators(symbol, fetch=None, *, provider='bybit', now=None):
     if provider not in PROVIDERS or symbol not in SYMBOLS:
         raise ValueError('UNSUPPORTED_MARKET_SOURCE')
     if fetch is None:
@@ -57,7 +57,13 @@ def indicators(symbol, fetch=None, *, provider='bybit'):
     for row in rows:
         if not isinstance(row,list) or len(row)<6:
             raise ValueError("INVALID_OHLCV_ROW")
-        ts=int(row[0]); o,h,l,c,v=map(float,row[1:6])
+        stamp = row[0]
+        if type(stamp) not in (int, str) or (isinstance(stamp,str) and (not stamp.isascii() or not stamp.isdigit())):
+            raise ValueError('INVALID_CANDLE_TIMESTAMP')
+        ts=int(stamp)
+        if ts<=0 or ts%300000!=0:
+            raise ValueError('INVALID_CANDLE_TIMESTAMP')
+        o,h,l,c,v=map(float,row[1:6])
         if (not all(math.isfinite(x) for x in (o,h,l,c,v)) or
             min(o,h,l,c)<=0 or v<0 or h<max(o,c,l) or l>min(o,c,h)):
             raise ValueError("INVALID_OHLCV_VALUE")
@@ -67,7 +73,9 @@ def indicators(symbol, fetch=None, *, provider='bybit'):
         raise ValueError("DUPLICATE_CANDLE")
     if any(bars[i+1][0]-bars[i][0]!=300000 for i in range(len(bars)-1)):
         raise ValueError("NON_CONTIGUOUS_CANDLES")
-    now_ms=int(datetime.now(timezone.utc).timestamp()*1000)
+    cutoff = now or datetime.now(timezone.utc)
+    if cutoff.tzinfo is None: raise ValueError('NAIVE_CANDLE_CUTOFF')
+    now_ms=int(cutoff.timestamp()*1000)
     completed=[x for x in bars if x[0]+300000<=now_ms]
     if len(completed)<200 or now_ms-(completed[-1][0]+300000)>3600000:
         raise ValueError("STALE_OR_INSUFFICIENT_CANDLES")
@@ -84,11 +92,17 @@ def indicators(symbol, fetch=None, *, provider='bybit'):
             "SMA50_BELOW_SMA200" if sma50<sma200 else "SMA_EQUAL"}
 def build(fetch=None, *, provider='bybit'):
     if provider not in PROVIDERS: raise ValueError('UNSUPPORTED_MARKET_SOURCE')
+    started=datetime.now(timezone.utc)
+    markets=[indicators(s,fetch,provider=provider,now=started) for s in SYMBOLS]
+    finished=datetime.now(timezone.utc)
+    if finished<started:
+        raise ValueError('COLLECTION_CLOCK_MOVED_BACKWARD')
+    validate_candle_batch(markets, finished)
     return {"version":"V225.0","source":SOURCES[PROVIDERS[provider]],"market_source":PROVIDERS[provider],
-            "generated_at_utc":datetime.now(timezone.utc).isoformat(),
+            "generated_at_utc":finished.isoformat(),
             "research_only":True,"orders_enabled":False,"realtime":False,
             "trade_signals_available":False,"ai_agents_running":False,
-            "markets":[indicators(s,fetch,provider=provider) for s in SYMBOLS]}
+            "markets":markets}
 def publish(target, fetch=None, *, provider='bybit'):
     """Replace complete snapshots atomically; discard stale output on feed failure."""
     target = Path(target)

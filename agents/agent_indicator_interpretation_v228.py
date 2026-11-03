@@ -1,5 +1,6 @@
 """V228 deterministic agent-labeled indicator interpretations; not AI inference."""
 from market_source_provenance import with_market_source
+from market_source_provenance import validate_candle_batch
 import json
 import math
 import sys
@@ -20,6 +21,8 @@ def interpret(snapshot, now=None):
     markets=snapshot.get("markets")
     if not isinstance(markets,list) or len(markets)!=3:
         raise ValueError("MISSING_INDICATORS")
+    if 'market_source' in snapshot:
+        validate_candle_batch(markets, generated)
     out=[]
     for symbol in SYMBOLS:
         matches=[m for m in markets if isinstance(m,dict) and m.get("symbol")==symbol]
