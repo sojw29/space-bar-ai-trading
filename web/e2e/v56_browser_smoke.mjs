@@ -198,6 +198,24 @@ async function smoke(){
   await invalid.close();
  }
 
+ // Broken API payloads and unexpected network failures must fail closed,
+ // not leak a half-rendered meeting or crash the browser.
+ for(const reason of ["malformed-json","network-error","oversized-body"]){
+  const broken=await context.newPage();
+  broken.on("pageerror",e=>errors.push(String(e)));
+  await serveThree(broken);
+  await broken.route("**/api/v1/meeting/transcript",route=>{
+   if(reason==="network-error")return route.abort("failed");
+   const body=reason==="malformed-json"?"{not valid JSON":("x".repeat(65537));
+   return route.fulfill({status:200,contentType:"application/json",body});
+  });
+  await broken.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+  await broken.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+  assert.equal(await broken.locator("#ai-meeting-rows p").count(),0,reason);
+  await broken.close();
+ }
+
  // Block a research request: the next navigation must not preserve old votes
  // or a fabricated market chart.
  const disconnected=await context.newPage();
