@@ -237,8 +237,8 @@ class LocalApiTests(unittest.TestCase):
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 const elements={};
-for(const id of ['ai-meeting-status','ai-meeting-rows'])
- elements[id]={children:[],replaceChildren(...items){this.children=items}};
+for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh'])
+ elements[id]={children:[],disabled:false,addEventListener(){},replaceChildren(...items){this.children=items}};
 let requested=null;
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
  createElement:()=>({style:{},set innerHTML(_){throw Error('unsafe HTML')}})};
