@@ -156,6 +156,33 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
+ // An in-flight refresh must immediately clear stale votes and disable
+ // duplicate requests until the new response is validated.
+ const pendingMeeting=await context.newPage();
+ await serveThree(pendingMeeting);
+ let pendingCalls=0;
+ let releasePending;
+ const pendingGate=new Promise(resolve=>{releasePending=resolve});
+ await pendingMeeting.route("**/api/v1/meeting/transcript",async route=>{
+  pendingCalls++;
+  if(pendingCalls===2)await pendingGate;
+  return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
+ });
+ await pendingMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ await pendingMeeting.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7);
+ await pendingMeeting.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
+ await pendingMeeting.locator("#ai-meeting-refresh").click();
+ await pendingMeeting.waitForFunction(()=>document.querySelector("#ai-meeting-refresh")?.disabled===true);
+ assert.equal(await pendingMeeting.locator("#ai-meeting-rows p").count(),0);
+ assert.match(await pendingMeeting.locator("#ai-meeting-status").textContent(),/확인 중/);
+ await pendingMeeting.locator("#ai-meeting-refresh").evaluate(el=>el.click());
+ assert.equal(pendingCalls,2,"duplicate refresh must not start a third request");
+ releasePending();
+ await pendingMeeting.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7);
+ assert.equal(await pendingMeeting.locator("#ai-meeting-refresh").isDisabled(),false);
+ assert.equal(pendingCalls,2);
+ await pendingMeeting.close();
+
  // Malformed meeting data must not appear as a valid completed session.
  const badMeeting=await context.newPage();
  await serveThree(badMeeting);
