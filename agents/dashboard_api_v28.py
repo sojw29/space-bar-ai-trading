@@ -17,6 +17,7 @@ DASHBOARD_HTML = Path(__file__).resolve().parent.parent / "web" / "command_cente
 AUDIT_ROOM_HTML = Path(__file__).resolve().parent.parent / "web" / "audit_room_mobile_v153.html"
 OFFICE_3D_HTML = Path(__file__).resolve().parent.parent / "web" / "office_3d.html"
 MAX_BYTES = 1_000_000
+MEETING_TRANSCRIPT_PATH = Path(__file__).resolve().parent.parent / "reports" / "ai_meeting" / "latest.json"
 
 
 def load_candles(path, limit=120):
@@ -150,8 +151,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     self.reply(200, live_store.status())
             elif path == "/api/v1/meeting/transcript":
                 # Separate from the offline quality gate. Never starts inference.
-                transcript_path = (Path(__file__).resolve().parent.parent /
-                                   "reports" / "ai_meeting" / "latest.json")
+                transcript_path = MEETING_TRANSCRIPT_PATH
                 try:
                     if (not transcript_path.is_file() or
                             transcript_path.stat().st_size > 65536):
