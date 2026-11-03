@@ -247,25 +247,49 @@ A redirect fails collection without retries or venue fallback; no redirected res
 is published with the selected exchange's provenance. The fixed official endpoint
 must return its own successful response.
 
-## Runtime transcript versus 3D meeting status
+## Runtime transcript and local 3D meeting viewer
 
-Two distinct research artifacts currently exist; **they are not automatically
-connected**:
+The two research views remain distinct:
 
-1. `agents/ai_meeting_runtime.py` runs an explicitly authorized, bounded
-   seven-call model meeting. Its CLI writes a transcript to the caller-selected
-   destination (for example `web/ai_meeting.json`) only after successful
-   validation and completion. It never submits orders.
-2. `GET /api/v1/meeting` in `agents/dashboard_api_v28.py` builds an
-   **offline quality-gate snapshot** from `reports/v65/quality.json`. The
-   3D room uses this endpoint to show ATLAS / GUARDIAN / COMMANDER
-   verification status, not the seven-call model transcript. A successful
-   quality-gate status does **not** establish that a paid model meeting ran.
+1. `GET /api/v1/meeting` reports an **offline quality gate** from
+   `reports/v65/quality.json`; it is not an AI model transcript.
+2. `GET /api/v1/meeting/transcript` reads a **completed, locally stored**
+   seven-step transcript from `reports/ai_meeting/latest.json`. The
+   `/office3d` meeting panel now requests this endpoint and displays the
+   validated analysis, peer review and COMMANDER conclusion as plain text.
+   The endpoint never runs a model and never submits orders.
 
-Opening or refreshing the 3D room does not start inference. The dashboard
-rejects POST requests with HTTP 405 and has no order endpoint. A missing
-quality report returns HTTP 503 with a blocked, non-trading state. Do not
-describe the room as live model-connected until a separately tested,
-read-only transcript transport with explicit provenance, freshness checks,
-safe size limits, and failure states is implemented. Do not expose API keys
-or untrusted model output as executable HTML.
+### Local operator steps (not a live-trading workflow)
+
+First prepare a fresh, valid V236 request bundle using the existing research
+pipeline and input-readiness checks. To explicitly run a paid research meeting,
+use the existing runtime with your own supported model and authorization:
+
+```sh
+python agents/ai_meeting_runtime.py path/to/fresh_v236_bundle.json reports/ai_meeting/latest.json --model YOUR_SUPPORTED_MODEL --enable-live
+python agents/dashboard_api_v28.py --help
+```
+
+The first command is **optional** and may make up to seven paid API calls.
+Set `OPENAI_API_KEY` only in the local process environment; never commit it.
+The dashboard's actual launch options are shown by `--help`. Open
+`/office3d` on the local dashboard server. A missing, oversized, stale,
+malformed, or inconsistent transcript yields HTTP 503 and an unconnected
+meeting display; no automatic retries or provider calls occur. The report
+must have a source timestamp no older than eight hours, valid provenance,
+seven ordered statements, and a consistent final verdict. A successful
+HTTP response does **not** mean any trade was authorized.
+
+The runtime accepts any caller-selected destination, but the local API
+reads **only** `reports/ai_meeting/latest.json` under the repository root.
+Writing `web/ai_meeting.json` or publishing to GitHub Pages does not
+populate this local API. Launch the dashboard from the repository root
+so other relative paths resolve as intended. A completed report generated
+on a remote GitHub Actions runner is **not automatically synchronized**
+to your local machine. Do not copy private diagnostics or API credentials
+into the web directory.
+
+The UI distinguishes `LIVE_PROVIDER` from `OFFLINE_FIXTURE`; a fixture
+is not evidence of real model inference. Neither view is live trading.
+Actual browser rendering and an end-to-end paid-provider run still require
+separate, explicitly authorized verification.
