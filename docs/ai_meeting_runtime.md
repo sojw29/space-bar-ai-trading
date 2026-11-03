@@ -142,6 +142,15 @@ describes the selected dated record and is not proof it belongs to a current run
 IDs provide correlation, not cryptographic authentication. Neither runtime
 completion nor matching identity proves Pages deployment succeeded.
 
+Diagnostic progress must also match the sequential seven-call plan. The last role
+and phase must match the attempted-call number, with at most one unvalidated
+response. Input/configuration stages cannot contain model attempts. Publication
+requires all seven responses, and COMPLETED requires the COMMANDER conclusion
+plus the completed stage. A RUNNING or FAILED record after seven responses still
+does not mean the transcript was published. Inconsistent records fall back to
+unknown status; legitimate between-call freshness failures and interrupted calls
+remain valid diagnostics.
+
 ## Input rehearsal without model calls
 
 In Actions, run **SPACE BAR AI Meeting Input Readiness (No Model Calls)**.

@@ -29,6 +29,24 @@ HINTS = {
 }
 
 
+def validate_progress_state(value):
+    attempted, validated = value['attempted_calls'], value['validated_responses']
+    # Calls are sequential: at most one attempted response can remain unvalidated.
+    if attempted-validated > 1:
+        raise ValueError('IMPOSSIBLE_SEQUENTIAL_PROGRESS')
+    plan = ([(agent, 'ANALYSIS') for agent in ANALYSTS] +
+            [(agent, 'PEER_REVIEW') for agent in ANALYSTS] + [('COMMANDER', 'CONCLUSION')])
+    expected = (None, None) if attempted == 0 else plan[attempted-1]
+    if (value['agent'], value['phase']) != expected:
+        raise ValueError('ROLE_PHASE_DO_NOT_MATCH_CALL_COUNT')
+    if value['stage'] in ('INPUT', 'CONFIGURATION') and attempted != 0:
+        raise ValueError('CALLS_BEFORE_INFERENCE')
+    if value['stage'] in ('PUBLICATION', 'COMPLETED') and (attempted, validated) != (7, 7):
+        raise ValueError('PUBLICATION_BEFORE_COMPLETE_RESPONSES')
+    if (value['stage'] == 'COMPLETED') != (value['status'] == 'COMPLETED'):
+        raise ValueError('INCONSISTENT_COMPLETION_STAGE')
+
+
 def render_status(value, *, expected_execution_id=None, now=None):
     if not isinstance(value, dict) or set(value) != FIELDS or value['version'] != 'MEETING_DIAGNOSTICS_2':
         raise ValueError('INVALID_DIAGNOSTICS')
@@ -53,8 +71,7 @@ def render_status(value, *, expected_execution_id=None, now=None):
         raise ValueError('UNTRUSTED_ERROR_CODE')
     if (value['status'] == 'FAILED') != (code is not None):
         raise ValueError('INCONSISTENT_ERROR_STATUS')
-    if value['status'] == 'COMPLETED' and (value['stage'] != 'COMPLETED' or validated != 7):
-        raise ValueError('INCOMPLETE_MEETING_STATUS')
+    validate_progress_state(value)
     lines = ['## AI 회의 실행 진단', '',
              '- 기록 실행 ID: '+value['execution_id'], '- 마지막 기록 시각: '+updated.isoformat(),
              '- 상태: '+value['status'], '- 실행 단계: '+value['stage'],
