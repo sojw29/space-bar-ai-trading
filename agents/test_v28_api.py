@@ -226,6 +226,10 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertFalse(payload["model_inference_performed"])
         self.assertFalse(payload["orders_enabled"])
+        self.assertEqual(payload["status"], "COMPLETED")
+        self.assertEqual(payload["call_count"], 7)
+        self.assertEqual(payload["trade_authorization"], "DENIED")
+        self.assertFalse(payload["ai_agents_running"])
         html = (Path(__file__).resolve().parent.parent / "web" /
                 "office_3d.html").read_text(encoding="utf-8")
         script = html.split('id="ai-meeting-panel"', 1)[1].split("<script>", 1)[1].split("</script>", 1)[0]
