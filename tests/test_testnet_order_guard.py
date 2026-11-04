@@ -50,6 +50,12 @@ class TestTestnetOrderGuard(unittest.TestCase):
                 with self.assertRaises(OrderBlocked):
                     validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
 
+    def test_quantity_format_matches_v310(self):
+        for quantity in ("1e-3", "+0.001", " 0.001", "0.001 ", ".001", "0.001\n", 0.001, 1, True):
+            with self.subTest(quantity=repr(quantity)):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
+
     def test_quantity_boundary(self):
         validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", "0.01"), settings=SAFE)
         with self.assertRaises(OrderBlocked):
