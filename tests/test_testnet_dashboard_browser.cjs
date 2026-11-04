@@ -48,14 +48,27 @@ const safe = {
       await page.goto("http://local.test/" + filename, { waitUntil: "domcontentloaded" });
       const label = page.locator("#testnet-staging-state");
       await label.waitFor({ state: "visible" });
-      await assert.doesNotReject(() => label.getAttribute("role"));
+      assert.equal(await label.getAttribute("role"), "status");
+      assert.equal(await label.getAttribute("aria-live"), "polite");
       await page.waitForFunction(() => document.querySelector("#testnet-staging-state")?.textContent.includes("NOT CONNECTED"), null, { timeout: 5000 });
       response = { ...safe, orders_enabled: true };
+      await page.evaluate(() => refreshTestnetSafety());
+      assert.match(await label.textContent(), /상태 확인 불가/);
+      response = { ...safe, network_enabled: true };
+      await page.evaluate(() => refreshTestnetSafety());
+      assert.match(await label.textContent(), /상태 확인 불가/);
+      response = { ...safe, research_only: false };
+      await page.evaluate(() => refreshTestnetSafety());
+      assert.match(await label.textContent(), /상태 확인 불가/);
+      response = {};
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /상태 확인 불가/);
       response = null;
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /상태 확인 불가/);
+      response = safe;
+      await page.evaluate(() => refreshTestnetSafety());
+      assert.match(await label.textContent(), /NOT CONNECTED/);
       assert.deepEqual(errors, [], filename + ": " + errors.join("; "));
       await page.close();
     }
