@@ -70,6 +70,48 @@ const safe = {
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /NOT CONNECTED/);
       if (filename.includes("mobile")) {
+        // A stale successful audit response cannot revive data after a newer failure.
+        await page.evaluate(async () => {
+          const originalFetch = window.fetch;
+          const pending = [];
+          window.fetch = (url, options) => {
+            if (url === "/api/v1/replay/audit") {
+              return new Promise(resolve => pending.push(resolve));
+            }
+            return originalFetch(url, options);
+          };
+          try {
+            const older = refresh();
+            const newer = refresh();
+            pending[1]({ ok: false, status: 503 });
+            await newer;
+            pending[0]({
+              ok: true,
+              json: async () => ({
+                mode: "historical_offline_audit",
+                realtime: false,
+                orders_enabled: false,
+                signals_enabled: false,
+                audit: {
+                  symbol: "BTC", timeframe_minutes: 5, candle_count: 300,
+                  first_timestamp: 1000, last_timestamp: 2000,
+                  closed_trades: 0, realized_pnl: 0, ending_realized_equity: 10000,
+                  open_quantity: 0, win_rate_pct: 0, max_drawdown_pct: 0,
+                  data_sha256: "a".repeat(64)
+                }
+              })
+            });
+            await older;
+            if (!document.querySelector("#status").textContent.includes("데이터 미연결")) {
+              throw new Error("stale audit success overwrote newer failure");
+            }
+            if (document.querySelector("#cards").children.length !== 0) {
+              throw new Error("stale audit response revived cards");
+            }
+          } finally {
+            window.fetch = originalFetch;
+          }
+        });
         // Audit data must fail closed on a stalled request, without showing stale cards.
         await page.evaluate(async () => {
           const originalFetch = window.fetch;
