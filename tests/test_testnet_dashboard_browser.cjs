@@ -112,6 +112,41 @@ const safe = {
             window.fetch = originalFetch;
           }
         });
+        // A later valid audit response must restore verified cards after an outage.
+        response = safe;
+        await page.evaluate(async () => {
+          const originalFetch = window.fetch;
+          window.fetch = (url, options) => {
+            if (url === "/api/v1/replay/audit") {
+              return Promise.resolve({
+                ok: true,
+                json: async () => ({
+                  mode: "historical_offline_audit", realtime: false,
+                  orders_enabled: false, signals_enabled: false,
+                  audit: {
+                    symbol: "BTC", timeframe_minutes: 5, candle_count: 300,
+                    first_timestamp: 1000, last_timestamp: 2000,
+                    closed_trades: 0, realized_pnl: 0, ending_realized_equity: 10000,
+                    open_quantity: 0, win_rate_pct: 0, max_drawdown_pct: 0,
+                    data_sha256: "b".repeat(64)
+                  }
+                })
+              });
+            }
+            return originalFetch(url, options);
+          };
+          try {
+            await refresh();
+            if (!document.querySelector("#status").textContent.includes("HISTORICAL")) {
+              throw new Error("audit did not recover after outage");
+            }
+            if (document.querySelector("#cards").children.length !== 8) {
+              throw new Error("verified audit cards were not restored");
+            }
+          } finally {
+            window.fetch = originalFetch;
+          }
+        });
         // Audit data must fail closed on a stalled request, without showing stale cards.
         await page.evaluate(async () => {
           const originalFetch = window.fetch;
