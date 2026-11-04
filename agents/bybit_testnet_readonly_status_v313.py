@@ -15,7 +15,7 @@ def parse_testnet_order_status(response, *, expected_client_order_id, expected_s
     """
     if type(expected_client_order_id) is not str or not LINK_ID.fullmatch(expected_client_order_id):
         raise OrderBlocked("INVALID_CLIENT_ID")
-    if expected_symbol not in ("BTCUSDT", "ETHUSDT", "SOLUSDT") or type(expected_symbol) is not str:
+    if type(expected_symbol) is not str or expected_symbol not in ("BTCUSDT", "ETHUSDT", "SOLUSDT"):
         raise OrderBlocked("INVALID_SYMBOL")
     if not isinstance(response, dict) or type(response.get("retCode")) is not int or response["retCode"] != 0:
         raise OrderBlocked("EXCHANGE_RESPONSE_ERROR")
