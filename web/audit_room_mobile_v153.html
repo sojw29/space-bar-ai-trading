@@ -89,8 +89,13 @@ async function refreshMeeting(){
      data.orders_enabled!==false||
      data.research_only!==true||!Array.isArray(data.transcript)||
      data.transcript.length!==7||
-     data.transcript[6]?.agent!=="COMMANDER"||
-     data.transcript[6]?.phase!=="CONCLUSION"||
+     ![["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],
+       ["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],["GUARDIAN","PEER_REVIEW"],
+       ["COMMANDER","CONCLUSION"]].every(([agent,phase],i)=>
+         data.transcript[i]!==null&&typeof data.transcript[i]==="object"&&
+         data.transcript[i].agent===agent&&data.transcript[i].phase===phase)||
+     typeof data.generated_at_utc!=="string"||
+     !Number.isFinite(Date.parse(data.generated_at_utc))||
      typeof data.final_verdict!=="string"||
      !["OFFLINE_FIXTURE","LIVE_PROVIDER"].includes(data.execution_mode)||
      typeof data.model_inference_performed!=="boolean"||
