@@ -23,6 +23,7 @@ button{background:#203a5a;border:1px solid #52749e;color:white;border-radius:10p
  <div id="testnet-staging-state" role="status" aria-live="polite" class="muted">상태 확인 중 · 주문 불가</div>
  <small>오프라인 기록 미연결 · 주문 생성 및 전송 불가</small>
 </section>
+<section class="card" aria-label="AI 회의 결과" style="margin-top:16px"><div class="label">AI MEETING · READ ONLY</div><div id="meeting-state" role="status" aria-live="polite">회의 기록 확인 중 · 거래 승인 없음</div><div id="meeting-detail" class="muted"></div></section>
 <main class="grid" id="cards" aria-live="polite"></main>
 <footer><div id="detail">데이터 로딩 중…</div><div>READ ONLY · OFFLINE PAPER RESEARCH · NO ORDERS</div></footer>
 <script>
@@ -65,8 +66,42 @@ async function refresh(){
   detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message;
  }finally{clearTimeout(timeout);}
 }
-document.getElementById("refresh").addEventListener("click",()=>{refresh();refreshTestnetSafety()});
-refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
+let meetingRequestId=0;
+async function refreshMeeting(){
+ const id=++meetingRequestId;
+ const state=document.getElementById("meeting-state");
+ const detail=document.getElementById("meeting-detail");
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),5000);
+ state.textContent="회의 기록 확인 중 · 거래 승인 없음";
+ detail.textContent="";
+ try{
+  const res=await fetch("/api/v1/meeting/transcript",{cache:"no-store",signal:controller.signal});
+  if(!res.ok)throw new Error("meeting_unavailable");
+  const data=await res.json();
+  if(id!==meetingRequestId)return;
+  if(data.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||
+     data.status!=="COMPLETED"||data.call_count!==7||
+     data.ai_agents_running!==false||data.trade_authorization!=="DENIED"||
+     data.research_only!==true||!Array.isArray(data.transcript)||
+     data.transcript.length!==7||
+     data.transcript[6]?.agent!=="COMMANDER"||
+     data.transcript[6]?.phase!=="CONCLUSION"||
+     typeof data.final_verdict!=="string"||
+     !["OFFLINE_FIXTURE","LIVE_PROVIDER"].includes(data.execution_mode)||
+     typeof data.model_inference_performed!=="boolean"||
+     data.model_inference_performed!==(data.execution_mode==="LIVE_PROVIDER"))
+   throw new Error("invalid_meeting");
+  state.textContent="회의 기록 확인 완료 · 거래 승인 없음";
+  detail.textContent="COMMANDER 결론: "+data.final_verdict+" · 출처: "+data.execution_mode+" · 생성: "+data.generated_at_utc;
+ }catch(_){
+  if(id!==meetingRequestId)return;
+  state.textContent="회의 기록 미연결 · 거래 승인 없음";
+  detail.textContent="";
+ }finally{clearTimeout(timeout);}
+}
+document.getElementById("refresh").addEventListener("click",()=>{refresh();refreshTestnetSafety();refreshMeeting()});
+refresh();refreshMeeting();setInterval(()=>{if(!document.hidden){refresh();refreshMeeting()}},30000);
 let testnetSafetyRequestId=0;
 async function refreshTestnetSafety(){
  const requestId=++testnetSafetyRequestId;
