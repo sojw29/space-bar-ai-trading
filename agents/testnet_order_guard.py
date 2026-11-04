@@ -4,6 +4,7 @@ This module does not submit orders or read credentials. Importing it is safe.
 """
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import re
 from typing import Mapping
 
 
@@ -44,6 +45,8 @@ def validate_testnet_intent(
         raise OrderBlocked("Symbol is not allowlisted")
     if intent.side not in {"Buy", "Sell"}:
         raise OrderBlocked("Invalid side")
+    if type(intent.quantity) is not str or re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', intent.quantity) is None:
+        raise OrderBlocked('Invalid quantity format')
     try:
         qty = Decimal(intent.quantity)
     except (InvalidOperation, TypeError, ValueError):
