@@ -38,6 +38,18 @@ class TestTestnetOrderGuard(unittest.TestCase):
                 with self.assertRaises(OrderBlocked):
                     validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
 
+    def test_invalid_side_rejected(self):
+        for side in ("BUY", "sell", "", "Hold"):
+            with self.subTest(side=side):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent("BTCUSDT", side, "0.001"), settings=SAFE)
+
+    def test_non_string_quantities_rejected(self):
+        for quantity in (None, [], {}):
+            with self.subTest(quantity=repr(quantity)):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
+
     def test_unknown_symbol_rejected(self):
         with self.assertRaises(OrderBlocked):
             validate_testnet_intent(TestnetOrderIntent("DOGEUSDT", "Buy", "0.001"), settings=SAFE)
