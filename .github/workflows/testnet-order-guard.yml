@@ -15,6 +15,7 @@ on:
       - 'tests/test_testnet_dashboard_panel.py'
       - 'tests/test_testnet_dashboard_js_syntax.py'
       - 'tests/test_testnet_dashboard_js_runtime.py'
+      - 'tests/test_testnet_dashboard_browser.cjs'
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'tests/test_testnet_offline_e2e.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
@@ -39,6 +40,7 @@ on:
       - 'tests/test_testnet_dashboard_panel.py'
       - 'tests/test_testnet_dashboard_js_syntax.py'
       - 'tests/test_testnet_dashboard_js_runtime.py'
+      - 'tests/test_testnet_dashboard_browser.cjs'
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'tests/test_testnet_offline_e2e.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
@@ -53,7 +55,7 @@ permissions:
 jobs:
   guard:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -76,3 +78,8 @@ jobs:
           node --version
           python -m unittest discover -s tests -p 'test_testnet_dashboard_js_syntax.py' -v
           python -m unittest discover -s tests -p 'test_testnet_dashboard_js_runtime.py' -v
+      - name: Run Chromium dashboard smoke tests (mock HTTP only)
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node tests/test_testnet_dashboard_browser.cjs
