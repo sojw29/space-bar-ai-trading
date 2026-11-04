@@ -168,6 +168,48 @@ class OfflineStagingTests(unittest.TestCase):
             self.assertEqual(result["reason"], "LEDGER_UNAVAILABLE")
             self.assertFalse(result["orders_enabled"])
 
+    def test_status_adapter_reports_duplicate_without_leaking_payload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
+            try:
+                first = stage_preflighted_testnet_intent_status(
+                    intent(), settings=SAFE, ledger=ledger, dry_run=True
+                )
+                self.assertEqual(first["status"], "STAGED_NOT_SENT")
+                second = stage_preflighted_testnet_intent_status(
+                    intent(), settings=SAFE, ledger=ledger, dry_run=True
+                )
+                self.assertEqual(second["status"], "BLOCKED")
+                self.assertEqual(second["reason"], "ORDER_VALIDATION_BLOCKED")
+                self.assertFalse(second["orders_enabled"])
+                self.assertNotIn("client_order_id", second)
+                self.assertNotIn("payload", second)
+            finally:
+                ledger.close()
+
+    def test_status_adapter_masks_sqlite_lock_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "intents.db"
+            ledger = DurableTestnetIntentLedger(path)
+            blocker = sqlite3.connect(str(path), isolation_level=None)
+            try:
+                ledger.db.execute("PRAGMA busy_timeout=100")
+                blocker.execute("BEGIN IMMEDIATE")
+                status = stage_preflighted_testnet_intent_status(
+                    intent(), settings=SAFE, ledger=ledger, dry_run=True
+                )
+                self.assertEqual(status["status"], "BLOCKED")
+                self.assertEqual(status["reason"], "LEDGER_UNAVAILABLE")
+                self.assertFalse(status["network_enabled"])
+                self.assertNotIn("client_order_id", status)
+                blocker.execute("ROLLBACK")
+                self.assertEqual(ledger.lookup(intent()["clientOrderId"])["status"], "NOT_STAGED")
+            finally:
+                if blocker.in_transaction:
+                    blocker.execute("ROLLBACK")
+                blocker.close()
+                ledger.close()
+
     def test_reduce_only_required_without_reservation(self):
         with tempfile.TemporaryDirectory() as directory:
             ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
