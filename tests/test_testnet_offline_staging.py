@@ -3,7 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from agents.testnet_offline_staging import stage_preflighted_testnet_intent
+from agents.testnet_offline_staging import stage_preflighted_testnet_intent, stage_preflighted_testnet_intent_status
 from agents.bybit_testnet_durable_ledger_v312 import DurableTestnetIntentLedger
 from agents.bybit_testnet_order_dryrun_v310 import OrderBlocked
 from agents.testnet_order_guard import OrderBlocked as GuardBlocked
@@ -125,6 +125,48 @@ class OfflineStagingTests(unittest.TestCase):
             ledger.close()
             with self.assertRaises(sqlite3.ProgrammingError):
                 stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=ledger, dry_run=True)
+
+    def test_status_adapter_reports_success_without_dispatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
+            try:
+                result = stage_preflighted_testnet_intent_status(
+                    intent(), settings=SAFE, ledger=ledger, dry_run=True
+                )
+                self.assertEqual(result["status"], "STAGED_NOT_SENT")
+                self.assertEqual(result["reason"], "OFFLINE_ONLY")
+                self.assertFalse(result["orders_enabled"])
+                self.assertFalse(result["network_enabled"])
+            finally:
+                ledger.close()
+
+    def test_status_adapter_masks_validation_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
+            try:
+                for settings, expected in (({}, "PREFLIGHT_BLOCKED"), (SAFE, "ORDER_VALIDATION_BLOCKED")):
+                    bad = intent() if not settings else {**intent(), "reduceOnly": False}
+                    result = stage_preflighted_testnet_intent_status(
+                        bad, settings=settings, ledger=ledger, dry_run=True
+                    )
+                    self.assertEqual(result["status"], "BLOCKED")
+                    self.assertEqual(result["reason"], expected)
+                    self.assertFalse(result["network_enabled"])
+                    self.assertNotIn("client_order_id", result)
+                self.assertEqual(ledger.lookup(intent()["clientOrderId"])["status"], "NOT_STAGED")
+            finally:
+                ledger.close()
+
+    def test_status_adapter_masks_closed_database_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
+            ledger.close()
+            result = stage_preflighted_testnet_intent_status(
+                intent(), settings=SAFE, ledger=ledger, dry_run=True
+            )
+            self.assertEqual(result["status"], "BLOCKED")
+            self.assertEqual(result["reason"], "LEDGER_UNAVAILABLE")
+            self.assertFalse(result["orders_enabled"])
 
     def test_reduce_only_required_without_reservation(self):
         with tempfile.TemporaryDirectory() as directory:
