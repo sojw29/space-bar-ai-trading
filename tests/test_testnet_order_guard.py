@@ -50,6 +50,33 @@ class TestTestnetOrderGuard(unittest.TestCase):
                 with self.assertRaises(OrderBlocked):
                     validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
 
+    def test_quantity_boundary(self):
+        validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", "0.01"), settings=SAFE)
+        with self.assertRaises(OrderBlocked):
+            validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", "0.0100000001"), settings=SAFE)
+
+    def test_switches_must_be_exact_and_endpoint_canonical(self):
+        mutations = (
+            ("SPACE_BAR_ENABLE_TESTNET_ORDERS", "TRUE"),
+            ("SPACE_BAR_ENABLE_TESTNET_ORDERS", "1"),
+            ("SPACE_BAR_CONFIRM_TESTNET_ONLY", "True"),
+            ("SPACE_BAR_EXCHANGE_ENV", "mainnet"),
+            ("SPACE_BAR_BYBIT_BASE_URL", "https://api-testnet.bybit.com/"),
+            ("SPACE_BAR_BYBIT_BASE_URL", "http://api-testnet.bybit.com"),
+            ("SPACE_BAR_BYBIT_BASE_URL", "https://api-testnet.bybit.com.evil.example"),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key, value=value):
+                settings = dict(SAFE, **{key: value})
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(INTENT, settings=settings)
+
+    def test_allowed_symbols_and_sides(self):
+        for symbol in ("BTCUSDT", "ETHUSDT", "SOLUSDT"):
+            for side in ("Buy", "Sell"):
+                with self.subTest(symbol=symbol, side=side):
+                    validate_testnet_intent(TestnetOrderIntent(symbol, side, "0.001"), settings=SAFE)
+
     def test_unknown_symbol_rejected(self):
         with self.assertRaises(OrderBlocked):
             validate_testnet_intent(TestnetOrderIntent("DOGEUSDT", "Buy", "0.001"), settings=SAFE)
