@@ -21,7 +21,7 @@ class TestDashboardJavaScriptSyntax(unittest.TestCase):
         for page in PAGES:
             with self.subTest(page=page.name):
                 html = page.read_text(encoding="utf-8")
-                scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script\\s*>", html, re.S | re.I)
+                scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script\s*>", html, re.S | re.I)
                 self.assertTrue(scripts, "missing inline script")
                 for script in scripts:
                     with tempfile.TemporaryDirectory() as directory:
