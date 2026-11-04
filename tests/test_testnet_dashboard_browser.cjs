@@ -26,6 +26,7 @@ const safe = {
       const errors = [];
       page.on("pageerror", e => errors.push(e.message));
       let response = safe;
+      const html = fs.readFileSync(path.join(root, "web", filename), "utf8");
       await page.route("http://local.test/**", async route => {
         const url = new URL(route.request().url());
         if (url.pathname === "/api/v1/testnet/staging/status") {
@@ -34,17 +35,17 @@ const safe = {
           } else {
             await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
           }
+        } else if (url.pathname === "/" + filename) {
+          await route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html });
         } else {
           await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
         }
       });
-      const html = fs.readFileSync(path.join(root, "web", filename), "utf8");
-      await page.goto("http://local.test/" + filename, { waitUntil: "domcontentloaded" }).catch(() => {});
-      await page.setContent(html, { waitUntil: "domcontentloaded" });
+      await page.goto("http://local.test/" + filename, { waitUntil: "domcontentloaded" });
       const label = page.locator("#testnet-staging-state");
       await label.waitFor({ state: "visible" });
       await assert.doesNotReject(() => label.getAttribute("role"));
-      await page.waitForFunction(() => document.querySelector("#testnet-staging-state")?.textContent.includes("NOT CONNECTED"), { timeout: 5000 });
+      await page.waitForFunction(() => document.querySelector("#testnet-staging-state")?.textContent.includes("NOT CONNECTED"), null, { timeout: 5000 });
       response = { ...safe, orders_enabled: true };
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /상태 확인 불가/);
