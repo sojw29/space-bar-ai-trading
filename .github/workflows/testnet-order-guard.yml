@@ -80,6 +80,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_testnet_dashboard_js_runtime.py' -v
       - name: Run Chromium dashboard smoke tests (mock HTTP only)
         run: |
+          node --check tests/test_testnet_dashboard_browser.cjs
           npm install --no-save --ignore-scripts playwright@1.56.1
           npx playwright install --with-deps chromium
           node tests/test_testnet_dashboard_browser.cjs
