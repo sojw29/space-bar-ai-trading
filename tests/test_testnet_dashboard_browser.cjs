@@ -27,8 +27,12 @@ const safe = {
       page.on("pageerror", e => errors.push(e.message));
       let response = safe;
       const html = fs.readFileSync(path.join(root, "web", filename), "utf8");
-      await page.route("http://local.test/**", async route => {
+      await page.route("**/*", async route => {
         const url = new URL(route.request().url());
+        if (url.origin !== "http://local.test") {
+          await route.abort("blockedbyclient");
+          return;
+        }
         if (url.pathname === "/api/v1/testnet/staging/status") {
           if (response === null) {
             await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
