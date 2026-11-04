@@ -83,6 +83,7 @@ async function refreshMeeting(){
   if(data.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||
      data.status!=="COMPLETED"||data.call_count!==7||
      data.ai_agents_running!==false||data.trade_authorization!=="DENIED"||
+     data.orders_enabled!==false||
      data.research_only!==true||!Array.isArray(data.transcript)||
      data.transcript.length!==7||
      data.transcript[6]?.agent!=="COMMANDER"||
