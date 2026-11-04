@@ -102,6 +102,31 @@ const safe = {
           window.fetch = originalFetch;
         }
       });
+      // A stalled request must abort and fail closed rather than spin forever.
+      await page.evaluate(async () => {
+        const originalFetch = window.fetch;
+        let observedAbort = false;
+        window.fetch = (url, options) => {
+          if (url !== "/api/v1/testnet/staging/status") return originalFetch(url, options);
+          return new Promise((resolve, reject) => {
+            const onAbort = () => {
+              observedAbort = true;
+              reject(new DOMException("The operation was aborted.", "AbortError"));
+            };
+            if (options.signal.aborted) onAbort();
+            else options.signal.addEventListener("abort", onAbort, { once: true });
+          });
+        };
+        try {
+          await refreshTestnetSafety();
+          if (!observedAbort) throw new Error("stalled safety request was not aborted");
+          if (!document.querySelector("#testnet-staging-state").textContent.includes("상태 확인 불가")) {
+            throw new Error("timeout did not fail closed");
+          }
+        } finally {
+          window.fetch = originalFetch;
+        }
+      });
       assert.deepEqual(errors, [], filename + ": " + errors.join("; "));
       await page.close();
     }
