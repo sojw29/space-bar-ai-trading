@@ -17,6 +17,11 @@ button{background:#203a5a;border:1px solid #52749e;color:white;border-radius:10p
 <header><div><small>SPACE BAR AI TRADING / LOCAL RESEARCH</small><h1>AUDIT ROOM</h1></div><span class="badge" id="status" role="status" aria-live="polite">연결 확인 중</span></header>
 <p class="muted">검증된 과거 데이터만 표시합니다. 실시간 시세나 실거래 결과가 아닙니다.</p>
 <button type="button" id="refresh">지금 새로고침</button>
+<section class="card" aria-label="테스트넷 안전 상태">
+ <div class="label">TESTNET STAGING · READ ONLY</div>
+ <div id="testnet-staging-state" role="status" aria-live="polite" class="muted">상태 확인 중 · 주문 불가</div>
+ <small>오프라인 기록 미연결 · 주문 생성 및 전송 불가</small>
+</section>
 <main class="grid" id="cards" aria-live="polite"></main>
 <footer><div id="detail">데이터 로딩 중…</div><div>READ ONLY · OFFLINE PAPER RESEARCH · NO ORDERS</div></footer>
 <script>
@@ -41,4 +46,23 @@ async function refresh(){status.textContent="검증 데이터 조회 중";status
 }
 document.getElementById("refresh").addEventListener("click",refresh);
 refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
+async function refreshTestnetSafety(){
+ const el=document.getElementById("testnet-staging-state");
+ el.textContent="상태 확인 중 · 주문 불가";
+ try{
+  const response=await fetch("/api/v1/testnet/staging/status",{cache:"no-store"});
+  if(!response.ok)throw new Error("unavailable");
+  const data=await response.json();
+  if(data.version!=="TESTNET_STAGING_STATUS_1"||
+     data.status!=="NOT_CONNECTED"||
+     data.staging_enabled!==false||
+     data.orders_enabled!==false||
+     data.network_enabled!==false||
+     data.live_trading_approved!==false||
+     data.research_only!==true)throw new Error("unsafe");
+  el.textContent="NOT CONNECTED · 주문 불가";
+ }catch(_){el.textContent="상태 확인 불가 · 주문 불가";}
+}
+refreshTestnetSafety();
+setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 </script></body></html>
