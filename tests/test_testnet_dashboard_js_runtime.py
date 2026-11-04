@@ -2,7 +2,6 @@
 
 No browser, exchange network, or real HTTP server is used.
 """
-import json
 import shutil
 import subprocess
 import unittest
@@ -19,7 +18,8 @@ const start = html.indexOf('async function refreshTestnetSafety(){');
 const end = html.indexOf('refreshTestnetSafety();', start);
 if (start < 0 || end < 0) throw new Error('safety function missing');
 const fn = html.slice(start, end);
-async function scenario(reply, expected) {
+async function scenario(reply, expected, httpOk = true) {
+  let calls = 0;
   const element = {textContent: ''};
   const context = {
     document: {getElementById: id => {
@@ -27,15 +27,17 @@ async function scenario(reply, expected) {
       return element;
     }},
     fetch: async (url, opts) => {
+      calls++;
       if (url !== '/api/v1/testnet/staging/status' || opts.cache !== 'no-store')
         throw new Error('unexpected fetch');
       if (reply === null) throw new Error('network unavailable');
-      return {ok: true, json: async () => reply};
+      return {ok: httpOk, json: async () => reply};
     },
   };
   vm.createContext(context);
   vm.runInContext(fn + '; this.testSafety = refreshTestnetSafety;', context, {timeout: 1000});
   await context.testSafety();
+  if (calls !== 1) throw new Error('unexpected fetch count: ' + calls);
   if (!element.textContent.includes(expected)) throw new Error('unexpected status: ' + element.textContent);
 }
 const safe = {
@@ -48,6 +50,14 @@ const safe = {
   await scenario(null, '상태 확인 불가');
   await scenario({...safe, orders_enabled:true}, '상태 확인 불가');
   await scenario({...safe, status:'STAGED_NOT_SENT'}, '상태 확인 불가');
+  await scenario(safe, '상태 확인 불가', false);
+  await scenario({...safe, network_enabled:true}, '상태 확인 불가');
+  await scenario({...safe, staging_enabled:true}, '상태 확인 불가');
+  await scenario({...safe, live_trading_approved:true}, '상태 확인 불가');
+  await scenario({...safe, research_only:false}, '상태 확인 불가');
+  await scenario({...safe, version:'UNKNOWN'}, '상태 확인 불가');
+  await scenario({...safe, orders_enabled:undefined}, '상태 확인 불가');
+  await scenario({}, '상태 확인 불가');
 })().catch(e => {console.error(e); process.exitCode = 1});
 """
 
