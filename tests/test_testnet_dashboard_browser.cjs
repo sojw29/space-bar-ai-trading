@@ -69,6 +69,14 @@ const safe = {
       response = safe;
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /NOT CONNECTED/);
+      if (filename.includes("mobile")) {
+        response = null;
+        await page.getByRole("button", { name: /새로고침/ }).click();
+        await page.waitForFunction(() => document.querySelector("#testnet-staging-state")?.textContent.includes("상태 확인 불가"), null, { timeout: 5000 });
+        response = safe;
+        await page.getByRole("button", { name: /새로고침/ }).click();
+        await page.waitForFunction(() => document.querySelector("#testnet-staging-state")?.textContent.includes("NOT CONNECTED"), null, { timeout: 5000 });
+      }
       assert.deepEqual(errors, [], filename + ": " + errors.join("; "));
       await page.close();
     }
