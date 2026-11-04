@@ -11,7 +11,7 @@ class TestDashboardSafetyPanel(unittest.TestCase):
     def test_mobile_panel_is_read_only_and_defaults_to_blocked(self):
         source = MOBILE_HTML.read_text(encoding="utf-8")
         self.assertIn('id="testnet-staging-state"', source)
-        self.assertIn('addEventListener("click",()=>{refresh();refreshTestnetSafety()})', source)
+        self.assertIn('addEventListener("click",()=>{refresh();refreshTestnetSafety();refreshMeeting()})', source)
         self.assertIn('aria-live="polite"', source)
         self.assertIn('"/api/v1/testnet/staging/status"', source)
         self.assertIn('data.status!=="NOT_CONNECTED"', source)
