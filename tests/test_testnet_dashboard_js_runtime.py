@@ -17,7 +17,9 @@ const html = fs.readFileSync(process.argv[1], 'utf8');
 const start = html.indexOf('async function refreshTestnetSafety(){');
 const end = html.indexOf('refreshTestnetSafety();', start);
 if (start < 0 || end < 0) throw new Error('safety function missing');
-const fn = html.slice(start, end);
+const declaration = 'let testnetSafetyRequestId=0;';
+if (!html.includes(declaration)) throw new Error('safety request guard missing');
+const fn = declaration + '\n' + html.slice(start, end);
 async function scenario(reply, expected, httpOk = true) {
   let calls = 0;
   const element = {textContent: ''};
