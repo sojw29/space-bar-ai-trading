@@ -55,7 +55,8 @@ async function refresh(){
   const body=await res.json();
   if(requestId!==auditRequestId)return;
   if(body.mode!=="historical_offline_audit"||body.realtime!==false||body.orders_enabled!==false||body.signals_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");
-  validateAudit(body.audit);render(body.audit);\n  document.getElementById("audit-updated-at").textContent="마지막 검증: "+new Date().toLocaleString("ko-KR");
+  validateAudit(body.audit);render(body.audit);
+  document.getElementById("audit-updated-at").textContent="마지막 검증: "+new Date().toLocaleString("ko-KR");
   status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";
   detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)";
  }catch(err){
