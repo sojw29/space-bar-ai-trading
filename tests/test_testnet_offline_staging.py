@@ -56,6 +56,48 @@ class OfflineStagingTests(unittest.TestCase):
         with self.assertRaisesRegex(OrderBlocked, "DRY_RUN_REQUIRED"):
             stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=None, dry_run=False)
 
+    def test_conflicting_payload_preserves_original_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "intents.db"
+            ledger = DurableTestnetIntentLedger(path)
+            try:
+                original = stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=ledger, dry_run=True)
+                with self.assertRaisesRegex(OrderBlocked, "CLIENT_ID_CONFLICT"):
+                    stage_preflighted_testnet_intent(
+                        {**intent(), "price": "49000"}, settings=SAFE, ledger=ledger, dry_run=True
+                    )
+                self.assertEqual(
+                    ledger.lookup(intent()["clientOrderId"])["payload_sha256"],
+                    original["payload_sha256"],
+                )
+            finally:
+                ledger.close()
+
+    def test_preflight_quantity_failure_never_reserves_client_id(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
+            try:
+                with self.assertRaises(GuardBlocked):
+                    stage_preflighted_testnet_intent(
+                        {**intent(), "qty": "0.02", "price": "100"},
+                        settings=SAFE, ledger=ledger, dry_run=True,
+                    )
+                self.assertEqual(ledger.lookup(intent()["clientOrderId"])["status"], "NOT_STAGED")
+                result = stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=ledger, dry_run=True)
+                self.assertEqual(result["status"], "STAGED_NOT_SENT")
+            finally:
+                ledger.close()
+
+    def test_missing_dry_run_does_not_reserve_client_id(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
+            try:
+                with self.assertRaisesRegex(OrderBlocked, "DRY_RUN_REQUIRED"):
+                    stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=ledger)
+                self.assertEqual(ledger.lookup(intent()["clientOrderId"])["status"], "NOT_STAGED")
+            finally:
+                ledger.close()
+
     def test_reduce_only_required_without_reservation(self):
         with tempfile.TemporaryDirectory() as directory:
             ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
