@@ -95,6 +95,19 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                 except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
                     self.reply(503, {"error": "offline_scorecard_invalid",
                                      "orders_enabled": False})
+            elif path == "/api/v1/testnet/staging/status":
+                # Read-only capability snapshot. No ledger is opened and no
+                # intent is created, staged, or dispatched by this endpoint.
+                self.reply(200, {
+                    "version": "TESTNET_STAGING_STATUS_1",
+                    "status": "NOT_CONNECTED",
+                    "reason": "OFFLINE_STAGING_NOT_ATTACHED_TO_DASHBOARD",
+                    "staging_enabled": False,
+                    "orders_enabled": False,
+                    "network_enabled": False,
+                    "live_trading_approved": False,
+                    "research_only": True,
+                })
             elif path == "/api/v1/market":
                 try:
                     if live_store is not None:
