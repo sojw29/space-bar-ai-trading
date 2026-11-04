@@ -127,6 +127,9 @@ const safe = {
           window.fetch = originalFetch;
         }
       });
+      response = safe;
+      await page.evaluate(() => refreshTestnetSafety());
+      assert.match(await label.textContent(), /NOT CONNECTED/);
       assert.deepEqual(errors, [], filename + ": " + errors.join("; "));
       await page.close();
     }
