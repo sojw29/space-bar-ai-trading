@@ -70,6 +70,35 @@ const safe = {
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /NOT CONNECTED/);
       if (filename.includes("mobile")) {
+        // Audit data must fail closed on a stalled request, without showing stale cards.
+        await page.evaluate(async () => {
+          const originalFetch = window.fetch;
+          let aborted = false;
+          window.fetch = (url, options) => {
+            if (url !== "/api/v1/replay/audit") return originalFetch(url, options);
+            return new Promise((resolve, reject) => {
+              const onAbort = () => {
+                aborted = true;
+                reject(new DOMException("Aborted", "AbortError"));
+              };
+              if (options.signal.aborted) onAbort();
+              else options.signal.addEventListener("abort", onAbort, { once: true });
+            });
+          };
+          try {
+            await refresh();
+            if (!aborted) throw new Error("audit request did not time out");
+            if (!document.querySelector("#status").textContent.includes("데이터 미연결")) {
+              throw new Error("audit timeout did not fail closed");
+            }
+            if (document.querySelector("#cards").children.length !== 0) {
+              throw new Error("stale audit cards remained after timeout");
+            }
+          } finally {
+            window.fetch = originalFetch;
+          }
+        });
+
         response = null;
         await page.getByRole("button", { name: /새로고침/ }).click();
         await page.waitForFunction(() => document.querySelector("#testnet-staging-state")?.textContent.includes("상태 확인 불가"), null, { timeout: 5000 });
