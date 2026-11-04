@@ -45,7 +45,7 @@ def validate_testnet_intent(
         raise OrderBlocked("Symbol is not allowlisted")
     if intent.side not in {"Buy", "Sell"}:
         raise OrderBlocked("Invalid side")
-    if type(intent.quantity) is not str or re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', intent.quantity) is None:
+    if type(intent.quantity) is not str or len(intent.quantity) > 32 or re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', intent.quantity) is None:
         raise OrderBlocked('Invalid quantity format')
     try:
         qty = Decimal(intent.quantity)
