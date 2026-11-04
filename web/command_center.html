@@ -523,7 +523,9 @@ async function refresh(){
  }
 }
 refresh();refreshPaper();refreshAnalytics();setInterval(refresh,30000);setInterval(refreshPaper,30000);setInterval(refreshAnalytics,30000);
+let testnetSafetyRequestId=0;
 async function refreshTestnetSafety(){
+ const requestId=++testnetSafetyRequestId;
  const el=document.getElementById("testnet-staging-state");
  if(!el)return;
  el.textContent="상태 확인 중 · 주문 불가";
@@ -531,6 +533,7 @@ async function refreshTestnetSafety(){
   const response=await fetch("/api/v1/testnet/staging/status",{cache:"no-store"});
   if(!response.ok)throw new Error("status_unavailable");
   const data=await response.json();
+  if(requestId!==testnetSafetyRequestId)return;
   if(data.version!=="TESTNET_STAGING_STATUS_1"||
      data.status!=="NOT_CONNECTED"||
      data.staging_enabled!==false||
@@ -540,6 +543,7 @@ async function refreshTestnetSafety(){
      data.research_only!==true)throw new Error("unsafe_status");
   el.textContent="NOT CONNECTED · 오프라인 기록 미연결 · 주문 불가";
  }catch(_){
+  if(requestId!==testnetSafetyRequestId)return;
   el.textContent="상태 확인 불가 · 주문 불가";
  }
 }
