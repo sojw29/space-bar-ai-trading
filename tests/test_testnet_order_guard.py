@@ -115,6 +115,16 @@ class TestTestnetOrderGuard(unittest.TestCase):
                 with self.assertRaises(OrderBlocked):
                     validate_testnet_intent(intent, settings=SAFE)
 
+    def test_unhashable_symbol_and_side_are_blocked(self):
+        for symbol in ([], {}, None, 123, True):
+            with self.subTest(symbol=repr(symbol)):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent(symbol, "Buy", "0.001"), settings=SAFE)
+        for side in ([], {}, None, 123, True):
+            with self.subTest(side=repr(side)):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent("BTCUSDT", side, "0.001"), settings=SAFE)
+
     def test_unknown_symbol_rejected(self):
         with self.assertRaises(OrderBlocked):
             validate_testnet_intent(TestnetOrderIntent("DOGEUSDT", "Buy", "0.001"), settings=SAFE)
