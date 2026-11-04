@@ -14,6 +14,7 @@ on:
       - 'tests/test_testnet_dashboard_status.py'
       - 'tests/test_testnet_dashboard_panel.py'
       - 'tests/test_testnet_dashboard_js_syntax.py'
+      - 'tests/test_testnet_dashboard_js_runtime.py'
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'tests/test_testnet_offline_e2e.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
@@ -37,6 +38,7 @@ on:
       - 'tests/test_testnet_dashboard_status.py'
       - 'tests/test_testnet_dashboard_panel.py'
       - 'tests/test_testnet_dashboard_js_syntax.py'
+      - 'tests/test_testnet_dashboard_js_runtime.py'
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'tests/test_testnet_offline_e2e.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
@@ -73,3 +75,4 @@ jobs:
           python -m unittest discover -s tests -p 'test_testnet_dashboard_panel.py' -v
           node --version
           python -m unittest discover -s tests -p 'test_testnet_dashboard_js_syntax.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_dashboard_js_runtime.py' -v
