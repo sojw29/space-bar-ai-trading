@@ -7,6 +7,10 @@ on:
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
       - 'tests/test_bybit_testnet_order_dryrun_v310.py'
+      - 'agents/bybit_testnet_intent_ledger_v311.py'
+      - 'agents/bybit_testnet_durable_ledger_v312.py'
+      - 'tests/test_bybit_testnet_intent_ledger_v311.py'
+      - 'tests/test_bybit_testnet_durable_ledger_v312.py'
       - '.github/workflows/testnet-order-guard.yml'
   push:
     paths:
@@ -15,6 +19,10 @@ on:
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
       - 'tests/test_bybit_testnet_order_dryrun_v310.py'
+      - 'agents/bybit_testnet_intent_ledger_v311.py'
+      - 'agents/bybit_testnet_durable_ledger_v312.py'
+      - 'tests/test_bybit_testnet_intent_ledger_v311.py'
+      - 'tests/test_bybit_testnet_durable_ledger_v312.py'
       - '.github/workflows/testnet-order-guard.yml'
 permissions:
   contents: read
@@ -34,3 +42,5 @@ jobs:
           python -m unittest discover -s tests -p 'test_testnet_order_guard.py' -v
           python -m unittest discover -s tests -p 'test_testnet_guard_v310_compatibility.py' -v
           python -m unittest discover -s tests -p 'test_bybit_testnet_order_dryrun_v310.py' -v
+          python -m unittest discover -s tests -p 'test_bybit_testnet_intent_ledger_v311.py' -v
+          python -m unittest discover -s tests -p 'test_bybit_testnet_durable_ledger_v312.py' -v
