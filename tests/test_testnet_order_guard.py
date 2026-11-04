@@ -93,6 +93,16 @@ class TestTestnetOrderGuard(unittest.TestCase):
                 with self.assertRaises(OrderBlocked):
                     validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
 
+    def test_malformed_intent_and_settings_fail_closed(self):
+        for settings in (None, [], "testnet"):
+            with self.subTest(settings=repr(settings)):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(INTENT, settings=settings)
+        for intent in (None, {}, "BTCUSDT"):
+            with self.subTest(intent=repr(intent)):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(intent, settings=SAFE)
+
     def test_unknown_symbol_rejected(self):
         with self.assertRaises(OrderBlocked):
             validate_testnet_intent(TestnetOrderIntent("DOGEUSDT", "Buy", "0.001"), settings=SAFE)
