@@ -1,0 +1,27 @@
+name: Testnet order guard (offline)
+on:
+  pull_request:
+    paths:
+      - 'agents/testnet_order_guard.py'
+      - 'tests/test_testnet_order_guard.py'
+      - '.github/workflows/testnet-order-guard.yml'
+  push:
+    paths:
+      - 'agents/testnet_order_guard.py'
+      - 'tests/test_testnet_order_guard.py'
+      - '.github/workflows/testnet-order-guard.yml'
+permissions:
+  contents: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run isolated offline tests
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -p 'test_testnet_order_guard.py' -v
