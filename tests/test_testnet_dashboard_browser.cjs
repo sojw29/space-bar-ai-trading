@@ -77,6 +77,31 @@ const safe = {
         await page.getByRole("button", { name: /새로고침/ }).click();
         await page.waitForFunction(() => document.querySelector("#testnet-staging-state")?.textContent.includes("NOT CONNECTED"), null, { timeout: 5000 });
       }
+      // An older response must never overwrite a newer safety decision.
+      await page.evaluate(async () => {
+        const originalFetch = window.fetch;
+        const pending = [];
+        window.fetch = (url, options) => {
+          if (url === "/api/v1/testnet/staging/status") {
+            return new Promise(resolve => pending.push(resolve));
+          }
+          return originalFetch(url, options);
+        };
+        try {
+          const older = refreshTestnetSafety();
+          const newer = refreshTestnetSafety();
+          const payload = value => ({ ok: true, json: async () => value });
+          pending[1](payload({ version: "TESTNET_STAGING_STATUS_1", status: "NOT_CONNECTED", staging_enabled: false, orders_enabled: false, network_enabled: false, live_trading_approved: false, research_only: true }));
+          await newer;
+          pending[0](payload({ orders_enabled: true }));
+          await older;
+          if (!document.querySelector("#testnet-staging-state").textContent.includes("NOT CONNECTED")) {
+            throw new Error("stale safety response overwrote newer result");
+          }
+        } finally {
+          window.fetch = originalFetch;
+        }
+      });
       assert.deepEqual(errors, [], filename + ": " + errors.join("; "));
       await page.close();
     }
