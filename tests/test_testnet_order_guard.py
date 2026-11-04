@@ -77,6 +77,22 @@ class TestTestnetOrderGuard(unittest.TestCase):
                 with self.subTest(symbol=symbol, side=side):
                     validate_testnet_intent(TestnetOrderIntent(symbol, side, "0.001"), settings=SAFE)
 
+    def test_rejects_whitespace_and_case_in_symbol_or_side(self):
+        for symbol, side in (
+            (" BTCUSDT", "Buy"), ("BTCUSDT ", "Buy"),
+            ("btcusdt", "Buy"), ("BTCUSDT", " Buy"),
+            ("BTCUSDT", "buy"), ("BTCUSDT", "Sell "),
+        ):
+            with self.subTest(symbol=symbol, side=side):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent(symbol, side, "0.001"), settings=SAFE)
+
+    def test_rejects_numeric_overflow_and_nonfinite_quantity(self):
+        for quantity in ("1e999999", "-Infinity", "sNaN", "0.010000000000000001"):
+            with self.subTest(quantity=quantity):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
+
     def test_unknown_symbol_rejected(self):
         with self.assertRaises(OrderBlocked):
             validate_testnet_intent(TestnetOrderIntent("DOGEUSDT", "Buy", "0.001"), settings=SAFE)
