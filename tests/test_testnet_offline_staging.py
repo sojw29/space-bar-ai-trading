@@ -1,4 +1,5 @@
 """No-network regression tests for composed testnet preflight + durable staging."""
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -97,6 +98,33 @@ class OfflineStagingTests(unittest.TestCase):
                 self.assertEqual(ledger.lookup(intent()["clientOrderId"])["status"], "NOT_STAGED")
             finally:
                 ledger.close()
+
+    def test_locked_database_fails_without_staging_and_recovers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "intents.db"
+            ledger = DurableTestnetIntentLedger(path)
+            blocker = sqlite3.connect(str(path), isolation_level=None)
+            try:
+                ledger.db.execute("PRAGMA busy_timeout=100")
+                blocker.execute("BEGIN IMMEDIATE")
+                with self.assertRaises(sqlite3.OperationalError):
+                    stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=ledger, dry_run=True)
+                blocker.execute("ROLLBACK")
+                self.assertEqual(ledger.lookup(intent()["clientOrderId"])["status"], "NOT_STAGED")
+                staged = stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=ledger, dry_run=True)
+                self.assertEqual(staged["status"], "STAGED_NOT_SENT")
+            finally:
+                if blocker.in_transaction:
+                    blocker.execute("ROLLBACK")
+                blocker.close()
+                ledger.close()
+
+    def test_closed_database_fails_without_success_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DurableTestnetIntentLedger(Path(directory) / "intents.db")
+            ledger.close()
+            with self.assertRaises(sqlite3.ProgrammingError):
+                stage_preflighted_testnet_intent(intent(), settings=SAFE, ledger=ledger, dry_run=True)
 
     def test_reduce_only_required_without_reservation(self):
         with tempfile.TemporaryDirectory() as directory:
