@@ -41,9 +41,9 @@ def validate_testnet_intent(
         raise OrderBlocked("Only testnet environment is permitted")
     if settings.get("SPACE_BAR_BYBIT_BASE_URL") != "https://api-testnet.bybit.com":
         raise OrderBlocked("Non-testnet or unknown Bybit endpoint")
-    if intent.symbol not in {"BTCUSDT", "ETHUSDT", "SOLUSDT"}:
+    if type(intent.symbol) is not str or intent.symbol not in {"BTCUSDT", "ETHUSDT", "SOLUSDT"}:
         raise OrderBlocked("Symbol is not allowlisted")
-    if intent.side not in {"Buy", "Sell"}:
+    if type(intent.side) is not str or intent.side not in {"Buy", "Sell"}:
         raise OrderBlocked("Invalid side")
     if type(intent.quantity) is not str or len(intent.quantity) > 32 or re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', intent.quantity) is None:
         raise OrderBlocked('Invalid quantity format')
