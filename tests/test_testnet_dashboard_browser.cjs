@@ -96,7 +96,16 @@ const safe = {
           pending[0](payload({ orders_enabled: true }));
           await older;
           if (!document.querySelector("#testnet-staging-state").textContent.includes("NOT CONNECTED")) {
-            throw new Error("stale safety response overwrote newer result");
+            throw new Error("stale unsafe response overwrote newer safe result");
+          }
+          const oldSafe = refreshTestnetSafety();
+          const newUnsafe = refreshTestnetSafety();
+          pending[3](payload({ orders_enabled: true }));
+          await newUnsafe;
+          pending[2](payload({ version: "TESTNET_STAGING_STATUS_1", status: "NOT_CONNECTED", staging_enabled: false, orders_enabled: false, network_enabled: false, live_trading_approved: false, research_only: true }));
+          await oldSafe;
+          if (!document.querySelector("#testnet-staging-state").textContent.includes("상태 확인 불가")) {
+            throw new Error("stale safe response overwrote newer unsafe result");
           }
         } finally {
           window.fetch = originalFetch;
