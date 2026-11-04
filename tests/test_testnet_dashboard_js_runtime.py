@@ -24,6 +24,9 @@ async function scenario(reply, expected, httpOk = true) {
   let calls = 0;
   const element = {textContent: ''};
   const context = {
+    AbortController,
+    setTimeout,
+    clearTimeout,
     document: {getElementById: id => {
       if (id !== 'testnet-staging-state') throw new Error('unexpected DOM access');
       return element;
