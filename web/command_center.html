@@ -122,7 +122,12 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 <header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
 <p class="muted">Multi-Agent Research Dashboard · V48 Observable Agent Office</p>
 <span class="badge">PAPER RESEARCH ONLY · NO LIVE ORDERS</span></header>
-<main><section class="summary">
+<main>
+<section class="panel" aria-label="테스트넷 주문 안전 상태">
+ <h2>테스트넷 안전 상태 · 읽기 전용</h2>
+ <p id="testnet-staging-state" role="status" aria-live="polite">상태 확인 중 · 주문 불가</p>
+ <small>이 화면에서는 주문을 생성하거나 전송할 수 없습니다. 로컬 오프라인 기록도 연결되지 않았습니다.</small>
+</section><section class="summary">
 <div class="panel"><small>SYMBOL</small><div class="value" id="symbol">BTCUSDT</div></div>
 <div class="panel"><small>TIMEFRAME</small><div class="value" id="timeframe">5m</div></div>
 <div class="panel"><small>COMMANDER</small><div class="value WAIT" id="decision">WAIT</div></div>
@@ -518,4 +523,26 @@ async function refresh(){
  }
 }
 refresh();refreshPaper();refreshAnalytics();setInterval(refresh,30000);setInterval(refreshPaper,30000);setInterval(refreshAnalytics,30000);
+async function refreshTestnetSafety(){
+ const el=document.getElementById("testnet-staging-state");
+ if(!el)return;
+ el.textContent="상태 확인 중 · 주문 불가";
+ try{
+  const response=await fetch("/api/v1/testnet/staging/status",{cache:"no-store"});
+  if(!response.ok)throw new Error("status_unavailable");
+  const data=await response.json();
+  if(data.version!=="TESTNET_STAGING_STATUS_1"||
+     data.status!=="NOT_CONNECTED"||
+     data.staging_enabled!==false||
+     data.orders_enabled!==false||
+     data.network_enabled!==false||
+     data.live_trading_approved!==false||
+     data.research_only!==true)throw new Error("unsafe_status");
+  el.textContent="NOT CONNECTED · 오프라인 기록 미연결 · 주문 불가";
+ }catch(_){
+  el.textContent="상태 확인 불가 · 주문 불가";
+ }
+}
+refreshTestnetSafety();
+setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 </script></body></html>
