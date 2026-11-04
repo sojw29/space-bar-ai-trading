@@ -70,6 +70,16 @@ const safe = {
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /NOT CONNECTED/);
       if (filename.includes("mobile")) {
+        // CSS regressions: escaped newline text must not swallow mobile focus and layout rules.
+        await page.evaluate(() => {
+          const styles = Array.from(document.styleSheets).flatMap(sheet => Array.from(sheet.cssRules));
+          if (!styles.some(rule => rule.selectorText === "button:focus-visible")) {
+            throw new Error("mobile keyboard focus rule missing");
+          }
+          if (!styles.some(rule => rule.conditionText === "(max-width: 480px)")) {
+            throw new Error("mobile responsive rule missing");
+          }
+        });
         // AI meeting transcript is display-only and must reject unsafe or malformed data.
         await page.evaluate(async () => {
           const originalFetch = window.fetch;
