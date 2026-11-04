@@ -46,13 +46,16 @@ async function refresh(){status.textContent="검증 데이터 조회 중";status
 }
 document.getElementById("refresh").addEventListener("click",()=>{refresh();refreshTestnetSafety()});
 refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
+let testnetSafetyRequestId=0;
 async function refreshTestnetSafety(){
+ const requestId=++testnetSafetyRequestId;
  const el=document.getElementById("testnet-staging-state");
  el.textContent="상태 확인 중 · 주문 불가";
  try{
   const response=await fetch("/api/v1/testnet/staging/status",{cache:"no-store"});
   if(!response.ok)throw new Error("unavailable");
   const data=await response.json();
+  if(requestId!==testnetSafetyRequestId)return;
   if(data.version!=="TESTNET_STAGING_STATUS_1"||
      data.status!=="NOT_CONNECTED"||
      data.staging_enabled!==false||
@@ -61,7 +64,7 @@ async function refreshTestnetSafety(){
      data.live_trading_approved!==false||
      data.research_only!==true)throw new Error("unsafe");
   el.textContent="NOT CONNECTED · 주문 불가";
- }catch(_){el.textContent="상태 확인 불가 · 주문 불가";}
+ }catch(_){if(requestId!==testnetSafetyRequestId)return;el.textContent="상태 확인 불가 · 주문 불가";}
 }
 refreshTestnetSafety();
 setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
