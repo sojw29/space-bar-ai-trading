@@ -70,6 +70,46 @@ const safe = {
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /NOT CONNECTED/);
       if (filename.includes("mobile")) {
+        // AI meeting transcript is display-only and must reject unsafe or malformed data.
+        await page.evaluate(async () => {
+          const originalFetch = window.fetch;
+          const expected = [
+            ["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],
+            ["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],
+            ["GUARDIAN","PEER_REVIEW"],["COMMANDER","CONCLUSION"]
+          ];
+          const valid = {
+            version:"AI_MEETING_TRANSCRIPT_VIEW_1",status:"COMPLETED",call_count:7,
+            ai_agents_running:false,trade_authorization:"DENIED",research_only:true,
+            execution_mode:"OFFLINE_FIXTURE",model_inference_performed:false,
+            final_verdict:"INSUFFICIENT_DATA",generated_at_utc:"2026-11-04T00:00:00Z",
+            transcript:expected.map(([agent,phase])=>({agent,phase}))
+          };
+          let payload=valid;
+          window.fetch=(url,options)=>url==="/api/v1/meeting/transcript"
+            ? Promise.resolve({ok:true,json:async()=>payload})
+            : originalFetch(url,options);
+          const state=document.getElementById("meeting-state");
+          const detail=document.getElementById("meeting-detail");
+          try {
+            await refreshMeeting();
+            if (!state.textContent.includes("확인 완료") ||
+                !detail.textContent.includes("INSUFFICIENT_DATA") ||
+                !detail.textContent.includes("OFFLINE_FIXTURE"))
+              throw new Error("valid offline meeting not displayed");
+            for (const unsafe of [
+              {...valid,trade_authorization:"APPROVED"},
+              {...valid,orders_enabled:true,ai_agents_running:true},
+              {...valid,execution_mode:"LIVE_PROVIDER",model_inference_performed:false},
+              {...valid,transcript:[]}
+            ]) {
+              payload=unsafe;
+              await refreshMeeting();
+              if (!state.textContent.includes("미연결") || detail.textContent!=="")
+                throw new Error("unsafe meeting was displayed");
+            }
+          } finally { window.fetch=originalFetch; }
+        });
         // A stale successful audit response cannot revive data after a newer failure.
         await page.evaluate(async () => {
           const originalFetch = window.fetch;
