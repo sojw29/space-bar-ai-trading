@@ -49,10 +49,12 @@ refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
 let testnetSafetyRequestId=0;
 async function refreshTestnetSafety(){
  const requestId=++testnetSafetyRequestId;
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),5000);
  const el=document.getElementById("testnet-staging-state");
  el.textContent="상태 확인 중 · 주문 불가";
  try{
-  const response=await fetch("/api/v1/testnet/staging/status",{cache:"no-store"});
+  const response=await fetch("/api/v1/testnet/staging/status",{cache:"no-store",signal:controller.signal});
   if(!response.ok)throw new Error("unavailable");
   const data=await response.json();
   if(requestId!==testnetSafetyRequestId)return;
@@ -65,6 +67,7 @@ async function refreshTestnetSafety(){
      data.research_only!==true)throw new Error("unsafe");
   el.textContent="NOT CONNECTED · 주문 불가";
  }catch(_){if(requestId!==testnetSafetyRequestId)return;el.textContent="상태 확인 불가 · 주문 불가";}
+ finally{clearTimeout(timeout);}
 }
 refreshTestnetSafety();
 setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
