@@ -5,9 +5,11 @@ on:
       - 'agents/testnet_order_guard.py'
       - 'agents/testnet_staging_preflight.py'
       - 'agents/testnet_offline_staging.py'
+      - 'agents/dashboard_api_v28.py'
       - 'tests/test_testnet_order_guard.py'
       - 'tests/test_testnet_staging_preflight.py'
       - 'tests/test_testnet_offline_staging.py'
+      - 'tests/test_testnet_dashboard_status.py'
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'tests/test_testnet_offline_e2e.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
@@ -22,9 +24,11 @@ on:
       - 'agents/testnet_order_guard.py'
       - 'agents/testnet_staging_preflight.py'
       - 'agents/testnet_offline_staging.py'
+      - 'agents/dashboard_api_v28.py'
       - 'tests/test_testnet_order_guard.py'
       - 'tests/test_testnet_staging_preflight.py'
       - 'tests/test_testnet_offline_staging.py'
+      - 'tests/test_testnet_dashboard_status.py'
       - 'tests/test_testnet_guard_v310_compatibility.py'
       - 'tests/test_testnet_offline_e2e.py'
       - 'agents/bybit_testnet_order_dryrun_v310.py'
@@ -57,3 +61,4 @@ jobs:
           python -m unittest discover -s tests -p 'test_testnet_offline_e2e.py' -v
           python -m unittest discover -s tests -p 'test_testnet_staging_preflight.py' -v
           python -m unittest discover -s tests -p 'test_testnet_offline_staging.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_dashboard_status.py' -v
