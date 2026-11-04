@@ -28,6 +28,10 @@ def validate_testnet_intent(
     Both explicit switches are required; production endpoints are never allowed.
     This is only a preliminary gate, not authorization to send an order.
     """
+    if not isinstance(settings, Mapping):
+        raise OrderBlocked("Invalid testnet settings")
+    if not isinstance(intent, TestnetOrderIntent):
+        raise OrderBlocked("Invalid testnet order intent")
     if settings.get("SPACE_BAR_ENABLE_TESTNET_ORDERS") != "true":
         raise OrderBlocked("Testnet orders disabled by default")
     if settings.get("SPACE_BAR_CONFIRM_TESTNET_ONLY") != "true":
