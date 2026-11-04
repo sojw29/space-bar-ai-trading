@@ -112,7 +112,9 @@ const safe = {
               {...valid,orders_enabled:true},
               {...valid,ai_agents_running:true},
               {...valid,execution_mode:"LIVE_PROVIDER",model_inference_performed:false},
-              {...valid,transcript:[]}
+              {...valid,transcript:[]},
+              {...valid,transcript:valid.transcript.map((entry,i)=>i===3?{...entry,agent:"COMMANDER"}:entry)},
+              {...valid,generated_at_utc:"not-a-timestamp"}
             ]) {
               payload=unsafe;
               await refreshMeeting();
