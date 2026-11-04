@@ -56,6 +56,12 @@ class TestTestnetOrderGuard(unittest.TestCase):
                 with self.assertRaises(OrderBlocked):
                     validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
 
+    def test_rejects_oversized_decimal_strings(self):
+        for quantity in ("0." + "0" * 10000 + "1", "9" * 10000):
+            with self.subTest(length=len(quantity)):
+                with self.assertRaises(OrderBlocked):
+                    validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", quantity), settings=SAFE)
+
     def test_quantity_boundary(self):
         validate_testnet_intent(TestnetOrderIntent("BTCUSDT", "Buy", "0.01"), settings=SAFE)
         with self.assertRaises(OrderBlocked):
