@@ -110,6 +110,14 @@ const safe = {
                 !detail.textContent.includes("주문 권한: DENIED") ||
                 document.querySelectorAll("#meeting-steps li").length!==7)
               throw new Error("valid offline meeting not displayed");
+            // Provider-supplied text must remain inert, never parsed as markup.
+            payload={...valid,transcript:valid.transcript.map((entry,i)=>
+              i===0?{...entry,summary:"<img src=x onerror=alert(1)>"}:entry)};
+            await refreshMeeting();
+            if (document.querySelector("#meeting-steps img") ||
+                !document.querySelector("#meeting-steps li")?.textContent.includes("<img src=x onerror=alert(1)>"))
+              throw new Error("meeting summary was parsed as HTML");
+            payload=valid;
             for (const unsafe of [
               {...valid,trade_authorization:"APPROVED"},
               {...valid,orders_enabled:true},
