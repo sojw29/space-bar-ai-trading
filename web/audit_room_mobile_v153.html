@@ -130,6 +130,7 @@ async function refreshMeeting(){
  const timeout=setTimeout(()=>controller.abort(),5000);
  state.textContent="회의 기록 확인 중 · 거래 승인 없음";
  detail.textContent="";
+ setRosterMeetingState(null,"");
  document.getElementById("meeting-steps").replaceChildren();
  try{
   const res=await fetch("/api/v1/meeting/transcript",{cache:"no-store",signal:controller.signal});
