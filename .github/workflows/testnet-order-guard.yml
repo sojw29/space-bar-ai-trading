@@ -24,6 +24,9 @@ on:
       - 'agents/bybit_testnet_durable_ledger_v312.py'
       - 'tests/test_bybit_testnet_intent_ledger_v311.py'
       - 'tests/test_bybit_testnet_durable_ledger_v312.py'
+      - 'web/space_bar_preview.html'
+      - 'tests/test_trading_room_pages_preview.py'
+      - '.github/workflows/trading-room-pages-preview.yml'
       - '.github/workflows/testnet-order-guard.yml'
   push:
     paths:
@@ -49,6 +52,9 @@ on:
       - 'agents/bybit_testnet_durable_ledger_v312.py'
       - 'tests/test_bybit_testnet_intent_ledger_v311.py'
       - 'tests/test_bybit_testnet_durable_ledger_v312.py'
+      - 'web/space_bar_preview.html'
+      - 'tests/test_trading_room_pages_preview.py'
+      - '.github/workflows/trading-room-pages-preview.yml'
       - '.github/workflows/testnet-order-guard.yml'
 permissions:
   contents: read
@@ -76,6 +82,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_testnet_offline_staging.py' -v
           python -m unittest discover -s tests -p 'test_testnet_dashboard_status.py' -v
           python -m unittest discover -s tests -p 'test_testnet_dashboard_panel.py' -v
+          python -m unittest discover -s tests -p 'test_trading_room_pages_preview.py' -v
           node --version
           python -m unittest discover -s tests -p 'test_testnet_dashboard_js_syntax.py' -v
           python -m unittest discover -s tests -p 'test_testnet_dashboard_js_runtime.py' -v
