@@ -173,7 +173,10 @@ async function refreshMeeting(){
   const sourceLabel=data.execution_mode==="OFFLINE_FIXTURE"?"오프라인 예시 데이터":"외부 AI 제공자 응답";
   setRosterMeetingState(data.transcript,sourceLabel);
   state.textContent="회의 기록 확인 완료 · "+sourceLabel+" · 거래 승인 없음";
-  detail.textContent="COMMANDER 결론: "+data.final_verdict+" · 출처: "+data.execution_mode+" · 생성: "+data.generated_at_utc+" · 주문 권한: DENIED";
+  const generatedMs=Date.parse(data.generated_at_utc);
+  const ageMs=Date.now()-generatedMs;
+  const ageLabel=ageMs<0?"생성 시각이 미래로 표시됨":ageMs<60000?"1분 이내 기록":ageMs<3600000?Math.floor(ageMs/60000)+"분 전 기록":ageMs<86400000?Math.floor(ageMs/3600000)+"시간 전 기록":Math.floor(ageMs/86400000)+"일 전 기록";
+  detail.textContent="COMMANDER 결론: "+data.final_verdict+" · 출처: "+data.execution_mode+" · 생성: "+data.generated_at_utc+" · "+ageLabel+" · 주문 권한: DENIED";
  }catch(_){
   if(id!==meetingRequestId)return;
   state.textContent="회의 기록 미연결 · 거래 승인 없음";
