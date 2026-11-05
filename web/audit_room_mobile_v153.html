@@ -96,6 +96,7 @@ async function refreshMeeting(){
          data.transcript[i]!==null&&typeof data.transcript[i]==="object"&&
          data.transcript[i].agent===agent&&data.transcript[i].phase===phase)||
      typeof data.generated_at_utc!=="string"||
+     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(data.generated_at_utc)||
      !Number.isFinite(Date.parse(data.generated_at_utc))||
      typeof data.final_verdict!=="string"||
      !["OFFLINE_FIXTURE","LIVE_PROVIDER"].includes(data.execution_mode)||
