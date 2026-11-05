@@ -93,7 +93,7 @@ const safe = {
             ai_agents_running:false,trade_authorization:"DENIED",research_only:true,orders_enabled:false,
             execution_mode:"OFFLINE_FIXTURE",model_inference_performed:false,
             final_verdict:"INSUFFICIENT_DATA",generated_at_utc:"2026-11-04T00:00:00Z",
-            transcript:expected.map(([agent,phase])=>({agent,phase}))
+            transcript:expected.map(([agent,phase])=>({agent,phase,summary:"Offline review",verdict:"INSUFFICIENT_DATA"}))
           };
           let payload=valid;
           window.fetch=(url,options)=>url==="/api/v1/meeting/transcript"
@@ -105,7 +105,8 @@ const safe = {
             await refreshMeeting();
             if (!state.textContent.includes("확인 완료") ||
                 !detail.textContent.includes("INSUFFICIENT_DATA") ||
-                !detail.textContent.includes("OFFLINE_FIXTURE"))
+                !detail.textContent.includes("OFFLINE_FIXTURE") ||
+                document.querySelectorAll("#meeting-steps li").length!==7)
               throw new Error("valid offline meeting not displayed");
             for (const unsafe of [
               {...valid,trade_authorization:"APPROVED"},
@@ -118,7 +119,8 @@ const safe = {
             ]) {
               payload=unsafe;
               await refreshMeeting();
-              if (!state.textContent.includes("미연결") || detail.textContent!=="")
+              if (!state.textContent.includes("미연결") || detail.textContent!=="" ||
+                  document.querySelectorAll("#meeting-steps li").length!==0)
                 throw new Error("unsafe meeting was displayed");
             }
           } finally { window.fetch=originalFetch; }
