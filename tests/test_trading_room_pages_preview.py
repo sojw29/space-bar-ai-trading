@@ -25,6 +25,9 @@ class TestTradingRoomPagesPreview(unittest.TestCase):
         self.assertIn("시각적 배치도 · 에이전트 미실행 · 거래 승인 없음", html)
         for agent in ("COMMANDER", "ATLAS", "ORACLE", "QUANT", "SCALPER", "TESTER", "GUARDIAN", "EXECUTOR", "EVOLVE", "AUDITOR"):
             self.assertIn(f"<strong>{agent}</strong>", html)
+        self.assertEqual(html.count('class="station"') + html.count('class="station command"'), 10)
+        for agent in ("COMMANDER", "ATLAS", "ORACLE", "QUANT", "SCALPER", "TESTER", "GUARDIAN", "EXECUTOR", "EVOLVE", "AUDITOR"):
+            self.assertEqual(html.count(f"<strong>{agent}</strong>"), 1)
         self.assertIn("<strong>EXECUTOR</strong><span>DISABLED</span>", html)
         self.assertIn("<strong>COMMANDER</strong><span>NO ORDERS</span>", html)
         self.assertIn("grid-template-columns:repeat(3,minmax(0,1fr))", html)
