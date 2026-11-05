@@ -86,6 +86,22 @@ async function refresh(){
   detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message;
  }finally{clearTimeout(timeout);}
 }
+const meetingParticipants=new Set(["ATLAS","QUANT","GUARDIAN","COMMANDER"]);
+function setRosterMeetingState(transcript,sourceLabel){
+ const entries=Array.isArray(transcript)?transcript:[];
+ for(const node of document.querySelectorAll("#agent-roster > div")){
+  const agent=node.querySelector("strong")?.textContent;
+  const role=node.querySelector(".muted");
+  if(!role||!agent)continue;
+  let state=node.querySelector(".meeting-role-state");
+  if(!state){state=document.createElement("div");state.className="meeting-role-state muted";node.append(state)}
+  if(agent==="EXECUTOR"){state.textContent="주문 기능 비활성화";continue}
+  if(!meetingParticipants.has(agent)){state.textContent="이 회의 기록에 참여하지 않음";continue}
+  const count=entries.filter(entry=>entry.agent===agent).length;
+  state.textContent=count?sourceLabel+" · 기록 "+count+"단계":"회의 기록 미연결";
+ }
+}
+setRosterMeetingState(null,"");
 let meetingRequestId=0;
 async function refreshMeeting(){
  const id=++meetingRequestId;
@@ -131,6 +147,7 @@ async function refreshMeeting(){
   }
   steps.replaceChildren(fragment);
   const sourceLabel=data.execution_mode==="OFFLINE_FIXTURE"?"오프라인 예시 데이터":"외부 AI 제공자 응답";
+  setRosterMeetingState(data.transcript,sourceLabel);
   state.textContent="회의 기록 확인 완료 · "+sourceLabel+" · 거래 승인 없음";
   detail.textContent="COMMANDER 결론: "+data.final_verdict+" · 출처: "+data.execution_mode+" · 생성: "+data.generated_at_utc+" · 주문 권한: DENIED";
  }catch(_){
@@ -138,6 +155,7 @@ async function refreshMeeting(){
   state.textContent="회의 기록 미연결 · 거래 승인 없음";
   detail.textContent="";
   document.getElementById("meeting-steps").replaceChildren();
+  setRosterMeetingState(null,"");
  }finally{clearTimeout(timeout);}
 }
 document.getElementById("refresh").addEventListener("click",()=>{refresh();refreshTestnetSafety();refreshMeeting()});
