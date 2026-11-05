@@ -106,6 +106,8 @@ const safe = {
             if (!state.textContent.includes("확인 완료") ||
                 !detail.textContent.includes("INSUFFICIENT_DATA") ||
                 !detail.textContent.includes("OFFLINE_FIXTURE") ||
+                !state.textContent.includes("오프라인 예시 데이터") ||
+                !detail.textContent.includes("주문 권한: DENIED") ||
                 document.querySelectorAll("#meeting-steps li").length!==7)
               throw new Error("valid offline meeting not displayed");
             for (const unsafe of [
