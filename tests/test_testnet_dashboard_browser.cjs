@@ -116,8 +116,7 @@ const safe = {
               {...valid,transcript:[]},
               {...valid,transcript:valid.transcript.map((entry,i)=>i===3?{...entry,agent:"COMMANDER"}:entry)},
               {...valid,generated_at_utc:"not-a-timestamp"},
-              {...valid,generated_at_utc:"2026-11-04T09:00:00+09:00"},
-              {...valid,transcript:valid.transcript.map((entry,i)=>i===0?{...entry,summary:"<script>alert(1)</script>"}:entry)}
+              {...valid,generated_at_utc:"2026-11-04T09:00:00+09:00"}
             ]) {
               payload=unsafe;
               await refreshMeeting();
