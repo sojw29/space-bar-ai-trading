@@ -28,6 +28,22 @@ button:focus-visible{outline:3px solid #9af1ce;outline-offset:3px}
  <small>오프라인 기록 미연결 · 주문 생성 및 전송 불가</small>
 </section>
 <section class="card" aria-label="AI 회의 결과" style="margin-top:16px"><div class="label">AI MEETING · READ ONLY</div><div id="meeting-state" role="status" aria-live="polite">회의 기록 확인 중 · 거래 승인 없음</div><div id="meeting-detail" class="muted"></div><ol id="meeting-steps" aria-label="AI 회의 단계"></ol></section>
+<section class="card" aria-label="AI 팀 상태" style="margin-top:16px">
+ <div class="label">AI TEAM · TEN ROLES · READ ONLY</div>
+ <p class="muted">역할 목록은 설계 정보입니다. 실제 에이전트 실행 여부나 회의 참여를 의미하지 않습니다.</p>
+ <div class="grid" style="margin-top:12px" id="agent-roster">
+  <div><strong>COMMANDER</strong><div class="muted">결론 · 주문 승인 없음</div></div>
+  <div><strong>ATLAS</strong><div class="muted">시장 분석</div></div>
+  <div><strong>ORACLE</strong><div class="muted">예측 연구</div></div>
+  <div><strong>QUANT</strong><div class="muted">정량 분석</div></div>
+  <div><strong>SCALPER</strong><div class="muted">진입 연구</div></div>
+  <div><strong>TESTER</strong><div class="muted">백테스트</div></div>
+  <div><strong>GUARDIAN</strong><div class="muted">위험 관리</div></div>
+  <div><strong>EXECUTOR</strong><div class="muted">비활성화 · 주문 불가</div></div>
+  <div><strong>EVOLVE</strong><div class="muted">전략 개선</div></div>
+  <div><strong>AUDITOR</strong><div class="muted">무결성 점검</div></div>
+ </div>
+</section>
 <main class="grid" id="cards" aria-live="polite"></main>
 <footer><div id="detail">데이터 로딩 중…</div><div>READ ONLY · OFFLINE PAPER RESEARCH · NO ORDERS</div></footer>
 <script>
