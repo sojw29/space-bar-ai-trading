@@ -34,6 +34,17 @@ class TestTradingRoomPagesPreview(unittest.TestCase):
         self.assertIn("@media(max-width:480px)", html)
         self.assertNotIn("<script", html.lower())
 
+    def test_local_audit_room_resets_stale_meeting_state_and_blocks_orders(self):
+        dashboard = (ROOT / "web/audit_room_mobile_v153.html").read_text(encoding="utf-8")
+        self.assertIn('setRosterMeetingState(null,"");\n document.getElementById("meeting-steps").replaceChildren();', dashboard)
+        self.assertIn('setRosterMeetingState(data.transcript,sourceLabel);', dashboard)
+        self.assertIn('data.trade_authorization!=="DENIED"', dashboard)
+        self.assertIn('data.orders_enabled!==false', dashboard)
+        self.assertIn('state.textContent="회의 기록 미연결 · 거래 승인 없음"', dashboard)
+        self.assertIn('li.dataset.phase=entry.phase', dashboard)
+        self.assertIn('summary.textContent=entry.summary', dashboard)
+        self.assertNotIn('summary.innerHTML=entry.summary', dashboard)
+
     def test_public_preview_is_static_and_explicitly_not_connected(self):
         html = PREVIEW.read_text(encoding="utf-8")
         self.assertIn("OFFLINE PREVIEW", html)
