@@ -10,9 +10,17 @@ h1{font-size:clamp(25px,5vw,46px);margin:10px 0}p{color:#b4c6df;line-height:1.6}
 .card{background:#14243a;border:1px solid #365172;border-radius:18px;padding:22px}
 .label{font-size:12px;color:#9cc7f7;letter-spacing:.1em}.value{font-size:24px;font-weight:700;margin-top:12px}
 ol{line-height:2;color:#c8d9ee}a{color:#a4d6ff}footer{margin-top:26px;color:#a9bad0;font-size:13px}
+.room{position:relative;overflow:hidden;min-height:310px;border:1px solid #375a83;border-radius:22px;margin-top:24px;padding:22px;background:radial-gradient(ellipse at 50% 0%,#24476c,#0c182b 70%)}
+.room h2{margin:0;font-size:18px;letter-spacing:.12em}.room-note{font-size:12px}
+.stations{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:850px;margin:26px auto 10px;perspective:700px}
+.station{border:1px solid #4d83b2;background:linear-gradient(145deg,#17375a,#101e32);border-radius:12px;padding:18px 8px;text-align:center;box-shadow:0 12px 25px #0006;transform:rotateX(8deg)}
+.station strong{display:block;color:#c4eaff;font-size:clamp(11px,2vw,17px)}.station span{display:block;color:#9db9d6;font-size:11px;margin-top:8px}
+.command{grid-column:2;border-color:#74d4d0;background:linear-gradient(145deg,#18525b,#13263a)}
+@media(max-width:480px){.room{padding:14px}.stations{gap:7px}.station{padding:14px 4px}.station span{font-size:10px}}
 </style></head><body>
 <header><div><small>SPACE BAR AI TRADING</small><h1>TRADING ROOM</h1></div><span class="badge">OFFLINE PREVIEW · NO ORDERS</span></header>
 <p>이 페이지는 설치 없이 열리는 <strong>정적 화면 미리보기</strong>입니다. 실시간 데이터, 실제 AI 회의, API 연결 또는 거래 기능을 제공하지 않습니다.</p>
+<section class="room" aria-label="AI 트레이딩룸 정적 배치도"><h2>AI COMMAND CENTER</h2><p class="room-note">시각적 배치도 · 에이전트 미실행 · 거래 승인 없음</p><div class="stations"><div class="station"><strong>ATLAS</strong><span>MARKET</span></div><div class="station"><strong>QUANT</strong><span>RESEARCH</span></div><div class="station"><strong>GUARDIAN</strong><span>RISK</span></div><div class="station"><strong>ORACLE</strong><span>FORECAST</span></div><div class="station command"><strong>COMMANDER</strong><span>NO ORDERS</span></div><div class="station"><strong>TESTER</strong><span>BACKTEST</span></div></div></section>
 <main class="grid">
 <section class="card"><div class="label">MARKET FEED</div><div class="value">NOT CONNECTED</div><p>실시간 시세 없음</p></section>
 <section class="card"><div class="label">AI MEETING</div><div class="value">PREVIEW ONLY</div><p>실제 AI 추론 및 회의 실행 없음</p></section>
