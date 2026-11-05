@@ -22,6 +22,11 @@ button:focus-visible{outline:3px solid #9af1ce;outline-offset:3px}
 #meeting-steps .meeting-summary{display:block;white-space:pre-wrap;color:#c2d3e9;line-height:1.5}
 #meeting-steps li[data-phase="CONCLUSION"]{border-color:#63b9b5}
 #meeting-steps li[data-phase="PEER_REVIEW"]{border-left:3px solid #6888c6}
+#agent-roster > div{border:1px solid #304865;border-radius:12px;padding:12px;min-width:0}
+#agent-roster > div[data-meeting="recorded"]{border-color:#528caa;background:#172d43}
+#agent-roster > div[data-meeting="disabled"]{border-color:#6e5660}
+#agent-roster .meeting-role-state{font-size:12px;line-height:1.5;margin-top:8px;overflow-wrap:anywhere}
+
 
 @media(max-width:480px){body{padding:16px}.grid{gap:12px;margin-top:16px}.card{padding:16px;min-height:110px}h1{letter-spacing:.06em}}
 .error{color:#ffb8ac}.ok{color:#9af1ce}
@@ -104,10 +109,15 @@ function setRosterMeetingState(transcript,sourceLabel){
   if(!role||!agent)continue;
   let state=node.querySelector(".meeting-role-state");
   if(!state){state=document.createElement("div");state.className="meeting-role-state muted";node.append(state)}
-  if(agent==="EXECUTOR"){state.textContent="주문 기능 비활성화";continue}
+  node.dataset.meeting="none";
+  if(agent==="EXECUTOR"){node.dataset.meeting="disabled";state.textContent="주문 기능 비활성화";continue}
   if(!meetingParticipants.has(agent)){state.textContent="이 회의 기록에 참여하지 않음";continue}
-  const count=entries.filter(entry=>entry.agent===agent).length;
-  state.textContent=count?sourceLabel+" · 기록 "+count+"단계":"회의 기록 미연결";
+  const recorded=entries.filter(entry=>entry.agent===agent);
+  if(recorded.length){
+   node.dataset.meeting="recorded";
+   const phases=recorded.map(entry=>entry.phase==="ANALYSIS"?"분석":entry.phase==="PEER_REVIEW"?"상호 검토":"결론");
+   state.textContent=sourceLabel+" · 과거 기록 "+recorded.length+"단계 ("+phases.join(", ")+")";
+  }else state.textContent="회의 기록 미연결";
  }
 }
 setRosterMeetingState(null,"");
