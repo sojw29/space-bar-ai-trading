@@ -26,6 +26,19 @@ const safe = {
       const errors = [];
       page.on("pageerror", e => errors.push(e.message));
       let response = safe;
+      let meetingResponse = {
+        version: "AI_MEETING_TRANSCRIPT_VIEW_1", status: "COMPLETED", call_count: 7,
+        ai_agents_running: false, trade_authorization: "DENIED",
+        orders_enabled: false, research_only: true, execution_mode: "OFFLINE_FIXTURE",
+        model_inference_performed: false, generated_at_utc: "2026-11-05T00:00:00Z",
+        final_verdict: "WAIT",
+        transcript: [
+          ["ATLAS", "ANALYSIS"], ["QUANT", "ANALYSIS"], ["GUARDIAN", "ANALYSIS"],
+          ["ATLAS", "PEER_REVIEW"], ["QUANT", "PEER_REVIEW"], ["GUARDIAN", "PEER_REVIEW"],
+          ["COMMANDER", "CONCLUSION"]
+        ].map(([agent, phase]) => ({ agent, phase, verdict: "WAIT", summary: "오프라인 검증 기록" }))
+      };
+
       const html = fs.readFileSync(path.join(root, "web", filename), "utf8");
       await page.route("**/*", async route => {
         const url = new URL(route.request().url());
@@ -33,7 +46,9 @@ const safe = {
           await route.abort("blockedbyclient");
           return;
         }
-        if (url.pathname === "/api/v1/testnet/staging/status") {
+        if (url.pathname === "/api/v1/meeting/transcript") {
+          await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(meetingResponse) });
+        } else if (url.pathname === "/api/v1/testnet/staging/status") {
           if (response === null) {
             await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
           } else {
@@ -69,6 +84,19 @@ const safe = {
       response = safe;
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /NOT CONNECTED/);
+      if (filename === "command_center.html") {
+        const meetingStatus = page.locator("#meeting-record-status");
+        await page.waitForFunction(() => document.querySelector("#meeting-record-steps")?.children.length === 7);
+        assert.match(await meetingStatus.textContent(), /과거 회의 기록 7단계/);
+        assert.match(await page.locator("#meeting-record-verdict").textContent(), /WAIT/);
+        meetingResponse = { ...meetingResponse, orders_enabled: true };
+        await page.evaluate(() => refreshMeetingRecord());
+        assert.equal(await page.locator("#meeting-record-steps li").count(), 0);
+        assert.match(await meetingStatus.textContent(), /검증 실패/);
+        meetingResponse = { ...meetingResponse, orders_enabled: false };
+        await page.evaluate(() => refreshMeetingRecord());
+        assert.equal(await page.locator("#meeting-record-steps li").count(), 7);
+      }
       if (filename.includes("mobile")) {
         // CSS regressions: escaped newline text must not swallow mobile focus and layout rules.
         await page.evaluate(() => {
