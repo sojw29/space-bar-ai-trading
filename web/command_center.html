@@ -194,6 +194,11 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 </div><p id="analytics-status" class="muted" role="status">기록 저장 기능을 켜면 분석됩니다.</p></section>
 <section class="panel"><h2>Connection &amp; Evidence</h2><p id="status" role="status">서버 연결 대기 중…</p>
 <p class="muted" id="candle">마지막 완료 캔들: —</p><p class="muted">분석 결과는 검증되지 않은 연구용 휴리스틱입니다. 실제 투자 판단이나 주문에 사용하지 마세요.</p></section>
+<section class="panel" aria-label="AI 회의 기록"><h2>AI MEETING · HISTORICAL READ ONLY</h2>
+<p id="meeting-record-status" class="muted" role="status" aria-live="polite">회의 기록 미연결 · 주문 불가</p>
+<ol id="meeting-record-steps" aria-label="검증된 AI 회의 기록"></ol>
+<p id="meeting-record-verdict" class="muted">최종 결론 미확인 · 거래 승인 없음</p>
+</section>
 </main><footer>SPACE BAR AI TRADING · Read-only local dashboard</footer>
 <script>
 "use strict";
@@ -551,4 +556,59 @@ async function refreshTestnetSafety(){
 }
 refreshTestnetSafety();
 setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
+
+// Historical meeting records are separate from the seven-agent market event stream.
+let meetingRecordRequestId=0;
+async function refreshMeetingRecord(){
+ const id=++meetingRecordRequestId;
+ const status=document.getElementById("meeting-record-status");
+ const steps=document.getElementById("meeting-record-steps");
+ const verdict=document.getElementById("meeting-record-verdict");
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),5000);
+ status.textContent="회의 기록 조회 중 · 주문 불가";
+ steps.replaceChildren();
+ verdict.textContent="최종 결론 미확인 · 거래 승인 없음";
+ try{
+  const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",signal:controller.signal});
+  if(!response.ok)throw Error("회의 API 미연결");
+  const data=await response.json();
+  if(id!==meetingRecordRequestId)return;
+  const expected=[["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],
+    ["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],["GUARDIAN","PEER_REVIEW"],["COMMANDER","CONCLUSION"]];
+  if(data.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||data.status!=="COMPLETED"||
+     data.call_count!==7||data.ai_agents_running!==false||data.orders_enabled!==false||
+     data.research_only!==true||data.trade_authorization!=="DENIED"||
+     !["OFFLINE_FIXTURE","LIVE_PROVIDER"].includes(data.execution_mode)||
+     data.model_inference_performed!==(data.execution_mode==="LIVE_PROVIDER")||
+     typeof data.generated_at_utc!=="string"||
+     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(data.generated_at_utc)||
+     !Number.isFinite(Date.parse(data.generated_at_utc))||
+     typeof data.final_verdict!=="string"||data.final_verdict.length>200||
+     !Array.isArray(data.transcript)||data.transcript.length!==7||
+     !expected.every(([agent,phase],i)=>{
+       const e=data.transcript[i];
+       return e&&e.agent===agent&&e.phase===phase&&
+         typeof e.summary==="string"&&e.summary.length<=2000&&
+         typeof e.verdict==="string"&&e.verdict.length<=100;
+     }))throw Error("안전한 회의 기록 형식이 아님");
+  const fragment=document.createDocumentFragment();
+  for(const e of data.transcript){
+   const item=document.createElement("li");
+   item.textContent=e.agent+" · "+e.phase+" · "+e.verdict+" — "+e.summary;
+   fragment.append(item);
+  }
+  steps.replaceChildren(fragment);
+  status.textContent=(data.execution_mode==="OFFLINE_FIXTURE"?"오프라인 예시":"외부 제공자 응답")+
+    " · 과거 회의 기록 7단계 · 생성 "+data.generated_at_utc+" · 주문 불가";
+  verdict.textContent="COMMANDER 기록 결론: "+data.final_verdict+" · 거래 승인 없음";
+ }catch(_){
+  if(id!==meetingRecordRequestId)return;
+  steps.replaceChildren();
+  status.textContent="회의 기록 미연결 또는 검증 실패 · 주문 불가";
+  verdict.textContent="최종 결론 미확인 · 거래 승인 없음";
+ }finally{clearTimeout(timeout)}
+}
+refreshMeetingRecord();
+setInterval(()=>{if(!document.hidden)refreshMeetingRecord()},30000);
 </script></body></html>
