@@ -113,8 +113,9 @@ async function refreshMeeting(){
    fragment.append(li);
   }
   steps.replaceChildren(fragment);
-  state.textContent="회의 기록 확인 완료 · 거래 승인 없음";
-  detail.textContent="COMMANDER 결론: "+data.final_verdict+" · 출처: "+data.execution_mode+" · 생성: "+data.generated_at_utc;
+  const sourceLabel=data.execution_mode==="OFFLINE_FIXTURE"?"오프라인 예시 데이터":"외부 AI 제공자 응답";
+  state.textContent="회의 기록 확인 완료 · "+sourceLabel+" · 거래 승인 없음";
+  detail.textContent="COMMANDER 결론: "+data.final_verdict+" · 출처: "+data.execution_mode+" · 생성: "+data.generated_at_utc+" · 주문 권한: DENIED";
  }catch(_){
   if(id!==meetingRequestId)return;
   state.textContent="회의 기록 미연결 · 거래 승인 없음";
