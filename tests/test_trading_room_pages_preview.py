@@ -19,12 +19,14 @@ class TestTradingRoomPagesPreview(unittest.TestCase):
         self.assertIn("assert \"<script\" not in page.lower()", workflow)
         self.assertIn('assert "fetch(" not in page.lower()', workflow)
 
-    def test_command_center_has_all_six_read_only_stations(self):
+    def test_command_center_has_all_ten_read_only_stations(self):
         html = PREVIEW.read_text(encoding="utf-8")
         self.assertIn('aria-label="AI 트레이딩룸 정적 배치도"', html)
         self.assertIn("시각적 배치도 · 에이전트 미실행 · 거래 승인 없음", html)
-        for agent in ("ATLAS", "QUANT", "GUARDIAN", "ORACLE", "TESTER", "COMMANDER"):
+        for agent in ("COMMANDER", "ATLAS", "ORACLE", "QUANT", "SCALPER", "TESTER", "GUARDIAN", "EXECUTOR", "EVOLVE", "AUDITOR"):
             self.assertIn(f"<strong>{agent}</strong>", html)
+        self.assertIn("<strong>EXECUTOR</strong><span>DISABLED</span>", html)
+        self.assertIn("<strong>COMMANDER</strong><span>NO ORDERS</span>", html)
         self.assertIn("grid-template-columns:repeat(3,minmax(0,1fr))", html)
         self.assertIn("@media(max-width:480px)", html)
         self.assertNotIn("<script", html.lower())
