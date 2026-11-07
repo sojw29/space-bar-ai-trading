@@ -583,7 +583,26 @@ refreshTestnetSafety();
 setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 
 // Historical meeting records are separate from the seven-agent market event stream.
+function updateTenRoleMeetingMap(transcript){
+ const participants=new Set(Array.isArray(transcript)?transcript.map(entry=>entry.agent):[]);
+ for(const card of document.querySelectorAll("#team-role-map > .agent")){
+  const name=card.querySelector("strong")?.textContent;
+  if(!name)continue;
+  let state=card.querySelector(".meeting-connection-state");
+  if(!state){state=document.createElement("p");state.className="muted meeting-connection-state";card.append(state);}
+  if(name==="EXECUTOR"){
+   state.textContent="주문 기능 비활성화 · 거래 승인 없음";
+  }else if(participants.has(name)){
+   state.textContent="검증된 과거 회의 기록에 참여 · 실시간 실행 아님";
+  }else if(["ATLAS","QUANT","GUARDIAN","COMMANDER"].includes(name)){
+   state.textContent="검증된 회의 기록 미연결";
+  }else{
+   state.textContent="이 회의 기록에 참여하지 않음 · 실행 여부 미확인";
+  }
+ }
+}
 function markHistoricalMeetingParticipants(transcript){
+ updateTenRoleMeetingMap(transcript);
  const participants=new Set(Array.isArray(transcript)?transcript.map(e=>e.agent):[]);
  for(const desk of document.querySelectorAll(".room-desk[data-agent]")){
   const name=desk.dataset.agent;
