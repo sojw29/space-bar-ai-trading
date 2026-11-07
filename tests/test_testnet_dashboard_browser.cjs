@@ -28,7 +28,7 @@ const safe = {
       let response = safe;
       let meetingResponse = {
         version: "AI_MEETING_TRANSCRIPT_VIEW_1", status: "COMPLETED", call_count: 7,
-        ai_agents_running: false, trade_authorization: "DENIED",
+        ai_agents_running: false, trade_authorization: "DENIED", live_trading_approved: false,
         orders_enabled: false, research_only: true, execution_mode: "OFFLINE_FIXTURE",
         model_inference_performed: false, generated_at_utc: "2026-11-05T00:00:00Z",
         final_verdict: "WAIT",
@@ -93,7 +93,11 @@ const safe = {
         await page.evaluate(() => refreshMeetingRecord());
         assert.equal(await page.locator("#meeting-record-steps li").count(), 0);
         assert.match(await meetingStatus.textContent(), /검증 실패/);
-        meetingResponse = { ...meetingResponse, orders_enabled: false };
+        meetingResponse = { ...meetingResponse, orders_enabled: false, live_trading_approved: true };
+        await page.evaluate(() => refreshMeetingRecord());
+        assert.equal(await page.locator("#meeting-record-steps li").count(), 0);
+        assert.match(await meetingStatus.textContent(), /검증 실패/);
+        meetingResponse = { ...meetingResponse, live_trading_approved: false };
         await page.evaluate(() => refreshMeetingRecord());
         assert.equal(await page.locator("#meeting-record-steps li").count(), 7);
         // Out-of-order meeting responses must never overwrite a newer safety decision.
@@ -106,7 +110,7 @@ const safe = {
           };
           const safeMeeting = {
             version: "AI_MEETING_TRANSCRIPT_VIEW_1", status: "COMPLETED", call_count: 7,
-            ai_agents_running: false, trade_authorization: "DENIED",
+            ai_agents_running: false, trade_authorization: "DENIED", live_trading_approved: false,
             orders_enabled: false, research_only: true, execution_mode: "OFFLINE_FIXTURE",
             model_inference_performed: false, generated_at_utc: "2026-11-05T00:00:00Z",
             final_verdict: "WAIT",
