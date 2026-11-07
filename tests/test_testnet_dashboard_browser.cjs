@@ -94,6 +94,15 @@ const safe = {
         assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="historical"]').count(), 4);
         assert.equal(await page.locator('#team-role-map .agent[data-execution-state="unverified"]').count(), 9);
         assert.equal(await page.locator('#team-role-map .agent[data-execution-state="disabled"]').count(), 1);
+        await page.evaluate(() => updateTenRoleMarketFeed({}, false, 31));
+        assert.equal(await page.locator('#team-role-map .agent[data-market-feed-state="stale"]').count(), 3);
+        await page.evaluate(() => updateTenRoleMarketFeed({}, true, -1));
+        assert.equal(await page.locator('#team-role-map .agent[data-market-feed-state="stale"]').count(), 3);
+        await page.evaluate(() => updateTenRoleMarketFeed({}, false, 2));
+        assert.equal(await page.locator('#team-role-map .agent[data-market-feed-state="observed"]').count(), 3);
+        assert.equal(await page.locator('#team-role-map .agent[data-execution-state="unverified"]').count(), 9);
+        await page.evaluate(() => updateTenRoleMarketFeed(null, false, NaN));
+        assert.equal(await page.locator('#team-role-map .agent[data-market-feed-state="unavailable"]').count(), 3);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("ATLAS")') }).locator(".agent-execution-state").textContent(), /실행 상태 미확인/);
         assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="disabled"]').count(), 1);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("EXECUTOR")') }).locator(".meeting-connection-state").textContent(), /주문 기능 비활성화/);
