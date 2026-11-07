@@ -209,8 +209,10 @@ async function smoke(){
    status:200,contentType:"application/json",body:JSON.stringify(mutate(transcript))
   }));
   await invalid.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
-  await invalid.waitForFunction(()=>
-   !document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록 확인 중"),null,{timeout:12000});
+  await invalid.waitForFunction(()=>{
+   const value=document.querySelector("#ai-meeting-status")?.textContent||"";
+   return value.includes("회의 미연결")||value.includes("최종 상태:");
+  },null,{timeout:12000});
   const invalidStatus=await invalid.locator("#ai-meeting-status").textContent();
   assert.match(invalidStatus,/회의 미연결/,reason+": unexpected status: "+invalidStatus);
   assert.equal(await invalid.locator("#ai-meeting-rows p").count(),0,reason);
