@@ -478,9 +478,11 @@ let marketRefreshPending=false;
 async function refresh(){
  if(marketRefreshPending)return;
  marketRefreshPending=true;
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),5000);
  setOfficePhase("FETCHING","공개/과거 데이터 API 응답 대기 · 신호 계산 중이라는 의미 아님");
  try{
-  const response=await fetch("/api/v1/agents",{cache:"no-store"});
+  const response=await fetch("/api/v1/agents",{cache:"no-store",signal:controller.signal});
   if(!response.ok)throw Error("HTTP "+response.status);
   const data=await response.json();
   if(data.orders_enabled!==false||data.paper_only!==true||typeof data.realtime!=="boolean"||data.live_trading_approved!==false)throw Error("안전 플래그 검증 실패");
@@ -556,6 +558,7 @@ async function refresh(){
   renderSpotlight();
   setOfficePhase("BLOCKED","사용 가능한 새 분석 결과 없음 · "+error.message);
  }finally{
+  clearTimeout(timeout);
   marketRefreshPending=false;
  }
 }
