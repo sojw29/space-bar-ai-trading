@@ -584,7 +584,8 @@ setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 
 // Historical meeting records are separate from the seven-agent market event stream.
 function updateTenRoleMeetingMap(transcript){
- const participants=new Set(Array.isArray(transcript)?transcript.map(entry=>entry.agent):[]);
+ const hasVerifiedRecord=Array.isArray(transcript);
+ const participants=new Set(hasVerifiedRecord?transcript.map(entry=>entry.agent):[]);
  for(const card of document.querySelectorAll("#team-role-map > .agent")){
   const name=card.querySelector("strong")?.textContent;
   if(!name)continue;
@@ -597,7 +598,9 @@ function updateTenRoleMeetingMap(transcript){
   }else if(["ATLAS","QUANT","GUARDIAN","COMMANDER"].includes(name)){
    state.textContent="검증된 회의 기록 미연결";
   }else{
-   state.textContent="이 회의 기록에 참여하지 않음 · 실행 여부 미확인";
+   state.textContent=hasVerifiedRecord?
+    "이 회의 기록에 참여하지 않음 · 실행 여부 미확인":
+    "회의 기록 미연결 · 실행 여부 미확인";
   }
  }
 }
