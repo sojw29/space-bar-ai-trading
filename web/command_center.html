@@ -588,7 +588,8 @@ setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 function updateTenRoleMarketFeed(envelope,realtime,ageMinutes){
  const observed=!!envelope&&Number.isFinite(ageMinutes)&&
   Array.isArray(envelope.events)&&envelope.events.length===ids.length&&
-  ids.every(id=>envelope.events.some(event=>event.agent_id===id));
+  new Set(envelope.events.map(event=>event&&event.agent_id)).size===ids.length&&
+  ids.every(id=>envelope.events.some(event=>event&&event.agent_id===id));
  for(const card of document.querySelectorAll("#team-role-map > .agent")){
   const name=card.querySelector("strong")?.textContent;
   if(!name)continue;
