@@ -142,6 +142,7 @@ async function smoke(){
   // retaining old rows; a failed second reload must fail closed.
   await meetingPage.locator("#ai-meeting-refresh").click();
   await meetingPage.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
   assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
