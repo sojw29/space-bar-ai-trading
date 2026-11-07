@@ -45,6 +45,15 @@ class TestTradingRoomPagesPreview(unittest.TestCase):
         self.assertIn('summary.textContent=entry.summary', dashboard)
         self.assertNotIn('summary.innerHTML=entry.summary', dashboard)
 
+    def test_command_center_ten_role_map_does_not_claim_execution(self):
+        html = (ROOT / "web/command_center.html").read_text(encoding="utf-8")
+        roster = html.split('id="team-role-map"', 1)[1].split("</div>\n<p class=\"muted\">기존 시장", 1)[0]
+        for name in ("COMMANDER", "ATLAS", "ORACLE", "QUANT", "SCALPER", "TESTER", "GUARDIAN", "EXECUTOR", "EVOLVE", "AUDITOR"):
+            self.assertEqual(roster.count(f"<strong>{name}</strong>"), 1)
+        self.assertIn("DISABLED · 주문 실행 권한 없음", roster)
+        self.assertIn("이 화면에 별도 데이터 연결 없음", roster)
+        self.assertIn("시장 이벤트 책상 없음", roster)
+
     def test_public_preview_is_static_and_explicitly_not_connected(self):
         html = PREVIEW.read_text(encoding="utf-8")
         self.assertIn("OFFLINE PREVIEW", html)
