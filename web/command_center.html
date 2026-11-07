@@ -577,7 +577,7 @@ async function refreshMeetingRecord(){
   const expected=[["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],
     ["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],["GUARDIAN","PEER_REVIEW"],["COMMANDER","CONCLUSION"]];
   if(data.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||data.status!=="COMPLETED"||
-     data.call_count!==7||data.ai_agents_running!==false||data.orders_enabled!==false||
+     data.call_count!==7||data.ai_agents_running!==false||data.orders_enabled!==false||data.live_trading_approved!==false||
      data.research_only!==true||data.trade_authorization!=="DENIED"||
      !["OFFLINE_FIXTURE","LIVE_PROVIDER"].includes(data.execution_mode)||
      data.model_inference_performed!==(data.execution_mode==="LIVE_PROVIDER")||
