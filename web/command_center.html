@@ -493,6 +493,7 @@ async function refresh(){
   const ageMinutes=Math.round((Date.now()-candleDate.getTime())/60000);
   const stale=ageMinutes>30||ageMinutes<0;
   if(data.realtime && (ageMinutes<0||ageMinutes>12))throw Error("실시간 확정 봉 데이터 지연");
+  updateTenRoleMarketFeed(envelope,data.realtime,ageMinutes);
   const ageNode=document.getElementById("observation-age");
   ageNode.textContent="마지막 관측 "+ageMinutes+"분 전"+(stale?" · 오래된 데이터":"");
   ageNode.className="activity-pill"+(stale?" offline":"");
@@ -540,6 +541,7 @@ async function refresh(){
   document.getElementById("risk-state").className="activity-pill offline";
   document.getElementById("observation-age").textContent="데이터 시각 확인 불가";
   document.getElementById("observation-age").className="activity-pill offline";
+  updateTenRoleMarketFeed(null,false,NaN);
   lastFailure=true;
   latestEvents.clear();
   latestCandle="—";
@@ -583,6 +585,24 @@ refreshTestnetSafety();
 setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 
 // Historical meeting records are separate from the seven-agent market event stream.
+function updateTenRoleMarketFeed(envelope,realtime,ageMinutes){
+ const observed=!!envelope&&Number.isFinite(ageMinutes);
+ for(const card of document.querySelectorAll("#team-role-map > .agent")){
+  const name=card.querySelector("strong")?.textContent;
+  if(!name)continue;
+  let feed=card.querySelector(".agent-market-feed-state");
+  if(!feed){feed=document.createElement("p");feed.className="muted agent-market-feed-state";card.append(feed);}
+  if(["ATLAS","QUANT","COMMANDER"].includes(name)){
+   card.dataset.marketFeedState=observed?"observed":"unavailable";
+   feed.textContent=observed?
+    (realtime?"검증된 공개 시장 이벤트 수신":"검증된 과거 시장 이벤트 수신")+" · "+ageMinutes+"분 전 · AI 실행 증거 아님":
+    "시장 이벤트 API 미연결 · AI 실행 미확인";
+  }else{
+   card.dataset.marketFeedState="not-mapped";
+   feed.textContent="기존 7명 시장 이벤트 API의 대응 역할 없음";
+  }
+ }
+}
 function updateTenRoleMeetingMap(transcript){
  const hasVerifiedRecord=Array.isArray(transcript);
  const participants=new Set(hasVerifiedRecord?transcript.map(entry=>entry.agent):[]);
@@ -674,6 +694,7 @@ async function refreshMeetingRecord(){
   verdict.textContent="최종 결론 미확인 · 거래 승인 없음";
  }finally{clearTimeout(timeout)}
 }
+updateTenRoleMarketFeed(null,false,NaN);
 markHistoricalMeetingParticipants(null);
 refreshMeetingRecord();
 setInterval(()=>{if(!document.hidden)refreshMeetingRecord()},30000);
