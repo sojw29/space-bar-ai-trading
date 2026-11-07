@@ -100,6 +100,18 @@ const safe = {
         meetingResponse = { ...meetingResponse, live_trading_approved: false };
         await page.evaluate(() => refreshMeetingRecord());
         assert.equal(await page.locator("#meeting-record-steps li").count(), 7);
+        // A narrow viewport must not overflow even with unusually long meeting text.
+        meetingResponse = { ...meetingResponse, transcript: meetingResponse.transcript.map(entry => ({
+          ...entry, summary: "긴회의기록".repeat(150)
+        })) };
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page.evaluate(() => refreshMeetingRecord());
+        assert.equal(await page.locator("#meeting-record-steps li").count(), 7);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+        meetingResponse = { ...meetingResponse, transcript: meetingResponse.transcript.map(entry => ({
+          ...entry, summary: "오프라인 검증 기록"
+        })) };
+        await page.setViewportSize({ width: 1280, height: 800 });
         // Out-of-order meeting responses must never overwrite a newer safety decision.
         await page.evaluate(async () => {
           const originalFetch = window.fetch;
