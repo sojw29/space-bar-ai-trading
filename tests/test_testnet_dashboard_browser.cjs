@@ -89,10 +89,15 @@ const safe = {
         await page.waitForFunction(() => document.querySelector("#meeting-record-steps")?.children.length === 7);
         assert.match(await meetingStatus.textContent(), /과거 회의 기록 7단계/);
         assert.match(await page.locator("#meeting-record-verdict").textContent(), /WAIT/);
+        assert.equal(await page.locator('.room-desk[data-agent="ATLAS"]').getAttribute("data-meeting-record"), "historical");
+        assert.equal(await page.locator('.room-desk[data-agent="QUANT"]').getAttribute("data-meeting-record"), "historical");
+        assert.equal(await page.locator('.room-desk[data-agent="COMMANDER"]').getAttribute("data-meeting-record"), "historical");
+        assert.equal(await page.locator('.room-desk[data-agent="ORBIT"]').getAttribute("data-meeting-record"), null);
         meetingResponse = { ...meetingResponse, orders_enabled: true };
         await page.evaluate(() => refreshMeetingRecord());
         assert.equal(await page.locator("#meeting-record-steps li").count(), 0);
         assert.match(await meetingStatus.textContent(), /검증 실패/);
+        assert.equal(await page.locator('.room-desk[data-meeting-record="historical"]').count(), 0);
         meetingResponse = { ...meetingResponse, orders_enabled: false, live_trading_approved: true };
         await page.evaluate(() => refreshMeetingRecord());
         assert.equal(await page.locator("#meeting-record-steps li").count(), 0);
