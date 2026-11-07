@@ -92,6 +92,9 @@ const safe = {
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("GUARDIAN")') }).locator(".meeting-connection-state").textContent(), /과거 회의 기록에 참여/);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("ORACLE")') }).locator(".meeting-connection-state").textContent(), /이 회의 기록에 참여하지 않음/);
         assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="historical"]').count(), 4);
+        assert.equal(await page.locator('#team-role-map .agent[data-execution-state="unverified"]').count(), 9);
+        assert.equal(await page.locator('#team-role-map .agent[data-execution-state="disabled"]').count(), 1);
+        assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("ATLAS")') }).locator(".agent-execution-state").textContent(), /실행 상태 미확인/);
         assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="disabled"]').count(), 1);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("EXECUTOR")') }).locator(".meeting-connection-state").textContent(), /주문 기능 비활성화/);
         assert.equal(await page.locator('.room-desk[data-agent="ATLAS"]').getAttribute("data-meeting-record"), "historical");
