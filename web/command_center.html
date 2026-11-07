@@ -493,7 +493,6 @@ async function refresh(){
   const ageMinutes=Math.round((Date.now()-candleDate.getTime())/60000);
   const stale=ageMinutes>30||ageMinutes<0;
   if(data.realtime && (ageMinutes<0||ageMinutes>12))throw Error("실시간 확정 봉 데이터 지연");
-  updateTenRoleMarketFeed(envelope,data.realtime,ageMinutes);
   const ageNode=document.getElementById("observation-age");
   ageNode.textContent="마지막 관측 "+ageMinutes+"분 전"+(stale?" · 오래된 데이터":"");
   ageNode.className="activity-pill"+(stale?" offline":"");
@@ -511,6 +510,7 @@ async function refresh(){
   }
   latestEvents=new Map(envelope.events.map(event=>[event.agent_id,event]));
   latestCandle=envelope.observed_candle_utc;
+  updateTenRoleMarketFeed(envelope,data.realtime,ageMinutes);
   lastFailure=false;
   isLiveTransport=data.realtime;
   latestValidObservation=envelope.observed_candle_utc;
