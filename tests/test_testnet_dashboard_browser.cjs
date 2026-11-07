@@ -85,6 +85,15 @@ const safe = {
       await page.evaluate(() => refreshTestnetSafety());
       assert.match(await label.textContent(), /NOT CONNECTED/);
       if (filename === "command_center.html") {
+        await page.evaluate(async () => {
+          marketRefreshPending = true;
+          const originalStatus = document.querySelector("#status").textContent;
+          await refresh();
+          if (document.querySelector("#status").textContent !== originalStatus) {
+            throw Error("Overlapping market refresh changed the status");
+          }
+          marketRefreshPending = false;
+        });
         const meetingStatus = page.locator("#meeting-record-status");
         await page.waitForFunction(() => document.querySelector("#meeting-record-steps")?.children.length === 7);
         assert.match(await meetingStatus.textContent(), /과거 회의 기록 7단계/);
