@@ -591,7 +591,12 @@ function updateTenRoleMeetingMap(transcript){
   if(!name)continue;
   let state=card.querySelector(".meeting-connection-state");
   if(!state){state=document.createElement("p");state.className="muted meeting-connection-state";card.append(state);}
+  card.dataset.executionState="unverified";
+  let execution=card.querySelector(".agent-execution-state");
+  if(!execution){execution=document.createElement("p");execution.className="muted agent-execution-state";card.append(execution);}
+  execution.textContent=name==="EXECUTOR"?"주문 실행 비활성화":"AI 실행 상태 미확인 · 회의 기록과 별개";
   if(name==="EXECUTOR"){
+   card.dataset.executionState="disabled";
    card.dataset.meetingState="disabled";
    state.textContent="주문 기능 비활성화 · 거래 승인 없음";
   }else if(participants.has(name)){
