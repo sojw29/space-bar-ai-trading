@@ -118,6 +118,11 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 @keyframes office-pulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
 @media(max-width:650px){.office-phase-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.room-desk[data-phase="FETCHING"] .phase-light{animation:none}}
+/* Meeting transcript remains readable on narrow phone screens. */
+#meeting-record-steps{display:grid;gap:10px;padding-left:24px;max-width:100%;min-width:0}
+#meeting-record-steps li{overflow-wrap:anywhere;word-break:break-word;line-height:1.55;padding:8px 10px;background:#0d192e;border:1px solid #304464;border-radius:8px}
+#meeting-record-status,#meeting-record-verdict{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:480px){main{padding:12px;gap:12px}.panel{padding:14px;min-width:0}#meeting-record-steps{padding-left:20px}#meeting-record-steps li{padding:8px;font-size:13px}}
 </style></head><body>
 <header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
 <p class="muted">Multi-Agent Research Dashboard · V48 Observable Agent Office</p>
