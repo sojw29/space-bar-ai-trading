@@ -586,7 +586,9 @@ setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 
 // Historical meeting records are separate from the seven-agent market event stream.
 function updateTenRoleMarketFeed(envelope,realtime,ageMinutes){
- const observed=!!envelope&&Number.isFinite(ageMinutes);
+ const observed=!!envelope&&Number.isFinite(ageMinutes)&&
+  Array.isArray(envelope.events)&&envelope.events.length===ids.length&&
+  ids.every(id=>envelope.events.some(event=>event.agent_id===id));
  for(const card of document.querySelectorAll("#team-role-map > .agent")){
   const name=card.querySelector("strong")?.textContent;
   if(!name)continue;
