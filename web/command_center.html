@@ -123,6 +123,9 @@ footer{color:#9bb0ce;text-align:center;padding:20px}
 #meeting-record-steps li{overflow-wrap:anywhere;word-break:break-word;line-height:1.55;padding:8px 10px;background:#0d192e;border:1px solid #304464;border-radius:8px}
 #meeting-record-status,#meeting-record-verdict{overflow-wrap:anywhere;word-break:break-word}
 @media(max-width:480px){main{padding:12px;gap:12px}.panel{padding:14px;min-width:0}#meeting-record-steps{padding-left:20px}#meeting-record-steps li{padding:8px;font-size:13px}}
+/* Historical meeting participation is independent of live market signals. */
+.room-desk[data-meeting-record="historical"]{outline:2px dashed #d9bb78;outline-offset:3px}
+.room-desk[data-meeting-record="historical"]::after{content:"PAST MEETING";position:absolute;bottom:-19px;left:0;font-size:9px;color:#f1d69a;white-space:nowrap}
 </style></head><body>
 <header><h1>SPACE BAR <span style="color:#66d9f7">COMMAND CENTER</span></h1>
 <p class="muted">Multi-Agent Research Dashboard · V48 Observable Agent Office</p>
@@ -563,6 +566,14 @@ refreshTestnetSafety();
 setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 
 // Historical meeting records are separate from the seven-agent market event stream.
+function markHistoricalMeetingParticipants(transcript){
+ const participants=new Set(Array.isArray(transcript)?transcript.map(e=>e.agent):[]);
+ for(const desk of document.querySelectorAll(".room-desk[data-agent]")){
+  const name=desk.dataset.agent;
+  if(participants.has(name)){desk.dataset.meetingRecord="historical";desk.title=name+" · 과거 AI 회의 참여 기록 (실시간 활동 아님)";}
+  else{delete desk.dataset.meetingRecord;desk.removeAttribute("title");}
+ }
+}
 let meetingRecordRequestId=0;
 async function refreshMeetingRecord(){
  const id=++meetingRecordRequestId;
@@ -574,6 +585,7 @@ async function refreshMeetingRecord(){
  status.textContent="회의 기록 조회 중 · 주문 불가";
  steps.replaceChildren();
  verdict.textContent="최종 결론 미확인 · 거래 승인 없음";
+ markHistoricalMeetingParticipants(null);
  try{
   const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",signal:controller.signal});
   if(!response.ok)throw Error("회의 API 미연결");
@@ -604,12 +616,14 @@ async function refreshMeetingRecord(){
    fragment.append(item);
   }
   steps.replaceChildren(fragment);
+  markHistoricalMeetingParticipants(data.transcript);
   status.textContent=(data.execution_mode==="OFFLINE_FIXTURE"?"오프라인 예시":"외부 제공자 응답")+
     " · 과거 회의 기록 7단계 · 생성 "+data.generated_at_utc+" · 주문 불가";
   verdict.textContent="COMMANDER 기록 결론: "+data.final_verdict+" · 거래 승인 없음";
  }catch(_){
   if(id!==meetingRecordRequestId)return;
   steps.replaceChildren();
+  markHistoricalMeetingParticipants(null);
   status.textContent="회의 기록 미연결 또는 검증 실패 · 주문 불가";
   verdict.textContent="최종 결론 미확인 · 거래 승인 없음";
  }finally{clearTimeout(timeout)}
