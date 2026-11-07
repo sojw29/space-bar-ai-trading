@@ -209,10 +209,19 @@ async function smoke(){
    status:200,contentType:"application/json",body:JSON.stringify(mutate(transcript))
   }));
   await invalid.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
-  await invalid.waitForFunction(()=>{
-   const value=document.querySelector("#ai-meeting-status")?.textContent||"";
-   return value.includes("회의 미연결")||value.includes("최종 상태:");
-  },null,{timeout:12000});
+  try{
+   await invalid.waitForFunction(()=>{
+    const value=document.querySelector("#ai-meeting-status")?.textContent||"";
+    return value.includes("회의 미연결")||value.includes("최종 상태:");
+   },null,{timeout:12000});
+  }catch(error){
+   const diagnostic=await invalid.evaluate(()=>({
+    status:document.querySelector("#ai-meeting-status")?.textContent||"missing",
+    readyState:document.readyState,
+    rows:document.querySelectorAll("#ai-meeting-rows p").length
+   }));
+   throw Error(reason+": meeting status never settled: "+JSON.stringify(diagnostic)+"; "+error.message);
+  }
   const invalidStatus=await invalid.locator("#ai-meeting-status").textContent();
   assert.match(invalidStatus,/회의 미연결/,reason+": unexpected status: "+invalidStatus);
   assert.equal(await invalid.locator("#ai-meeting-rows p").count(),0,reason);
