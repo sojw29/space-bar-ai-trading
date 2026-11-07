@@ -133,6 +133,7 @@ async function smoke(){
   await meetingPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
   assert.equal(transcriptCalls,1);
   const label=viewport.width<500?"mobile":"desktop";
@@ -141,6 +142,7 @@ async function smoke(){
   // retaining old rows; a failed second reload must fail closed.
   await meetingPage.locator("#ai-meeting-refresh").click();
   await meetingPage.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
   assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
@@ -152,10 +154,44 @@ async function smoke(){
   await meetingPage.waitForFunction(()=>
    document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
   assert.equal(transcriptCalls,3);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
+ // A slow transcript must time out and allow the user to retry safely.
+ const stalled=await context.newPage();
+ await serveThree(stalled);
+ let stallRequests=0;
+ await stalled.route("**/api/v1/meeting/transcript",async route=>{
+  stallRequests++;
+  if(stallRequests===1){
+   await new Promise(resolve=>setTimeout(resolve,6500));
+   try{await route.fulfill({status:503,body:"late response"});}catch(_){}
+   return;
+  }
+  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
+ });
+ await stalled.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ // Do not wait for transient loading text: slow WebGL initialization can
+ // finish after the request timeout, so the pending state may never render.
+ await stalled.waitForFunction(()=>
+  document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),null,{timeout:12000});
+ assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),false);
+ assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
+ await stalled.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
+ await stalled.locator("#ai-meeting-refresh").click();
+ await stalled.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7,null,{timeout:12000});
+ assert.equal(stallRequests,2);
+ await stalled.waitForTimeout(1800);
+ assert.equal(await stalled.locator("#ai-meeting-rows p").count(),7,
+  "late response must not erase the successful retry");
+ assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"validated",
+  "late failure must not downgrade the successful retry");
+ assert.match(await stalled.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+ await stalled.close();
+
  // Malformed meeting data must not appear as a valid completed session.
  const badMeeting=await context.newPage();
  await serveThree(badMeeting);
@@ -201,6 +237,8 @@ async function smoke(){
  for(const [reason,mutate] of [
   ["stale-source",d=>({...d,source_generated_at_utc:new Date(Date.now()-9*3600000).toISOString()})],
   ["future-finish",d=>({...d,generated_at_utc:new Date(Date.now()+600000).toISOString()})],
+  ["future-source",d=>({...d,source_generated_at_utc:new Date(Date.now()+600000).toISOString()})],
+  ["reversed-timeline",d=>({...d,started_at_utc:new Date(Date.now()+120000).toISOString()})],
   ["contradictory-verdict",d=>({...d,final_verdict:"REVIEW_NEEDED"})]
  ]){
   const invalid=await context.newPage();
@@ -209,8 +247,21 @@ async function smoke(){
    status:200,contentType:"application/json",body:JSON.stringify(mutate(transcript))
   }));
   await invalid.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
-  await invalid.waitForFunction(()=>
-   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+  try{
+   await invalid.waitForFunction(()=>{
+    const value=document.querySelector("#ai-meeting-status")?.textContent||"";
+    return value.includes("회의 미연결")||value.includes("최종 상태:");
+   },null,{timeout:12000});
+  }catch(error){
+   const diagnostic=await invalid.evaluate(()=>({
+    status:document.querySelector("#ai-meeting-status")?.textContent||"missing",
+    readyState:document.readyState,
+    rows:document.querySelectorAll("#ai-meeting-rows p").length
+   }));
+   throw Error(reason+": meeting status never settled: "+JSON.stringify(diagnostic)+"; "+error.message);
+  }
+  const invalidStatus=await invalid.locator("#ai-meeting-status").textContent();
+  assert.match(invalidStatus,/회의 미연결/,reason+": unexpected status: "+invalidStatus);
   assert.equal(await invalid.locator("#ai-meeting-rows p").count(),0,reason);
   await invalid.close();
  }
