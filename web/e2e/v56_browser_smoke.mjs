@@ -201,6 +201,8 @@ async function smoke(){
  for(const [reason,mutate] of [
   ["stale-source",d=>({...d,source_generated_at_utc:new Date(Date.now()-9*3600000).toISOString()})],
   ["future-finish",d=>({...d,generated_at_utc:new Date(Date.now()+600000).toISOString()})],
+  ["future-source",d=>({...d,source_generated_at_utc:new Date(Date.now()+600000).toISOString()})],
+  ["reversed-timeline",d=>({...d,started_at_utc:new Date(Date.now()+120000).toISOString()})],
   ["contradictory-verdict",d=>({...d,final_verdict:"REVIEW_NEEDED"})]
  ]){
   const invalid=await context.newPage();
