@@ -2058,7 +2058,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   status.textContent=(live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님")+
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   validSince=source;validUntil=source+8*3600000;expire();
- }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error.message);}
+ }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error.message);status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";}
  finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;}
  }
  refreshButton.addEventListener("click",loadMeeting);
