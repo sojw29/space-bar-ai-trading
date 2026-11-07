@@ -156,6 +156,29 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
+ // A slow transcript must time out and allow the user to retry safely.
+ const stalled=await context.newPage();
+ await serveThree(stalled);
+ let stallRequests=0;
+ await stalled.route("**/api/v1/meeting/transcript",async route=>{
+  stallRequests++;
+  if(stallRequests===1){
+   await new Promise(resolve=>setTimeout(resolve,6500));
+   try{await route.fulfill({status:503,body:"late response"});}catch(_){}
+   return;
+  }
+  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
+ });
+ await stalled.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ await stalled.waitForFunction(()=>
+  document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),null,{timeout:12000});
+ assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),false);
+ assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
+ await stalled.locator("#ai-meeting-refresh").click();
+ await stalled.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7,null,{timeout:12000});
+ assert.equal(stallRequests,2);
+ await stalled.close();
+
  // Malformed meeting data must not appear as a valid completed session.
  const badMeeting=await context.newPage();
  await serveThree(badMeeting);
