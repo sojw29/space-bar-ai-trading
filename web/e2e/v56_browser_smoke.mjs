@@ -133,6 +133,7 @@ async function smoke(){
   await meetingPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
   assert.equal(transcriptCalls,1);
   const label=viewport.width<500?"mobile":"desktop";
@@ -152,6 +153,7 @@ async function smoke(){
   await meetingPage.waitForFunction(()=>
    document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
   assert.equal(transcriptCalls,3);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
