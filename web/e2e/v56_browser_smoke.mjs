@@ -155,6 +155,7 @@ async function smoke(){
    document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
   assert.equal(transcriptCalls,3);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
