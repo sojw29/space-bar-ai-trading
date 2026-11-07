@@ -171,12 +171,21 @@ async function smoke(){
  });
  await stalled.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
  await stalled.waitForFunction(()=>
+  document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록 확인 중"),null,{timeout:4000});
+ assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),true,
+  "refresh must remain locked during a pending transcript request");
+ assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
+ await stalled.waitForFunction(()=>
   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),null,{timeout:12000});
  assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),false);
  assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
  await stalled.locator("#ai-meeting-refresh").click();
  await stalled.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7,null,{timeout:12000});
  assert.equal(stallRequests,2);
+ await stalled.waitForTimeout(1800);
+ assert.equal(await stalled.locator("#ai-meeting-rows p").count(),7,
+  "late response must not erase the successful retry");
+ assert.match(await stalled.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
  await stalled.close();
 
  // Malformed meeting data must not appear as a valid completed session.
