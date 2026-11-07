@@ -2016,10 +2016,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  async function loadMeeting(){
   if(loading)return;
   loading=true;refreshButton.disabled=true;
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),5000);
   rows.replaceChildren();validSince=null;validUntil=null;
   status.textContent="회의 기록 확인 중…";
  try{
-  const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit"});
+  const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",signal:controller.signal});
   if(!response.ok)throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
   const raw=await response.text();if(raw.length>65536)throw Error("회의 기록 크기 초과");
   const d=JSON.parse(raw),live=d.execution_mode==="LIVE_PROVIDER";
@@ -2057,7 +2059,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   validSince=source;validUntil=source+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+error.message;}
- finally{loading=false;refreshButton.disabled=false;}
+ finally{clearTimeout(timeout);loading=false;refreshButton.disabled=false;}
  }
  refreshButton.addEventListener("click",loadMeeting);
  await loadMeeting();
