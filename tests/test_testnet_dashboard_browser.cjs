@@ -94,6 +94,24 @@ const safe = {
           }
           marketRefreshPending = false;
         });
+        await page.evaluate(async () => {
+          const originalFetch = window.fetch;
+          try {
+            window.fetch = (url, options) => {
+              if (url === "/api/v1/agents") {
+                return new Promise((resolve, reject) => {
+                  options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {once:true});
+                });
+              }
+              return originalFetch(url, options);
+            };
+            await refresh();
+            if (marketRefreshPending) throw Error("Market refresh lock remained after timeout");
+            if (!document.querySelector("#status").textContent.includes("데이터를 표시할 수 없습니다")) {
+              throw Error("Market timeout did not fail closed");
+            }
+          } finally { window.fetch = originalFetch; }
+        });
         const meetingStatus = page.locator("#meeting-record-status");
         await page.waitForFunction(() => document.querySelector("#meeting-record-steps")?.children.length === 7);
         assert.match(await meetingStatus.textContent(), /과거 회의 기록 7단계/);
