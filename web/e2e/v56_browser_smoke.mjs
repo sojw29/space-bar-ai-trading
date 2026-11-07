@@ -210,7 +210,9 @@ async function smoke(){
   }));
   await invalid.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await invalid.waitForFunction(()=>
-   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+   !document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록 확인 중"),null,{timeout:12000});
+  const invalidStatus=await invalid.locator("#ai-meeting-status").textContent();
+  assert.match(invalidStatus,/회의 미연결/,reason+": unexpected status: "+invalidStatus);
   assert.equal(await invalid.locator("#ai-meeting-rows p").count(),0,reason);
   await invalid.close();
  }
