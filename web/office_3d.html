@@ -2059,7 +2059,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";
   validSince=source;validUntil=source+8*3600000;expire();
- }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error.message);status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";}
+ }catch(error){rows.replaceChildren();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error.message);status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";}
  finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;}
  }
  refreshButton.addEventListener("click",loadMeeting);
