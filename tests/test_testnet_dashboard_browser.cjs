@@ -91,6 +91,8 @@ const safe = {
         assert.match(await page.locator("#meeting-record-verdict").textContent(), /WAIT/);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("GUARDIAN")') }).locator(".meeting-connection-state").textContent(), /과거 회의 기록에 참여/);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("ORACLE")') }).locator(".meeting-connection-state").textContent(), /이 회의 기록에 참여하지 않음/);
+        assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="historical"]').count(), 4);
+        assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="disabled"]').count(), 1);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("EXECUTOR")') }).locator(".meeting-connection-state").textContent(), /주문 기능 비활성화/);
         assert.equal(await page.locator('.room-desk[data-agent="ATLAS"]').getAttribute("data-meeting-record"), "historical");
         assert.equal(await page.locator('.room-desk[data-agent="QUANT"]').getAttribute("data-meeting-record"), "historical");
@@ -103,6 +105,8 @@ const safe = {
         assert.equal(await page.locator('.room-desk[data-meeting-record="historical"]').count(), 0);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("GUARDIAN")') }).locator(".meeting-connection-state").textContent(), /회의 기록 미연결/);
         assert.match(await page.locator('#team-role-map .agent').filter({ has: page.locator('strong:text-is("ORACLE")') }).locator(".meeting-connection-state").textContent(), /회의 기록 미연결/);
+        assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="historical"]').count(), 0);
+        assert.equal(await page.locator('#team-role-map .agent[data-meeting-state="unavailable"]').count(), 9);
         meetingResponse = { ...meetingResponse, orders_enabled: false, live_trading_approved: true };
         await page.evaluate(() => refreshMeetingRecord());
         assert.equal(await page.locator("#meeting-record-steps li").count(), 0);
