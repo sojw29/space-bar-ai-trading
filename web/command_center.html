@@ -592,15 +592,17 @@ function updateTenRoleMeetingMap(transcript){
   let state=card.querySelector(".meeting-connection-state");
   if(!state){state=document.createElement("p");state.className="muted meeting-connection-state";card.append(state);}
   if(name==="EXECUTOR"){
+   card.dataset.meetingState="disabled";
    state.textContent="주문 기능 비활성화 · 거래 승인 없음";
   }else if(participants.has(name)){
+   card.dataset.meetingState="historical";
    state.textContent="검증된 과거 회의 기록에 참여 · 실시간 실행 아님";
-  }else if(["ATLAS","QUANT","GUARDIAN","COMMANDER"].includes(name)){
-   state.textContent="검증된 회의 기록 미연결";
+  }else if(hasVerifiedRecord){
+   card.dataset.meetingState="not-participant";
+   state.textContent="이 회의 기록에 참여하지 않음 · 실행 여부 미확인";
   }else{
-   state.textContent=hasVerifiedRecord?
-    "이 회의 기록에 참여하지 않음 · 실행 여부 미확인":
-    "회의 기록 미연결 · 실행 여부 미확인";
+   card.dataset.meetingState="unavailable";
+   state.textContent="회의 기록 미연결 · 실행 여부 미확인";
   }
  }
 }
@@ -667,6 +669,7 @@ async function refreshMeetingRecord(){
   verdict.textContent="최종 결론 미확인 · 거래 승인 없음";
  }finally{clearTimeout(timeout)}
 }
+markHistoricalMeetingParticipants(null);
 refreshMeetingRecord();
 setInterval(()=>{if(!document.hidden)refreshMeetingRecord()},30000);
 </script></body></html>
