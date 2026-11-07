@@ -96,6 +96,48 @@ const safe = {
         meetingResponse = { ...meetingResponse, orders_enabled: false };
         await page.evaluate(() => refreshMeetingRecord());
         assert.equal(await page.locator("#meeting-record-steps li").count(), 7);
+        // Out-of-order meeting responses must never overwrite a newer safety decision.
+        await page.evaluate(async () => {
+          const originalFetch = window.fetch;
+          const pending = [];
+          window.fetch = (url, options) => {
+            if (url !== "/api/v1/meeting/transcript") return originalFetch(url, options);
+            return new Promise(resolve => pending.push(resolve));
+          };
+          const safeMeeting = {
+            version: "AI_MEETING_TRANSCRIPT_VIEW_1", status: "COMPLETED", call_count: 7,
+            ai_agents_running: false, trade_authorization: "DENIED",
+            orders_enabled: false, research_only: true, execution_mode: "OFFLINE_FIXTURE",
+            model_inference_performed: false, generated_at_utc: "2026-11-05T00:00:00Z",
+            final_verdict: "WAIT",
+            transcript: [["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],
+              ["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],["GUARDIAN","PEER_REVIEW"],
+              ["COMMANDER","CONCLUSION"]].map(([agent,phase])=>({agent,phase,verdict:"WAIT",summary:"offline"}))
+          };
+          const payload = value => ({ ok: true, json: async () => value });
+          try {
+            const oldRequest = refreshMeetingRecord();
+            const newRequest = refreshMeetingRecord();
+            pending[1](payload({ ...safeMeeting, orders_enabled: true }));
+            await newRequest;
+            pending[0](payload(safeMeeting));
+            await oldRequest;
+            if (document.querySelectorAll("#meeting-record-steps li").length !== 0 ||
+                !document.querySelector("#meeting-record-status").textContent.includes("검증 실패")) {
+              throw new Error("stale safe meeting response overwrote newer unsafe response");
+            }
+            const oldUnsafe = refreshMeetingRecord();
+            const newSafe = refreshMeetingRecord();
+            pending[3](payload(safeMeeting));
+            await newSafe;
+            pending[2](payload({ ...safeMeeting, orders_enabled: true }));
+            await oldUnsafe;
+            if (document.querySelectorAll("#meeting-record-steps li").length !== 7) {
+              throw new Error("stale unsafe meeting response overwrote newer safe response");
+            }
+          } finally { window.fetch = originalFetch; }
+        });
+
       }
       if (filename.includes("mobile")) {
         // CSS regressions: escaped newline text must not swallow mobile focus and layout rules.
