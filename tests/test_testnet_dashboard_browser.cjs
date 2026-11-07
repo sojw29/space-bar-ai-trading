@@ -111,6 +111,29 @@ const safe = {
               throw Error("Market timeout did not fail closed");
             }
           } finally { window.fetch = originalFetch; }
+          const recovered = {
+            orders_enabled:false,paper_only:true,live_trading_approved:false,realtime:false,
+            events:{
+              symbol:"BTCUSDT",timeframe:"5m",observed_candle_utc:new Date().toISOString(),
+              events:["ATLAS","ORBIT","ECHO","PULSE","QUANT","APEX","COMMANDER"].map(agent_id => ({
+                agent_id,decision:"WAIT",reason:"Offline browser recovery fixture",
+                ...(agent_id==="COMMANDER"?{long_votes:0,short_votes:0,risk_veto:false}:{})
+              }))
+            }
+          };
+          try {
+            window.fetch = (url, options) => url === "/api/v1/agents"
+              ? Promise.resolve(new Response(JSON.stringify(recovered),{status:200,headers:{"Content-Type":"application/json"}}))
+              : originalFetch(url, options);
+            await refresh();
+            if (marketRefreshPending) throw Error("Market refresh lock remained after recovery");
+            if (!document.querySelector("#status").textContent.includes("로컬 연구 서버 연결됨")) {
+              throw Error("Market did not recover after timeout");
+            }
+            if (document.querySelectorAll('#team-role-map .agent[data-market-feed-state="observed"]').length !== 3) {
+              throw Error("Market event state did not recover");
+            }
+          } finally { window.fetch = originalFetch; }
         });
         const meetingStatus = page.locator("#meeting-record-status");
         await page.waitForFunction(() => document.querySelector("#meeting-record-steps")?.children.length === 7);
