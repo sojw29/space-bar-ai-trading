@@ -593,10 +593,12 @@ function updateTenRoleMarketFeed(envelope,realtime,ageMinutes){
   let feed=card.querySelector(".agent-market-feed-state");
   if(!feed){feed=document.createElement("p");feed.className="muted agent-market-feed-state";card.append(feed);}
   if(["ATLAS","QUANT","COMMANDER"].includes(name)){
-   card.dataset.marketFeedState=observed?"observed":"unavailable";
-   feed.textContent=observed?
-    (realtime?"검증된 공개 시장 이벤트 수신":"검증된 과거 시장 이벤트 수신")+" · "+ageMinutes+"분 전 · AI 실행 증거 아님":
-    "시장 이벤트 API 미연결 · AI 실행 미확인";
+   const fresh=observed&&ageMinutes>=0&&ageMinutes<=(realtime?12:30);
+   card.dataset.marketFeedState=!observed?"unavailable":fresh?"observed":"stale";
+   feed.textContent=!observed?
+    "시장 이벤트 API 미연결 · AI 실행 미확인":
+    !fresh?"시장 이벤트 기록 지연 또는 미래 시각 · "+ageMinutes+"분 차이 · AI 실행 미확인":
+    (realtime?"검증된 공개 시장 이벤트 수신":"검증된 과거 시장 이벤트 수신")+" · "+ageMinutes+"분 전 · AI 실행 증거 아님";
   }else{
    card.dataset.marketFeedState="not-mapped";
    feed.textContent="기존 7명 시장 이벤트 API의 대응 역할 없음";
