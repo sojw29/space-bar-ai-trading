@@ -187,6 +187,8 @@ async function smoke(){
  await stalled.waitForTimeout(1800);
  assert.equal(await stalled.locator("#ai-meeting-rows p").count(),7,
   "late response must not erase the successful retry");
+ assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"validated",
+  "late failure must not downgrade the successful retry");
  assert.match(await stalled.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
  await stalled.close();
 
