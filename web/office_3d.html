@@ -2008,6 +2008,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function expire(){
   if(validUntil!==null&&(Date.now()<validSince||Date.now()>validUntil)){
    rows.replaceChildren();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
+   status.title="만료된 회의 기록은 표시되지 않습니다. 다시 확인 버튼으로 새 기록을 조회하세요.";
+   status.setAttribute?.("data-connection","disconnected");
    validSince=null;validUntil=null;
   }
  }
