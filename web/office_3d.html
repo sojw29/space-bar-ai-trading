@@ -2005,7 +2005,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const connectionLabel=document.getElementById("ai-meeting-connection-label");
  function setConnection(state,reason){
   status.setAttribute?.("data-connection",state);status.setAttribute?.("data-reason",reason);
-  connectionLabel.textContent=state==="validated"?"연결 상태: 검증된 완료 기록":
+  if(connectionLabel)connectionLabel.textContent=state==="validated"?"연결 상태: 검증된 완료 기록":
    state==="loading"?"연결 상태: 조회 중":
    reason==="expired"?"연결 상태: 기록 만료 · 새로고침 필요":
    "연결 상태: 요청 실패 · 다시 확인 가능";
