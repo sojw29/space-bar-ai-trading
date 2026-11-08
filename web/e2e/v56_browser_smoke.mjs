@@ -154,8 +154,13 @@ async function smoke(){
   // Verify a real user click reloads the completed meeting rather than
   // retaining old rows; a failed second reload must fail closed.
   await meetingPage.locator("#ai-meeting-refresh").click();
-  await meetingPage.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7);
+  await meetingPage.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7&&
+   document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="validated");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/,
+   "refresh after expiry must restore the verified offline provenance label");
+  assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/,
+   "refresh after expiry must restore the complete meeting conclusion");
   assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
