@@ -135,6 +135,7 @@ async function smoke(){
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록/);
   assert.equal(transcriptCalls,1);
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
@@ -151,6 +152,7 @@ async function smoke(){
    "expired transcript must not remain validated");
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/만료 또는 시계 변경/);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"expired");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/기록 만료/);
   // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
   // retaining old rows; a failed second reload must fail closed.
@@ -163,6 +165,7 @@ async function smoke(){
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/,
    "refresh after expiry must restore the complete meeting conclusion");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"none");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록/);
   assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
@@ -178,6 +181,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
   assert.equal(transcriptCalls,3);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
