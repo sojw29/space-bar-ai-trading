@@ -138,6 +138,19 @@ async function smoke(){
   assert.equal(transcriptCalls,1);
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
+  // A validated historical transcript must fail closed if its source expires.
+  await meetingPage.evaluate(()=>{
+   const now=Date.now;
+   Date.now=()=>now()+9*60*60*1000;
+   document.dispatchEvent(new Event("visibilitychange"));
+   Date.now=now;
+  });
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
+   "expired transcript must be cleared");
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+   "expired transcript must not remain validated");
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/만료 또는 시계 변경/);
+  // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
   // retaining old rows; a failed second reload must fail closed.
   await meetingPage.locator("#ai-meeting-refresh").click();
@@ -158,18 +171,6 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
   assert.equal(transcriptCalls,3);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
-  // A validated historical transcript must fail closed if its source expires.
-  await meetingPage.evaluate(()=>{
-   const now=Date.now;
-   Date.now=()=>now()+9*60*60*1000;
-   document.dispatchEvent(new Event("visibilitychange"));
-   Date.now=now;
-  });
-  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
-   "expired transcript must be cleared");
-  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
-   "expired transcript must not remain validated");
-  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/만료 또는 시계 변경/);
   await meetingPage.close();
  }
  // A slow transcript must time out and allow the user to retry safely.
