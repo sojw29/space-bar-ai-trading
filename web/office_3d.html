@@ -1992,7 +1992,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <details id="ai-meeting-panel" style="position:relative;z-index:1006;margin:18px auto;max-width:1000px;background:#101c30;color:#e8f4ff;padding:16px;border:1px solid #426482;border-radius:12px">
 <summary>별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
 <button id="ai-meeting-refresh" type="button" style="padding:6px 12px;margin:8px 0;background:#25435e;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">회의 기록 다시 확인</button>
-<p id="ai-meeting-status" role="status">회의 결과 연결 확인 중…</p>
+<p id="ai-meeting-status" role="status" aria-live="polite">회의 결과 연결 확인 중…</p>
 <p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
 <div id="ai-meeting-rows"></div>
 </details>
