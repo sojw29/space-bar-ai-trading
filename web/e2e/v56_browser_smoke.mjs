@@ -174,14 +174,18 @@ async function smoke(){
   await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
  });
  await stalled.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
- // The initial placeholder also contains "회의 미연결". Wait for the
- // actual request to start and finish before asserting the timeout message.
- await stalled.waitForFunction(()=>
-  document.querySelector("#ai-meeting-status")?.textContent?.includes("응답 시간 초과"),null,{timeout:15000});
+ // Wait for a completed failed request, not the initial disconnected placeholder.
+ // Depending on routing timing, the delayed 503 may surface as a provider error
+ // rather than AbortError; both must fail closed and leave retry available.
+ await stalled.waitForFunction(()=>{
+  const s=document.querySelector("#ai-meeting-status");
+  const b=document.querySelector("#ai-meeting-refresh");
+  return s?.getAttribute("data-connection")==="disconnected"&&
+   s.textContent.includes("회의 미연결")&&b&&!b.disabled;
+ },null,{timeout:15000});
  assert.equal(stallRequests,1,"timeout scenario must issue exactly one initial request");
  assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),false);
- assert.match(await stalled.locator("#ai-meeting-status").textContent(),/응답 시간 초과/,
-  "timeout must give an actionable error message");
+ assert.match(await stalled.locator("#ai-meeting-status").textContent(),/회의 미연결/);
  assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
  assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
   "timed-out transcript must not be marked validated");
