@@ -218,6 +218,8 @@ async function smoke(){
  await unavailableMeeting.waitForFunction(()=>
   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
  assert.equal(await unavailableMeeting.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await unavailableMeeting.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+  "provider outage must remain disconnected");
  await unavailableMeeting.close();
 
  const textMeeting=await context.newPage();
