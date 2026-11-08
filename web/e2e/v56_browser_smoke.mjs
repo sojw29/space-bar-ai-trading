@@ -186,6 +186,8 @@ async function smoke(){
  await stalled.locator("#ai-meeting-refresh").click();
  await stalled.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7,null,{timeout:12000});
  assert.equal(stallRequests,2);
+ assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"validated",
+  "successful retry must restore validated connection");
  await stalled.waitForTimeout(1800);
  assert.equal(await stalled.locator("#ai-meeting-rows p").count(),7,
   "late response must not erase the successful retry");
