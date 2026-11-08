@@ -158,6 +158,17 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
   assert.equal(transcriptCalls,3);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
+  // A validated historical transcript must fail closed if its source expires.
+  await meetingPage.evaluate(()=>{
+   const now=Date.now;
+   Date.now=()=>now()+9*60*60*1000;
+   document.dispatchEvent(new Event("visibilitychange"));
+   Date.now=now;
+  });
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
+   "expired transcript must be cleared");
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+   "expired transcript must not remain validated");
   await meetingPage.close();
  }
  // A slow transcript must time out and allow the user to retry safely.
