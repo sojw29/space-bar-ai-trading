@@ -180,6 +180,8 @@ async function smoke(){
   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),null,{timeout:12000});
  assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),false);
  assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+  "timed-out transcript must not be marked validated");
  await stalled.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
  await stalled.locator("#ai-meeting-refresh").click();
  await stalled.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7,null,{timeout:12000});
