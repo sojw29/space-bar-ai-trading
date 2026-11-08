@@ -237,6 +237,22 @@ async function smoke(){
   "unsafe transcript must not be marked validated");
  await badMeeting.close();
 
+ // HTTP 200 with a non-completed meeting must never be displayed as a result.
+ const incompleteMeeting=await context.newPage();
+ await serveThree(incompleteMeeting);
+ await incompleteMeeting.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+  status:200,contentType:"application/json",
+  body:JSON.stringify({...transcript,status:"RUNNING"})
+ }));
+ await incompleteMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ await incompleteMeeting.waitForFunction(()=>
+  document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+ assert.equal(await incompleteMeeting.locator("#ai-meeting-rows p").count(),0,
+  "non-completed meeting must not render transcript rows");
+ assert.equal(await incompleteMeeting.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
+ assert.equal(await incompleteMeeting.locator("#ai-meeting-refresh").isDisabled(),false);
+ await incompleteMeeting.close();
+
  // A provider outage and hostile text must never be mistaken for a live
  // meeting or executed as HTML in the actual Chromium document.
  const unavailableMeeting=await context.newPage();
