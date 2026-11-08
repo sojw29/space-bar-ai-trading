@@ -206,6 +206,8 @@ async function smoke(){
  await badMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
  await badMeeting.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),{timeout:12000});
  assert.equal(await badMeeting.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await badMeeting.locator("#ai-meeting-refresh").isDisabled(),false,
+  "invalid transcript must allow manual retry");
  assert.equal(await badMeeting.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
   "unsafe transcript must not be marked validated");
  await badMeeting.close();
