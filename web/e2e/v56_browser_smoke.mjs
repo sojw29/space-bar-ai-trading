@@ -179,6 +179,8 @@ async function smoke(){
  await stalled.waitForFunction(()=>
   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),null,{timeout:12000});
  assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),false);
+ assert.match(await stalled.locator("#ai-meeting-status").textContent(),/응답 시간 초과/,
+  "timeout must give an actionable error message");
  assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
  assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
   "timed-out transcript must not be marked validated");
