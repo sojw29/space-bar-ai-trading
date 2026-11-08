@@ -292,7 +292,9 @@ async function smoke(){
   ["future-finish",d=>({...d,generated_at_utc:new Date(Date.now()+600000).toISOString()})],
   ["future-source",d=>({...d,source_generated_at_utc:new Date(Date.now()+600000).toISOString()})],
   ["reversed-timeline",d=>({...d,started_at_utc:new Date(Date.now()+120000).toISOString()})],
-  ["contradictory-verdict",d=>({...d,final_verdict:"REVIEW_NEEDED"})]
+  ["contradictory-verdict",d=>({...d,final_verdict:"REVIEW_NEEDED"})],
+  ["missing-completed-status",d=>({...d,status:undefined})],
+  ["false-completed-status",d=>({...d,status:false})]
  ]){
   const invalid=await context.newPage();
   await serveThree(invalid);
