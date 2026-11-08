@@ -150,6 +150,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
    "expired transcript must not remain validated");
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/만료 또는 시계 변경/);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"expired");
   // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
   // retaining old rows; a failed second reload must fail closed.
@@ -161,6 +162,7 @@ async function smoke(){
    "refresh after expiry must restore the verified offline provenance label");
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/,
    "refresh after expiry must restore the complete meeting conclusion");
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"none");
   assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
@@ -175,6 +177,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
   assert.equal(transcriptCalls,3);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
