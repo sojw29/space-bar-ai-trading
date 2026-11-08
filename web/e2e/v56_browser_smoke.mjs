@@ -169,6 +169,7 @@ async function smoke(){
    "expired transcript must be cleared");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
    "expired transcript must not remain validated");
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/만료 또는 시계 변경/);
   await meetingPage.close();
  }
  // A slow transcript must time out and allow the user to retry safely.
