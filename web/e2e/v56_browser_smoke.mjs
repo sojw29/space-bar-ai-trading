@@ -183,6 +183,14 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
+  // Non-Error rejections must show a useful fallback, not "undefined".
+  await meetingPage.evaluate(()=>{window.fetch=()=>Promise.reject(null)});
+  await meetingPage.locator("#ai-meeting-refresh").click();
+  await meetingPage.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록을 가져오지 못했습니다"));
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.doesNotMatch(await meetingPage.locator("#ai-meeting-status").textContent(),/undefined|null/);
+  assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
  // A slow transcript must time out and allow the user to retry safely.
