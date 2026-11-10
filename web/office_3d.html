@@ -2026,7 +2026,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
  async function loadMeeting(){
   if(loading)return;
-  loading=true;refreshButton.disabled=true;
+  loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
   const controller=typeof AbortController==="function"?new AbortController():null;
   const timeout=controller&&typeof setTimeout==="function"?setTimeout(()=>controller.abort(),5000):null;
   rows.replaceChildren();validSince=null;validUntil=null;
@@ -2072,7 +2072,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
  }catch(error){rows.replaceChildren();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
- finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;}
+ finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;rows.setAttribute?.("aria-busy","false");}
  }
  refreshButton.addEventListener("click",loadMeeting);
  await loadMeeting();
