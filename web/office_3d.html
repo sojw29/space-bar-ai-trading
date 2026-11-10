@@ -2041,7 +2041,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(d.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||d.status!=="COMPLETED"||
      !["LIVE_PROVIDER","OFFLINE_FIXTURE"].includes(d.execution_mode)||
      d.model_inference_performed!==live||d.ai_agents_running!==false||
-     d.research_only!==true||d.orders_enabled!==false||d.trade_authorization!=="DENIED"||
+     d.research_only!==true||d.orders_enabled!==false||
+     (d.live_trading_approved!==undefined&&d.live_trading_approved!==false)||d.trade_authorization!=="DENIED"||
      d.call_count!==7||!verdicts.includes(d.final_verdict)||
      typeof d.model!=="string"||!d.model.trim()||d.model.length>120||
      typeof d.request_sha256!=="string"||!/^[a-f0-9]{64}$/.test(d.request_sha256)||
