@@ -49,8 +49,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    if(mode==='timer')timers[0]();else events.visibilitychange();
    assert.equal(elements['ai-meeting-rows'].children.length,0,mode);
    assert.match(elements['ai-meeting-status'].textContent,/만료/);
+   if(mode!=='timer')await new Promise(setImmediate);
   }
-  assert.equal(requests,1,'No implicit provider or refresh calls');
+  assert.equal(requests,mode==='foreground'||mode==='rollback'?2:1,'Only foreground resume may trigger a read-only refresh');
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
