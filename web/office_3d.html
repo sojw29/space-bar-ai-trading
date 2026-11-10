@@ -2076,6 +2076,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  refreshButton.addEventListener("click",loadMeeting);
  await loadMeeting();
+ // Poll completed research snapshots only; this never starts inference or orders.
+ // Skip hidden tabs and overlapping requests; failed/stale responses fail closed.
+ setInterval(()=>{if(!document.hidden&&!loading)loadMeeting();},60000);
 })();
 </script>
 </body></html>
