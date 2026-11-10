@@ -2023,7 +2023,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
  }
  setInterval(expire,60000);
- document.addEventListener("visibilitychange",()=>{if(!document.hidden){expire();loadMeeting();}});
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden){expire();if(validUntil!==null&&!loading)loadMeeting();}});
  async function loadMeeting(){
   if(loading)return;
   loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
