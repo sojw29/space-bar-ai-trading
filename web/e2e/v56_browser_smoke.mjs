@@ -67,6 +67,10 @@ async function smoke(){
         "--disable-gpu-sandbox","--no-sandbox"]
  });
  const context=await browser.newContext({viewport:{width:1360,height:900},deviceScaleFactor:1.5});
+ // Capture all page crashes, including short-lived pages not covered by local handlers.
+ context.on("page",p=>{
+  p.on("crash",()=>errors.push("Chromium page crashed: "+p.url()));
+ });
  async function serveThree(page){
   await page.route(moduleURL,route=>route.fulfill({
    status:200,contentType:"text/javascript; charset=utf-8",body:bundledThree
