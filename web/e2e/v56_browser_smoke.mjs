@@ -20,6 +20,7 @@ const base="http://127.0.0.1:"+port;
 const moduleURL="https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 const runDir=await mkdtemp(path.join(tmpdir(),"spacebar-v56-"));
 let server=null,browser=null;
+let apiStderr="";
 const errors=[];
 async function waitForApi(){
  const deadline=Date.now()+12000;
@@ -47,8 +48,7 @@ async function smoke(){
  server=spawn(process.env.PYTHON||"python3",
   ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath],
   {cwd:repo,stdio:["ignore","pipe","pipe"]});
- let stderr="";
- server.stderr.on("data",data=>{stderr+=String(data);});
+ server.stderr.on("data",data=>{apiStderr=(apiStderr+String(data)).slice(-8192);});
  await waitForApi();
  const market=await (await fetch(base+"/api/v1/market")).json();
  assert.equal(market.paper_only,true);
@@ -390,7 +390,7 @@ try{
  await smoke();
 }catch(error){
  console.error("V56 browser smoke failed",error);
- if(server)console.error("API stderr (truncated):",String(server.stderr||"").slice(-2000));
+ if(server)console.error("API stderr (last 8192 chars):",apiStderr||"(no stderr captured)");
  process.exitCode=1;
 }finally{
  if(browser)await browser.close();
