@@ -256,6 +256,20 @@ async function smoke(){
   "unsafe transcript must not be marked validated");
  await badMeeting.close();
 
+ // Even a completed transcript must not display if approval flags contradict
+ // the read-only research contract, regardless of the HTTP 200 response.
+ const unsafeApproval=await context.newPage();
+ await serveThree(unsafeApproval);
+ await unsafeApproval.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+  status:200,contentType:"application/json",
+  body:JSON.stringify({...transcript,live_trading_approved:true})
+ }));
+ await unsafeApproval.goto(base+"/office3d",{waitUntil:"commit",timeout:45000});
+ await unsafeApproval.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="disconnected"&&document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+ assert.equal(await unsafeApproval.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await unsafeApproval.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+ await unsafeApproval.close();
+
  // HTTP 200 with a non-completed meeting must never be displayed as a result.
  const incompleteMeeting=await context.newPage();
  await serveThree(incompleteMeeting);
