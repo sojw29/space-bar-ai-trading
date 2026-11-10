@@ -259,7 +259,8 @@ async function smoke(){
   status:200,contentType:"application/json",
   body:JSON.stringify({...transcript,status:"RUNNING"})
  }));
- await incompleteMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ // CI may delay DOMContentLoaded under load; wait for the application result below.
+ await incompleteMeeting.goto(base+"/office3d",{waitUntil:"commit",timeout:45000});
  await incompleteMeeting.waitForFunction(()=>
   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
  assert.equal(await incompleteMeeting.locator("#ai-meeting-rows p").count(),0,
