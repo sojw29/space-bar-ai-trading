@@ -136,6 +136,7 @@ async function smoke(){
   await meetingPage.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
   await meetingPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
+  assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
@@ -185,6 +186,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
   assert.equal(transcriptCalls,3);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   // Non-Error rejections must show a useful fallback, not "undefined".
