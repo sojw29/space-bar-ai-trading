@@ -44,9 +44,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
    now=Date.parse(data.source_generated_at_utc)+8*3600000;
-   timers.forEach(fn=>fn());assert.equal(elements['ai-meeting-rows'].children.length,7,'inclusive expiry');
+   timers[0]();assert.equal(elements['ai-meeting-rows'].children.length,7,'inclusive expiry');
    now=mode==='rollback'?Date.parse(data.source_generated_at_utc)-1:now+1;
-   if(mode==='timer')timers.forEach(fn=>fn());else events.visibilitychange();
+   if(mode==='timer')timers[0]();else events.visibilitychange();
    assert.equal(elements['ai-meeting-rows'].children.length,0,mode);
    assert.match(elements['ai-meeting-status'].textContent,/만료/);
   }
