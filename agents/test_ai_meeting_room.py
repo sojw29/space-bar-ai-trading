@@ -51,7 +51,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(elements['ai-meeting-status'].textContent,/만료/);
    if(mode!=='timer')await new Promise(setImmediate);
   }
-  assert.equal(requests,mode==='foreground'||mode==='rollback'?2:1,'Only foreground resume may trigger a read-only refresh');
+  assert.equal(requests,1,'Expired or clock-rolled-back snapshots must not auto-refresh on foreground');
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
