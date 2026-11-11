@@ -2089,8 +2089,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const final=d.transcript[6];
    const reviewCount=d.transcript.filter(t=>t.verdict==="REVIEW_NEEDED").length;
    const missingCount=d.transcript.filter(t=>t.verdict==="INSUFFICIENT_DATA").length;
+   const changed=d.transcript.slice(0,3).filter((t,i)=>t.verdict!==d.transcript[i+3].verdict).map(t=>t.agent);
+   const blockers=[];
+   if(missingCount)blockers.push("자료 부족 발언 "+missingCount+"건");
+   if(d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED"))blockers.push("GUARDIAN 추가 검토 요청");
    decision.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+
     final.summary+"\n검토 필요 발언: "+reviewCount+"건 · 자료 부족 발언: "+missingCount+"건"+
+    "\n판단 변경: "+(changed.length?changed.join(", "):"없음")+
+    "\n최종 상태 결정에 적용된 보수적 조건: "+(blockers.length?blockers.join(" / "):"없음")+
     (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
    decision.hidden=false;
   }
