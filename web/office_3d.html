@@ -1708,6 +1708,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    output.push(p);
   }
   rows.replaceChildren(...output);
+  if(decision){
+   const final=d.transcript[6];
+   const reviewCount=d.transcript.filter(t=>t.verdict==="REVIEW_NEEDED").length;
+   const missingCount=d.transcript.filter(t=>t.verdict==="INSUFFICIENT_DATA").length;
+   decision.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+
+    final.summary+"\n검토 필요 발언: "+reviewCount+"건 · 자료 부족 발언: "+missingCount+"건"+
+    (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
+   decision.hidden=false;
+  }
   status.textContent=marketLabel+" · 과거 캔들 지표 해석 · "+new Date(d.source_generated_at_utc).toLocaleString();
   validSince=captured;validUntil=captured+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="해석 미연결: "+error.message;}
@@ -1995,6 +2004,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <p id="ai-meeting-status" role="status" aria-live="polite">회의 결과 연결 확인 중…</p>
 <p id="ai-meeting-connection-label" style="font-size:12px;color:#a9c5d9">연결 상태: 확인 중</p>
 <p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
+<p id="ai-meeting-decision" role="note" style="white-space:pre-wrap;padding:10px;border-left:3px solid #547c9a;background:#152941" hidden></p>
 <div id="ai-meeting-rows"></div>
 </details>
 <script>
@@ -2003,6 +2013,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const status=document.getElementById("ai-meeting-status"),rows=document.getElementById("ai-meeting-rows");
  const refreshButton=document.getElementById("ai-meeting-refresh");
  const connectionLabel=document.getElementById("ai-meeting-connection-label");
+ const decision=document.getElementById("ai-meeting-decision");
+ function clearDecision(){if(decision){decision.textContent="";decision.hidden=true;}}
  function setConnection(state,reason,provenance=""){
   status.setAttribute?.("data-connection",state);status.setAttribute?.("data-reason",reason);
   if(connectionLabel)connectionLabel.textContent=state==="validated"?"연결 상태: 검증된 완료 기록 · "+(provenance==="LIVE_PROVIDER"?"모델 API 실행 완료": "오프라인 테스트 · AI 실행 아님"):
@@ -2016,7 +2028,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let validSince=null,validUntil=null;
  function expire(){
   if(validUntil!==null&&(Date.now()<validSince||Date.now()>validUntil)){
-   rows.replaceChildren();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
+   rows.replaceChildren();clearDecision();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
    status.title="만료된 회의 기록은 표시되지 않습니다. 다시 확인 버튼으로 새 기록을 조회하세요.";
    setConnection("disconnected","expired");
    validSince=null;validUntil=null;
@@ -2029,7 +2041,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
   const controller=typeof AbortController==="function"?new AbortController():null;
   const timeout=controller&&typeof setTimeout==="function"?setTimeout(()=>controller.abort(),5000):null;
-  rows.replaceChildren();validSince=null;validUntil=null;
+  rows.replaceChildren();clearDecision();validSince=null;validUntil=null;
   status.textContent="회의 기록 확인 중…";status.title="회의 기록 API 응답을 기다리고 있습니다.";setConnection("loading","none");
  try{
   const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",...(controller?{signal:controller.signal}:{})});
@@ -2071,7 +2083,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
- }catch(error){rows.replaceChildren();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
+ }catch(error){rows.replaceChildren();clearDecision();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
  finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;rows.setAttribute?.("aria-busy","false");}
  }
  refreshButton.addEventListener("click",loadMeeting);
