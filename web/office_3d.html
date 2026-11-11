@@ -1708,15 +1708,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    output.push(p);
   }
   rows.replaceChildren(...output);
-  if(decision){
-   const final=d.transcript[6];
-   const reviewCount=d.transcript.filter(t=>t.verdict==="REVIEW_NEEDED").length;
-   const missingCount=d.transcript.filter(t=>t.verdict==="INSUFFICIENT_DATA").length;
-   decision.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+
-    final.summary+"\n검토 필요 발언: "+reviewCount+"건 · 자료 부족 발언: "+missingCount+"건"+
-    (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
-   decision.hidden=false;
-  }
   status.textContent=marketLabel+" · 과거 캔들 지표 해석 · "+new Date(d.source_generated_at_utc).toLocaleString();
   validSince=captured;validUntil=captured+8*3600000;expire();
  }catch(error){rows.replaceChildren();status.textContent="해석 미연결: "+error.message;}
