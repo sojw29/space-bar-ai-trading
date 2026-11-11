@@ -1,0 +1,22 @@
+{
+  "name": "SPACE BAR iPhone Research Room",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "forwardPorts": [
+    8765
+  ],
+  "portsAttributes": {
+    "8765": {
+      "label": "SPACE BAR read-only 3D room",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "python -m compileall -q agents/dashboard_api_v28.py agents/agent_events_v27.py",
+  "postStartCommand": "bash .devcontainer/start-room.sh",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "README.md"
+      ]
+    }
+  }
+}
