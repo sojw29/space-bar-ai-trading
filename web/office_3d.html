@@ -2063,13 +2063,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const item=document.createElement("p");
    item.textContent=t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
     t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):"");
-   item.style.whiteSpace="pre-wrap";output.push(item);
+   item.style.whiteSpace="pre-wrap";
+   item.setAttribute?.("data-phase",phase);
+   item.setAttribute?.("data-agent",t.agent);
+   item.style.padding="9px 12px";
+   item.style.margin="7px 0";
+   item.style.borderLeft=i===6?"3px solid #80c8a8":i<3?"3px solid #547c9a":"3px solid #b2a0d8";
+   item.style.background="#152941";
+   output.push(item);
   }
   const insufficient=d.transcript.some(t=>t.verdict==="INSUFFICIENT_DATA");
   const guardian=d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED");
   const expected=insufficient?"INSUFFICIENT_DATA":guardian?"REVIEW_NEEDED":d.transcript[6].verdict;
   if(d.final_verdict!==expected)throw Error("최종 검토 상태 불일치");
   rows.replaceChildren(...output);
+  if(decision){
+   const final=d.transcript[6];
+   const reviewCount=d.transcript.filter(t=>t.verdict==="REVIEW_NEEDED").length;
+   const missingCount=d.transcript.filter(t=>t.verdict==="INSUFFICIENT_DATA").length;
+   decision.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+
+    final.summary+"\n검토 필요 발언: "+reviewCount+"건 · 자료 부족 발언: "+missingCount+"건"+
+    (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
+   decision.hidden=false;
+  }
   status.textContent=(live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님")+
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
