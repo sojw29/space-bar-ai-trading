@@ -2064,6 +2064,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    item.textContent=t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
     t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):"");
    item.style.whiteSpace="pre-wrap";
+   if(i>=3&&i<6){
+    const initial=d.transcript[i-3];
+    if(initial&&initial.agent===t.agent){
+     item.textContent+="\n초기 판단: "+labels[initial.verdict]+
+      " → 상호 검토: "+labels[t.verdict]+
+      (initial.verdict===t.verdict?" (판단 유지)":" (판단 변경)");
+    }
+   }
    item.setAttribute?.("data-phase",phase);
    item.setAttribute?.("data-agent",t.agent);
    item.style.padding="9px 12px";
