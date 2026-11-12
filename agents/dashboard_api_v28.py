@@ -126,7 +126,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                                      "orders_enabled": False})
             elif path == "/api/v1/replay/audit":
                 try:
-                    from agents.offline_replay_audit_v151 import audit_history
+                    from offline_replay_audit_v151 import audit_history
                     import re
                     match = re.fullmatch(r"(BTC|ETH|SOL)_(1|5|15)m[.]csv", history_path.name)
                     if match is None:
