@@ -1576,8 +1576,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        " | "+m.trend_label;
     output.push(line);
    }
-   clearLinked();
-  rows.replaceChildren(...output);
+   rows.replaceChildren(...output);
    status.textContent=marketLabel+" · 수집: "+new Date(generated).toLocaleString()+" · 연구용";
    validSince=since;validUntil=expires;expire();
   }catch(error){rows.replaceChildren();status.textContent="지표 미연결: "+error.message;}
@@ -2121,6 +2120,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const guardian=d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED");
   const expected=insufficient?"INSUFFICIENT_DATA":guardian?"REVIEW_NEEDED":d.transcript[6].verdict;
   if(d.final_verdict!==expected)throw Error("최종 검토 상태 불일치");
+  clearLinked();
   rows.replaceChildren(...output);
   if(decision){
    const final=d.transcript[6];
