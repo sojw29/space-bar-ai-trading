@@ -290,6 +290,16 @@ setImmediate(()=>{
   assert.equal(elements['ai-meeting-linked'].hidden,true);
   assert.equal(elements['ai-meeting-decision'].hidden,true);
   assert.match(elements['ai-meeting-status'].textContent,/만료/);
+  // Restore the clock to a valid instant, then exercise the actual refresh button.
+  now=Date.now();
+  assert.equal(typeof elements['ai-meeting-refresh'].events.click,'function');
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(timeline.children.length,5);
+  assert.equal(timeline.hidden,false);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,false);
+  assert.match(elements['ai-meeting-status'].textContent,/오프라인 테스트 기록/);
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
