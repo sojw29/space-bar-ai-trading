@@ -2125,6 +2125,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(d.final_verdict!==expected)throw Error("최종 검토 상태 불일치");
   if(timeline){
    const lines=[];
+   const selectable=[];
+   const markSelected=(element)=>{
+    for(const node of selectable){
+     const active=node===element;
+     node.setAttribute?.("aria-pressed",active?"true":"false");
+     node.style.background=active?"#284762":"#152941";
+     node.style.outline=active?"2px solid #80c8e8":"none";
+    }
+   };
    const heading=document.createElement("p");
    heading.textContent="회의 판단 타임라인 · 분석 → 상호 검토 → 결론";
    heading.style.fontWeight="bold";
@@ -2141,10 +2150,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     line.style.padding="6px 9px";
     line.style.borderLeft=initial.verdict===review.verdict?"3px solid #547c9a":"3px solid #c8a86c";
     line.tabIndex=0;
+    line.style.cursor="pointer";
+    line.style.background="#152941";
+    line.setAttribute?.("aria-pressed","false");
     line.setAttribute?.("role","button");
     line.setAttribute?.("aria-label",initial.agent+" 초기 분석 및 상호 검토 상세 보기");
     const showDetails=()=>{
      if(!linked)return;
+     markSelected(line);
      linked.textContent=initial.agent+" 판단 비교\\n"+
       "["+initialId+"] 초기 분석 · "+labels[initial.verdict]+"\\n"+initial.summary+
       (initial.concerns.length?"\\n우려: "+initial.concerns.join(" / "):"")+
@@ -2155,6 +2168,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     };
     line.addEventListener?.("click",showDetails);
     line.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showDetails();}});
+    selectable.push(line);
     lines.push(line);
    }
    const conclusion=document.createElement("p");
@@ -2162,10 +2176,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    conclusion.style.padding="7px 9px";
    conclusion.style.borderLeft="3px solid #80c8a8";
    conclusion.tabIndex=0;
+   conclusion.style.cursor="pointer";
+   conclusion.style.background="#152941";
+   conclusion.setAttribute?.("aria-pressed","false");
    conclusion.setAttribute?.("role","button");
    conclusion.setAttribute?.("aria-label","COMMANDER 최종 결론 상세 보기");
    const showConclusion=()=>{
     if(!linked)return;
+    markSelected(conclusion);
     const final=d.transcript[6];
     linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\\n"+final.summary+
      (final.concerns.length?"\\n최종 우려: "+final.concerns.join(" / "):"");
@@ -2173,6 +2191,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    };
    conclusion.addEventListener?.("click",showConclusion);
    conclusion.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showConclusion();}});
+   selectable.push(conclusion);
    lines.push(conclusion);
    timeline.replaceChildren(...lines);
    timeline.hidden=false;
