@@ -250,7 +250,8 @@ setImmediate(()=>{
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.match(elements['ai-meeting-status'].textContent,/실제 AI 실행 아님/);
   assert.ok(elements['ai-meeting-rows'].children.every(x=>typeof x.textContent==='string'));
- }catch(e){console.error(e);process.exitCode=1}
+  process.exit(0);
+ }catch(e){console.error(e);process.exit(1)}
 });
 """
         result = subprocess.run([shutil.which("node"), "-e", harness],
