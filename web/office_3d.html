@@ -1997,6 +1997,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
 <p id="ai-meeting-decision" role="note" style="white-space:pre-wrap;padding:10px;border-left:3px solid #547c9a;background:#152941" hidden></p>
 <p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
+<div id="ai-meeting-timeline" aria-label="회의 판단 타임라인" hidden></div>
 <div id="ai-meeting-rows"></div>
 </details>
 <script>
@@ -2007,6 +2008,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const connectionLabel=document.getElementById("ai-meeting-connection-label");
  const decision=document.getElementById("ai-meeting-decision");
  const linked=document.getElementById("ai-meeting-linked");
+ const timeline=document.getElementById("ai-meeting-timeline");
+ function clearTimeline(){if(timeline){timeline.replaceChildren();timeline.hidden=true;}}
  function clearLinked(){if(linked){linked.textContent="";linked.hidden=true;}}
  function clearDecision(){if(decision){decision.textContent="";decision.hidden=true;}}
  function setConnection(state,reason,provenance=""){
@@ -2022,7 +2025,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let validSince=null,validUntil=null;
  function expire(){
   if(validUntil!==null&&(Date.now()<validSince||Date.now()>validUntil)){
-   rows.replaceChildren();clearDecision();clearLinked();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
+   rows.replaceChildren();clearDecision();clearLinked();clearTimeline();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
    status.title="만료된 회의 기록은 표시되지 않습니다. 다시 확인 버튼으로 새 기록을 조회하세요.";
    setConnection("disconnected","expired");
    validSince=null;validUntil=null;
@@ -2035,7 +2038,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
   const controller=typeof AbortController==="function"?new AbortController():null;
   const timeout=controller&&typeof setTimeout==="function"?setTimeout(()=>controller.abort(),5000):null;
-  rows.replaceChildren();clearDecision();clearLinked();validSince=null;validUntil=null;
+  rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
   status.textContent="회의 기록 확인 중…";status.title="회의 기록 API 응답을 기다리고 있습니다.";setConnection("loading","none");
  try{
   const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",...(controller?{signal:controller.signal}:{})});
@@ -2120,6 +2123,33 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const guardian=d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED");
   const expected=insufficient?"INSUFFICIENT_DATA":guardian?"REVIEW_NEEDED":d.transcript[6].verdict;
   if(d.final_verdict!==expected)throw Error("최종 검토 상태 불일치");
+  if(timeline){
+   const lines=[];
+   const heading=document.createElement("p");
+   heading.textContent="회의 판단 타임라인 · 분석 → 상호 검토 → 결론";
+   heading.style.fontWeight="bold";
+   lines.push(heading);
+   for(let i=0;i<3;i++){
+    const initial=d.transcript[i],review=d.transcript[i+3];
+    const initialId=refs?refs[i].id:"M"+String(i+1).padStart(2,"0");
+    const reviewId=refs?refs[i+3].id:"M"+String(i+4).padStart(2,"0");
+    const line=document.createElement("p");
+    line.textContent=initial.agent+" ["+initialId+"] "+labels[initial.verdict]+
+     " → ["+reviewId+"] "+labels[review.verdict]+
+     (initial.verdict===review.verdict?" · 유지":" · 변경");
+    line.style.whiteSpace="pre-wrap";
+    line.style.padding="6px 9px";
+    line.style.borderLeft=initial.verdict===review.verdict?"3px solid #547c9a":"3px solid #c8a86c";
+    lines.push(line);
+   }
+   const conclusion=document.createElement("p");
+   conclusion.textContent="COMMANDER ["+(refs?refs[6].id:"M07")+"] 최종 상태: "+labels[d.final_verdict];
+   conclusion.style.padding="7px 9px";
+   conclusion.style.borderLeft="3px solid #80c8a8";
+   lines.push(conclusion);
+   timeline.replaceChildren(...lines);
+   timeline.hidden=false;
+  }
   clearLinked();
   rows.replaceChildren(...output);
   if(decision){
@@ -2159,7 +2189,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
- }catch(error){rows.replaceChildren();clearDecision();clearLinked();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
+ }catch(error){rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
  finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;rows.setAttribute?.("aria-busy","false");}
  }
  refreshButton.addEventListener("click",loadMeeting);
