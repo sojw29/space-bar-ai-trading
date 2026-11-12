@@ -250,7 +250,10 @@ for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
 let requested=null;
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
  createElement:makeElement};
-vm.runInNewContext(data.script,{document,Date,setInterval:()=>{},
+const callbacks=[];
+let now=Date.now();
+class Clock extends Date{static now(){return now}}
+vm.runInNewContext(data.script,{document,Date:Clock,setInterval:fn=>callbacks.push(fn),
  fetch:async url=>{requested=url;return {ok:true,text:async()=>JSON.stringify(data.payload)}}});
 setImmediate(()=>{
  try{
@@ -278,6 +281,15 @@ setImmediate(()=>{
   commander.events.click();
   assert.equal(commander.attrs['aria-pressed'],'true');
   assert.match(elements['ai-meeting-linked'].textContent,/COMMANDER 최종 결론/);
+  assert.ok(callbacks.length>=2,'expiry and polling callbacks must exist');
+  now=Date.parse(data.payload.source_generated_at_utc)+8*3600000+1000;
+  callbacks[0]();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(timeline.children.length,0);
+  assert.equal(timeline.hidden,true);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.match(elements['ai-meeting-status'].textContent,/만료/);
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
