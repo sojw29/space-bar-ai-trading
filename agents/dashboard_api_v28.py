@@ -198,6 +198,23 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         statement = validate_statement({k: item.get(k) for k in
                                                         ("summary", "concerns", "verdict")})
                         entries.append({"agent": agent, "phase": phase, **statement})
+                    refs = raw.get("statement_refs")
+                    if refs is not None:
+                        if not isinstance(refs, list) or len(refs) != 7:
+                            raise ValueError("invalid_statement_refs")
+                        for i, (entry, (agent, phase)) in enumerate(zip(refs, expected)):
+                            expected_refs = ["M%02d" % (i-2)] if 3 <= i <= 5 else []
+                            if (not isinstance(entry, dict) or
+                                    entry.get("id") != "M%02d" % (i+1) or
+                                    entry.get("agent") != agent or
+                                    entry.get("phase") != phase or
+                                    entry.get("references") != expected_refs):
+                                raise ValueError("invalid_statement_ref")
+                    else:
+                        refs = [{"id": "M%02d" % (i+1), "agent": agent,
+                                 "phase": phase,
+                                 "references": ["M%02d" % (i-2)] if 3 <= i <= 5 else []}
+                                for i, (agent, phase) in enumerate(expected)]
                     from datetime import datetime, timezone
                     source_time = raw.get("source_generated_at_utc")
                     started_time = raw.get("started_at_utc")
@@ -242,7 +259,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                                      "model": raw["model"],
                                      "request_sha256": raw["request_sha256"],
                                      "final_verdict": raw.get("final_verdict"),
-                                     "transcript": entries, "research_only": True,
+                                     "transcript": entries, "statement_refs": refs, "research_only": True,
                                      "orders_enabled": False, "live_trading_approved": False})
                 except (OSError, ValueError, TypeError, KeyError):
                     self.reply(503, {"error": "meeting_transcript_unavailable_or_invalid",
