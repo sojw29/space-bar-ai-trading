@@ -236,12 +236,20 @@ class LocalApiTests(unittest.TestCase):
         harness = r"""
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+const makeElement=()=>({
+ children:[],disabled:false,hidden:false,style:{},attrs:{},events:{},
+ addEventListener(name,fn){this.events[name]=fn},
+ setAttribute(name,value){this.attrs[name]=value},
+ replaceChildren(...items){this.children=items},
+ set innerHTML(_){throw Error('unsafe HTML')}
+});
 const elements={};
-for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh'])
- elements[id]={children:[],disabled:false,addEventListener(){},replaceChildren(...items){this.children=items}};
+for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
+ 'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
+ elements[id]=makeElement();
 let requested=null;
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
- createElement:()=>({style:{},set innerHTML(_){throw Error('unsafe HTML')}})};
+ createElement:makeElement};
 vm.runInNewContext(data.script,{document,Date,setInterval:()=>{},
  fetch:async url=>{requested=url;return {ok:true,text:async()=>JSON.stringify(data.payload)}}});
 setImmediate(()=>{
@@ -250,6 +258,26 @@ setImmediate(()=>{
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.match(elements['ai-meeting-status'].textContent,/실제 AI 실행 아님/);
   assert.ok(elements['ai-meeting-rows'].children.every(x=>typeof x.textContent==='string'));
+  const timeline=elements['ai-meeting-timeline'];
+  assert.equal(timeline.hidden,false);
+  assert.equal(timeline.children.length,5);
+  const atlas=timeline.children[1],quant=timeline.children[2],commander=timeline.children[4];
+  assert.equal(atlas.attrs.role,'button');
+  assert.equal(atlas.attrs['aria-pressed'],'false');
+  atlas.events.click();
+  assert.equal(atlas.attrs['aria-pressed'],'true');
+  assert.equal(quant.attrs['aria-pressed'],'false');
+  assert.equal(elements['ai-meeting-linked'].hidden,false);
+  assert.match(elements['ai-meeting-linked'].textContent,/판단 비교/);
+  assert.match(elements['ai-meeting-linked'].textContent,/재언급이 없다고 해결된 것은 아닙니다/);
+  let prevented=false;
+  quant.events.keydown({key:'Enter',preventDefault(){prevented=true}});
+  assert.equal(prevented,true);
+  assert.equal(quant.attrs['aria-pressed'],'true');
+  assert.equal(atlas.attrs['aria-pressed'],'false');
+  commander.events.click();
+  assert.equal(commander.attrs['aria-pressed'],'true');
+  assert.match(elements['ai-meeting-linked'].textContent,/COMMANDER 최종 결론/);
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
