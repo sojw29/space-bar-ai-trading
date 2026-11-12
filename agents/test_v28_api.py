@@ -255,7 +255,7 @@ let now=Date.now();
 class Clock extends Date{static now(){return now}}
 vm.runInNewContext(data.script,{document,Date:Clock,setInterval:fn=>callbacks.push(fn),
  fetch:async url=>{requested=url;return {ok:true,text:async()=>JSON.stringify(data.payload)}}});
-setImmediate(()=>{
+setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
   assert.equal(elements['ai-meeting-rows'].children.length,7);
