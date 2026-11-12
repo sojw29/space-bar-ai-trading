@@ -2054,6 +2054,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(![source,started,finished].every(Number.isFinite)||source>started||started>finished||
      finished>Date.now()||Date.now()-source>8*3600000)throw Error("회의 원본 오래됨 또는 시각 오류");
   const output=[],order=["ATLAS","QUANT","GUARDIAN","ATLAS","QUANT","GUARDIAN","COMMANDER"];
+  const refs=d.statement_refs;
+  if(refs!==undefined){
+   if(!Array.isArray(refs)||refs.length!==7)throw Error("회의 참조 목록 검증 실패");
+   for(let i=0;i<7;i++){
+    const phase=i<3?"ANALYSIS":i<6?"PEER_REVIEW":"CONCLUSION";
+    const expectedRefs=i>=3&&i<6?["M"+String(i-2).padStart(2,"0")]:[];
+    const entry=refs[i];
+    if(!entry||typeof entry!=="object"||Array.isArray(entry)||
+       Object.keys(entry).sort().join(",")!=="agent,id,phase,references"||
+       entry.id!=="M"+String(i+1).padStart(2,"0")||
+       entry.agent!==order[i]||entry.phase!==phase||
+       !Array.isArray(entry.references)||entry.references.length!==expectedRefs.length||
+       entry.references.some((id,j)=>id!==expectedRefs[j]))throw Error("회의 발언 참조 검증 실패");
+   }
+  }
   for(let i=0;i<7;i++){
    const t=d.transcript[i],phase=i<3?"ANALYSIS":i<6?"PEER_REVIEW":"CONCLUSION";
    if(!t||t.agent!==order[i]||t.phase!==phase||!verdicts.includes(t.verdict)||
@@ -2061,13 +2076,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       !Array.isArray(t.concerns)||t.concerns.length>8||
       t.concerns.some(c=>typeof c!=="string"||!c.trim()||c.length>400))throw Error("회의 발언 검증 실패");
    const item=document.createElement("p");
-   const statementId="M"+String(i+1).padStart(2,"0");
+   const statementId=refs?refs[i].id:"M"+String(i+1).padStart(2,"0");
    item.textContent="["+statementId+"] "+t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
     t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):"");
    item.style.whiteSpace="pre-wrap";
    if(i>=3&&i<6){
     const initial=d.transcript[i-3];
-    const initialId="M"+String(i-2).padStart(2,"0");
+    const initialId=refs?refs[i].references[0]:"M"+String(i-2).padStart(2,"0");
     if(initial&&initial.agent===t.agent){
      item.textContent+="\n참조 ["+initialId+"] 초기 판단: "+labels[initial.verdict]+
       " → 상호 검토: "+labels[t.verdict]+
