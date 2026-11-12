@@ -2140,12 +2140,39 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     line.style.whiteSpace="pre-wrap";
     line.style.padding="6px 9px";
     line.style.borderLeft=initial.verdict===review.verdict?"3px solid #547c9a":"3px solid #c8a86c";
+    line.tabIndex=0;
+    line.setAttribute?.("role","button");
+    line.setAttribute?.("aria-label",initial.agent+" 초기 분석 및 상호 검토 상세 보기");
+    const showDetails=()=>{
+     if(!linked)return;
+     linked.textContent=initial.agent+" 판단 비교\\n"+
+      "["+initialId+"] 초기 분석 · "+labels[initial.verdict]+"\\n"+initial.summary+
+      (initial.concerns.length?"\\n우려: "+initial.concerns.join(" / "):"")+
+      "\\n["+reviewId+"] 상호 검토 · "+labels[review.verdict]+"\\n"+review.summary+
+      (review.concerns.length?"\\n우려: "+review.concerns.join(" / "):"")+
+      "\\n판단 상태: "+(initial.verdict===review.verdict?"유지":"변경");
+     linked.hidden=false;
+    };
+    line.addEventListener?.("click",showDetails);
+    line.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showDetails();}});
     lines.push(line);
    }
    const conclusion=document.createElement("p");
    conclusion.textContent="COMMANDER ["+(refs?refs[6].id:"M07")+"] 최종 상태: "+labels[d.final_verdict];
    conclusion.style.padding="7px 9px";
    conclusion.style.borderLeft="3px solid #80c8a8";
+   conclusion.tabIndex=0;
+   conclusion.setAttribute?.("role","button");
+   conclusion.setAttribute?.("aria-label","COMMANDER 최종 결론 상세 보기");
+   const showConclusion=()=>{
+    if(!linked)return;
+    const final=d.transcript[6];
+    linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\\n"+final.summary+
+     (final.concerns.length?"\\n최종 우려: "+final.concerns.join(" / "):"");
+    linked.hidden=false;
+   };
+   conclusion.addEventListener?.("click",showConclusion);
+   conclusion.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showConclusion();}});
    lines.push(conclusion);
    timeline.replaceChildren(...lines);
    timeline.hidden=false;
