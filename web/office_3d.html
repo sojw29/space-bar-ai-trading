@@ -2158,12 +2158,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const showDetails=()=>{
      if(!linked)return;
      markSelected(line);
+     const initialSet=new Set(initial.concerns);
+     const reviewSet=new Set(review.concerns);
+     const retained=review.concerns.filter(value=>initialSet.has(value));
+     const added=review.concerns.filter(value=>!initialSet.has(value));
+     const notRepeated=initial.concerns.filter(value=>!reviewSet.has(value));
+     const format=(values)=>values.length?values.join(" / "):"없음";
      linked.textContent=initial.agent+" 판단 비교\\n"+
       "["+initialId+"] 초기 분석 · "+labels[initial.verdict]+"\\n"+initial.summary+
-      (initial.concerns.length?"\\n우려: "+initial.concerns.join(" / "):"")+
+      (initial.concerns.length?"\\n초기 우려: "+initial.concerns.join(" / "):"")+
       "\\n["+reviewId+"] 상호 검토 · "+labels[review.verdict]+"\\n"+review.summary+
-      (review.concerns.length?"\\n우려: "+review.concerns.join(" / "):"")+
-      "\\n판단 상태: "+(initial.verdict===review.verdict?"유지":"변경");
+      (review.concerns.length?"\\n검토 우려: "+review.concerns.join(" / "):"")+
+      "\\n판단 상태: "+(initial.verdict===review.verdict?"유지":"변경")+
+      "\\n양쪽에서 언급: "+format(retained)+
+      "\\n검토 단계에서 새로 언급: "+format(added)+
+      "\\n검토 단계에서 재언급 없음: "+format(notRepeated)+
+      "\\n※ 문구가 정확히 일치하는 경우만 동일 우려로 분류합니다. 재언급이 없다고 해결된 것은 아닙니다.";
      linked.hidden=false;
     };
     line.addEventListener?.("click",showDetails);
