@@ -2061,19 +2061,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       !Array.isArray(t.concerns)||t.concerns.length>8||
       t.concerns.some(c=>typeof c!=="string"||!c.trim()||c.length>400))throw Error("회의 발언 검증 실패");
    const item=document.createElement("p");
-   item.textContent=t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
+   const statementId="M"+String(i+1).padStart(2,"0");
+   item.textContent="["+statementId+"] "+t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
     t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):"");
    item.style.whiteSpace="pre-wrap";
    if(i>=3&&i<6){
     const initial=d.transcript[i-3];
+    const initialId="M"+String(i-2).padStart(2,"0");
     if(initial&&initial.agent===t.agent){
-     item.textContent+="\n초기 판단: "+labels[initial.verdict]+
+     item.textContent+="\n참조 ["+initialId+"] 초기 판단: "+labels[initial.verdict]+
       " → 상호 검토: "+labels[t.verdict]+
       (initial.verdict===t.verdict?" (판단 유지)":" (판단 변경)");
     }
    }
    item.setAttribute?.("data-phase",phase);
    item.setAttribute?.("data-agent",t.agent);
+   item.setAttribute?.("data-statement-id",statementId);
    item.style.padding="9px 12px";
    item.style.margin="7px 0";
    item.style.borderLeft=i===6?"3px solid #80c8a8":i<3?"3px solid #547c9a":"3px solid #b2a0d8";
@@ -2094,11 +2097,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const evidence=[];
    if(missingCount){
     blockers.push("자료 부족 발언 "+missingCount+"건");
-    d.transcript.forEach((t,i)=>{if(t.verdict==="INSUFFICIENT_DATA")evidence.push((i+1)+"단계 "+t.agent+" · 자료 부족");});
+    d.transcript.forEach((t,i)=>{if(t.verdict==="INSUFFICIENT_DATA")evidence.push("[M"+String(i+1).padStart(2,"0")+"] "+t.agent+" · 자료 부족");});
    }
    if(d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")){
     blockers.push("GUARDIAN 추가 검토 요청");
-    d.transcript.forEach((t,i)=>{if(t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")evidence.push((i+1)+"단계 GUARDIAN · 추가 검토");});
+    d.transcript.forEach((t,i)=>{if(t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")evidence.push("[M"+String(i+1).padStart(2,"0")+"] GUARDIAN · 추가 검토");});
    }
    decision.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+
     final.summary+"\n검토 필요 발언: "+reviewCount+"건 · 자료 부족 발언: "+missingCount+"건"+
