@@ -253,13 +253,22 @@ const window={addEventListener:(name,fn)=>{windowEvents[name]=fn}};
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
  createElement:makeElement};
 const callbacks=[],timeouts=new Map();
-let timeoutId=0,timeoutPhase=null;
+let timeoutId=0,timeoutPhase=null,bodyFault=null;
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
 vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,
  setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
  clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
  fetch:async (url,options)=>{requested=url;requestCount++;
+ if(bodyFault){
+  const fault=bodyFault;
+  return {ok:true,text:async()=>{
+   if(fault==='read-error')throw new TypeError('body stream interrupted');
+   if(fault==='truncated')return '{"version":';
+   if(fault==='oversized')return ' '.repeat(65537);
+   return 'null';
+  }};
+ }
  if(timeoutPhase){
   assert.ok(options.signal instanceof AbortSignal);
   const pending=()=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>{
@@ -602,6 +611,28 @@ setImmediate(async()=>{
   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   assert.equal(elements['ai-meeting-refresh'].disabled,false);
   assert.equal(timeouts.size,0);
+  // HTTP 200 does not guarantee a complete, bounded, valid JSON body.
+  for(const fault of ['read-error','truncated','oversized','null']){
+   timeline.children[1].events.click();
+   bodyFault=fault;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,fault);
+   assert.equal(timeline.children.length,0,fault);
+   assert.equal(elements['ai-meeting-linked'].hidden,true,fault);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,fault);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',fault);
+   assert.equal(elements['ai-meeting-refresh'].disabled,false,fault);
+   assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false',fault);
+   assert.equal(timeouts.size,0,fault);
+   if(fault==='oversized')assert.match(elements['ai-meeting-status'].textContent,/크기 초과/);
+   if(fault==='truncated')assert.match(elements['ai-meeting-status'].textContent,/JSON 형식 오류/);
+   if(fault==='null')assert.match(elements['ai-meeting-status'].textContent,/객체 형식 오류/);
+   bodyFault=null;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,fault);
+   assert.equal(elements['ai-meeting-linked'].hidden,true,fault);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',fault);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
