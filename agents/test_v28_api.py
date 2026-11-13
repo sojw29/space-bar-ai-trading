@@ -386,6 +386,23 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  // Future and expired source timestamps must never be shown as current.
+  const originalSource=data.payload.source_generated_at_utc;
+  for(const invalidSource of [
+   new Date(Date.now()+60*60*1000).toISOString(),
+   new Date(Date.now()-9*60*60*1000).toISOString()
+  ]){
+   data.payload.source_generated_at_utc=invalidSource;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,'invalid source timestamp');
+   assert.equal(timeline.children.length,0,'invalid source timestamp');
+   assert.equal(elements['ai-meeting-decision'].hidden,true,'invalid source timestamp');
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+   data.payload.source_generated_at_utc=originalSource;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
