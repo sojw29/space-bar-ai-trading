@@ -2046,7 +2046,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",...(controller?{signal:controller.signal}:{})});
   if(!response.ok)throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
   const raw=await response.text();if(raw.length>65536)throw Error("회의 기록 크기 초과");
-  const d=JSON.parse(raw),live=d.execution_mode==="LIVE_PROVIDER";
+  let d;
+  try{d=JSON.parse(raw);}catch(_){throw Error("회의 기록 JSON 형식 오류 · 다시 확인해 주세요");}
+  if(d===null||typeof d!=="object"||Array.isArray(d))throw Error("회의 기록 객체 형식 오류 · 다시 확인해 주세요");
+  const live=d.execution_mode==="LIVE_PROVIDER";
   const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
   if(marketLabel===null)throw Error("데이터 출처 검증 실패");
   if(d.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||d.status!=="COMPLETED"||
