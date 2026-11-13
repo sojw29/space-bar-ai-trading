@@ -248,14 +248,15 @@ for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
 let requested=null,failRequest=false,requestCount=0,holdResponse=null;
-const documentEvents={};
+const documentEvents={},windowEvents={};
+const window={addEventListener:(name,fn)=>{windowEvents[name]=fn}};
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
  createElement:makeElement};
 const callbacks=[],timeouts=new Map();
 let timeoutId=0,timeoutPhase=null;
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
-vm.runInNewContext(data.script,{document,Date:Clock,AbortController,
+vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,
  setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
  clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
  fetch:async (url,options)=>{requested=url;requestCount++;
@@ -570,6 +571,32 @@ setImmediate(async()=>{
   assert.equal(requestCount,beforeReturn+1,'visibility and polling must share request guard');
   const resume=holdResponse;holdResponse=null;
   resume({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await flush();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
+  // BFCache restoration uses pageshow, which need not emit visibilitychange.
+  assert.equal(typeof windowEvents.pageshow,'function');
+  const beforeRestore=requestCount;
+  windowEvents.pageshow({persisted:false});
+  document.hidden=true;windowEvents.pageshow({persisted:true});
+  await flush();
+  assert.equal(requestCount,beforeRestore,'initial or hidden pageshow must not fetch');
+  document.hidden=false;
+  now=Date.parse(data.payload.source_generated_at_utc)+9*3600000;
+  holdResponse=true;
+  windowEvents.pageshow({persisted:true});
+  documentEvents.visibilitychange();callbacks[1]();
+  assert.equal(requestCount,beforeRestore+1,'restoration shares the request guard');
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  const restore=holdResponse;holdResponse=null;
+  restore({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await flush();
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  now=Date.now();
+  windowEvents.pageshow({persisted:true});
   await flush();
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
