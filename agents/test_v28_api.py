@@ -247,14 +247,14 @@ const elements={};
 for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
-let requested=null;
+let requested=null,failRequest=false;
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
  createElement:makeElement};
 const callbacks=[];
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
 vm.runInNewContext(data.script,{document,Date:Clock,setInterval:fn=>callbacks.push(fn),
- fetch:async url=>{requested=url;return {ok:true,text:async()=>JSON.stringify(data.payload)}}});
+ fetch:async url=>{requested=url;return {ok:!failRequest,text:async()=>JSON.stringify(data.payload)}}});
 setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
@@ -300,6 +300,17 @@ setImmediate(async()=>{
   assert.equal(elements['ai-meeting-linked'].hidden,true);
   assert.equal(elements['ai-meeting-decision'].hidden,false);
   assert.match(elements['ai-meeting-status'].textContent,/오프라인 테스트 기록/);
+  // A subsequent HTTP error must fail closed, not preserve a stale decision.
+  failRequest=true;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(timeline.children.length,0);
+  assert.equal(timeline.hidden,true);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
