@@ -250,11 +250,23 @@ for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
 let requested=null,failRequest=false,requestCount=0,holdResponse=null;
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
  createElement:makeElement};
-const callbacks=[];
+const callbacks=[],timeouts=new Map();
+let timeoutId=0,timeoutPhase=null;
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
-vm.runInNewContext(data.script,{document,Date:Clock,setInterval:fn=>callbacks.push(fn),
- fetch:async url=>{requested=url;requestCount++;if(holdResponse)return await new Promise(resolve=>{holdResponse=resolve});return {ok:!failRequest,text:async()=>JSON.stringify(data.payload)}}});
+vm.runInNewContext(data.script,{document,Date:Clock,AbortController,
+ setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
+ clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
+ fetch:async (url,options)=>{requested=url;requestCount++;
+ if(timeoutPhase){
+  assert.ok(options.signal instanceof AbortSignal);
+  const pending=()=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>{
+   const error=new Error('aborted');error.name='AbortError';reject(error);
+  },{once:true}));
+  if(timeoutPhase==='headers')return await pending();
+  return {ok:true,text:pending};
+ }
+if(holdResponse)return await new Promise(resolve=>{holdResponse=resolve});return {ok:!failRequest,text:async()=>JSON.stringify(data.payload)}}});
 setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
@@ -501,6 +513,32 @@ setImmediate(async()=>{
   assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(timeouts.size,0,'successful requests release deadline timers');
+  // Both stalled headers and a stalled response body must abort and allow retry.
+  for(const phase of ['headers','body']){
+   timeline.children[1].events.click();
+   timeoutPhase=phase;
+   const stalled=elements['ai-meeting-refresh'].events.click();
+   await Promise.resolve();
+   assert.equal(timeouts.size,1,phase);
+   assert.equal(elements['ai-meeting-refresh'].disabled,true,phase);
+   for(const fire of [...timeouts.values()])fire();
+   await stalled;
+   assert.equal(timeouts.size,0,phase);
+   assert.equal(elements['ai-meeting-rows'].children.length,0,phase);
+   assert.equal(timeline.children.length,0,phase);
+   assert.equal(elements['ai-meeting-linked'].hidden,true,phase);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,phase);
+   assert.match(elements['ai-meeting-status'].textContent,/응답 시간 초과/,phase);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',phase);
+   assert.equal(elements['ai-meeting-refresh'].disabled,false,phase);
+   assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false',phase);
+   timeoutPhase=null;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,phase);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',phase);
+   assert.equal(timeouts.size,0,phase);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
