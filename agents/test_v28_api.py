@@ -441,6 +441,27 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  // Transcript statement content must satisfy strict bounds and types.
+  for(const [field,invalid] of [
+   ['summary',''],
+   ['summary','x'.repeat(1601)],
+   ['concerns',['']],
+   ['concerns',['x'.repeat(401)]],
+   ['concerns',Array(9).fill('concern')],
+   ['concerns','not-an-array']
+  ]){
+   const original=data.payload.transcript[0][field];
+   data.payload.transcript[0][field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload.transcript[0][field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
