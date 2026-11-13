@@ -365,6 +365,27 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  // Corrupted transcript order and peer-review references must fail closed.
+  for(const field of ['transcript','statement_refs']){
+   const original=data.payload[field];
+   assert.ok(Array.isArray(original)&&original.length===7,field);
+   const tampered=original.map(item=>({...item}));
+   if(field==='transcript'){
+    [tampered[0],tampered[1]]=[tampered[1],tampered[0]];
+   }else{
+    tampered[3]={...tampered[3],references:['M02']};
+   }
+   data.payload[field]=tampered;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
