@@ -462,6 +462,26 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  // Invalid verdicts or contradictory final verdicts must never be shown.
+  for(const [target,invalid] of [
+   ['statement','UNRECOGNIZED_VERDICT'],
+   ['final','UNRECOGNIZED_VERDICT']
+  ]){
+   const isFinal=target==='final';
+   const original=isFinal?data.payload.final_verdict:data.payload.transcript[0].verdict;
+   if(isFinal)data.payload.final_verdict=invalid;
+   else data.payload.transcript[0].verdict=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,target);
+   assert.equal(timeline.children.length,0,target);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,target);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',target);
+   if(isFinal)data.payload.final_verdict=original;
+   else data.payload.transcript[0].verdict=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,target);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',target);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
