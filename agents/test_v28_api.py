@@ -421,6 +421,26 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  // Reject malformed model identity and request digest metadata.
+  for(const [field,invalid] of [
+   ['model',''],
+   ['model','x'.repeat(121)],
+   ['request_sha256',''],
+   ['request_sha256','g'.repeat(64)],
+   ['request_sha256','a'.repeat(63)]
+  ]){
+   const original=data.payload[field];
+   data.payload[field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
