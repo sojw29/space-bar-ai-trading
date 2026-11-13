@@ -146,18 +146,24 @@ async function smoke(){
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
   // A validated historical transcript must fail closed if its source expires.
   await meetingPage.evaluate(()=>{
-   const now=Date.now;
-   Date.now=()=>now()+9*60*60*1000;
+   window.__meetingRealNow=Date.now;
+   Date.now=()=>window.__meetingRealNow()+9*60*60*1000;
    document.dispatchEvent(new Event("visibilitychange"));
-   Date.now=now;
+
   });
+  // Await the foreground refresh with the clock still advanced.
+  await meetingPage.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="disconnected"&&
+   document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
    "expired transcript must be cleared");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
    "expired transcript must not remain validated");
-  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/만료 또는 시계 변경/);
-  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"expired");
-  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/기록 만료/);
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/회의 원본 오래됨 또는 시각 오류/);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
+  assert.equal(transcriptCalls,2,"foreground expiry must fetch exactly once");
+  await meetingPage.evaluate(()=>{Date.now=window.__meetingRealNow;delete window.__meetingRealNow});
   // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
   // retaining old rows; a failed second reload must fail closed.
@@ -171,7 +177,7 @@ async function smoke(){
    "refresh after expiry must restore the complete meeting conclusion");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"none");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
-  assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
+  assert.equal(transcriptCalls,3,"manual refresh must fetch exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
    transcriptCalls++;
@@ -184,7 +190,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
-  assert.equal(transcriptCalls,3);
+  assert.equal(transcriptCalls,4);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
