@@ -351,6 +351,20 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  // Offline fixtures must never masquerade as actual model inference.
+  for(const [field,invalid] of [['model_inference_performed',true],['ai_agents_running',true],['execution_mode','LIVE_PROVIDER']]){
+   const original=data.payload[field];
+   data.payload[field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
