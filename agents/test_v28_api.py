@@ -322,6 +322,21 @@ setImmediate(async()=>{
   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   assert.equal(elements['ai-meeting-refresh'].disabled,false);
   assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  // A malformed but HTTP-successful response must also fail closed.
+  data.payload.call_count=6;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(timeline.children.length,0);
+  assert.equal(timeline.hidden,true);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  data.payload.call_count=7;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
