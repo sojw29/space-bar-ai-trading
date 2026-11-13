@@ -247,14 +247,14 @@ const elements={};
 for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
-let requested=null,failRequest=false;
+let requested=null,failRequest=false,requestCount=0,holdResponse=null;
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
  createElement:makeElement};
 const callbacks=[];
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
 vm.runInNewContext(data.script,{document,Date:Clock,setInterval:fn=>callbacks.push(fn),
- fetch:async url=>{requested=url;return {ok:!failRequest,text:async()=>JSON.stringify(data.payload)}}});
+ fetch:async url=>{requested=url;requestCount++;if(holdResponse)return await new Promise(resolve=>{holdResponse=resolve});return {ok:!failRequest,text:async()=>JSON.stringify(data.payload)}}});
 setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
@@ -482,6 +482,25 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,target);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',target);
   }
+  // Rapid refresh and background polling must not create concurrent fetches.
+  holdResponse=true;
+  const beforeOverlap=requestCount;
+  const firstRefresh=elements['ai-meeting-refresh'].events.click();
+  assert.equal(requestCount,beforeOverlap+1);
+  assert.equal(elements['ai-meeting-refresh'].disabled,true);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'true');
+  await elements['ai-meeting-refresh'].events.click();
+  await callbacks[1]();
+  assert.equal(requestCount,beforeOverlap+1,'overlapping refresh must not fetch twice');
+  assert.equal(elements['ai-meeting-rows'].children.length,0,'stale meeting cleared while loading');
+  const release=holdResponse;
+  holdResponse=null;
+  release({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await firstRefresh;
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
