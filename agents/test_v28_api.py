@@ -403,6 +403,24 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   }
+  // Chronologically impossible meeting timestamps must fail closed.
+  for(const [field,invalid] of [
+   ['started_at_utc',new Date(Date.parse(data.payload.source_generated_at_utc)-1000).toISOString()],
+   ['generated_at_utc',new Date(Date.parse(data.payload.started_at_utc)-1000).toISOString()],
+   ['generated_at_utc',new Date(Date.now()+60*60*1000).toISOString()]
+  ]){
+   const original=data.payload[field];
+   data.payload[field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
