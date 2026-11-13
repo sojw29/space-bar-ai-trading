@@ -248,7 +248,8 @@ for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
 let requested=null,failRequest=false,requestCount=0,holdResponse=null;
-const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
+const documentEvents={};
+const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
  createElement:makeElement};
 const callbacks=[],timeouts=new Map();
 let timeoutId=0,timeoutPhase=null;
@@ -539,6 +540,41 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',phase);
    assert.equal(timeouts.size,0,phase);
   }
+  // Returning from a hidden mobile tab must retry even after expiry or failure.
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  document.hidden=true;
+  const beforeHidden=requestCount;
+  callbacks[1]();
+  documentEvents.visibilitychange();
+  await flush();
+  assert.equal(requestCount,beforeHidden,'hidden tabs must not poll');
+  now=Date.parse(data.payload.source_generated_at_utc)+8*3600000+1000;
+  document.hidden=false;
+  documentEvents.visibilitychange();
+  await flush();
+  assert.equal(requestCount,beforeHidden+1,'returning after expiry must refresh');
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  now=Date.now();
+  failRequest=true;
+  document.hidden=true;documentEvents.visibilitychange();
+  document.hidden=false;documentEvents.visibilitychange();
+  await flush();
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  failRequest=false;
+  holdResponse=true;
+  document.hidden=true;documentEvents.visibilitychange();
+  const beforeReturn=requestCount;
+  document.hidden=false;documentEvents.visibilitychange();
+  documentEvents.visibilitychange();callbacks[1]();
+  assert.equal(requestCount,beforeReturn+1,'visibility and polling must share request guard');
+  const resume=holdResponse;holdResponse=null;
+  resume({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await flush();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
