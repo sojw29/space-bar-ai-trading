@@ -2045,7 +2045,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
   status.textContent="회의 기록 확인 중…";status.title="회의 기록 API 응답을 기다리고 있습니다.";setConnection("loading","none");
  try{
-  const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",...(controller?{signal:controller.signal}:{})});
+  let response;
+  try{response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",...(controller?{signal:controller.signal}:{})});}
+  catch(error){if(error&&error.name==="AbortError")throw error;throw Error("회의 기록 서버에 연결하지 못했습니다 · 네트워크 연결을 확인해 주세요");}
   if(!response.ok){
    if(response.status===404)throw Error("회의 기록 API 경로를 찾을 수 없습니다 · 서버 버전을 확인해 주세요");
    if(response.status===401||response.status===403)throw Error("회의 기록 접근이 거부되었습니다 · 서버 접근 설정을 확인해 주세요");
@@ -2053,7 +2055,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(response.status===502||response.status===504)throw Error("회의 기록 서버 응답 지연 · 잠시 후 다시 확인해 주세요");
    throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
   }
-  const raw=await response.text();if(raw.length>65536)throw Error("회의 기록 크기 초과");
+  let raw;
+  try{raw=await response.text();}
+  catch(error){if(error&&error.name==="AbortError")throw error;throw Error("회의 기록 수신이 중단되었습니다 · 다시 확인해 주세요");}
+  if(raw.length>65536)throw Error("회의 기록 크기 초과");
   let d;
   try{d=JSON.parse(raw);}catch(_){throw Error("회의 기록 JSON 형식 오류 · 다시 확인해 주세요");}
   if(d===null||typeof d!=="object"||Array.isArray(d))throw Error("회의 기록 객체 형식 오류 · 다시 확인해 주세요");
