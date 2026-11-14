@@ -454,3 +454,12 @@ state advances only after a successful atomic write. This is a per-run recorder,
 not a cross-process lock or restart recovery mechanism; use separate status files
 for concurrent runs and optional server execution-ID pinning when needed. The
 stateless snapshot reader still validates each saved record independently.
+
+
+Every parsed workflow CLI invocation now includes its generated `execution_id`
+in the final JSON result, on readiness and failure paths as well as completion.
+With --status-file, this is the same ID written to its progress snapshots; use it
+for the dashboard's --meeting-execution-id option. Without --status-file it still
+identifies the command invocation but does not imply any progress file exists.
+Repeated invocations receive different IDs. The field identifies an execution,
+not proof of model inference, successful publication or verified API access.
