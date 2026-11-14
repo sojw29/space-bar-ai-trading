@@ -245,7 +245,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut',
+for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -285,6 +285,8 @@ if(holdResponse)return await new Promise(resolve=>{holdResponse=resolve});return
 setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
+  assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'validated');
+  assert.match(elements['ai-meeting-shortcut-status'].textContent,/오프라인 테스트/);
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
   assert.equal(elements['ai-meeting-panel'].open,true);
@@ -526,6 +528,7 @@ setImmediate(async()=>{
   assert.equal(requestCount,beforeOverlap+1);
   assert.equal(elements['ai-meeting-refresh'].disabled,true);
   assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'true');
+  assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'loading');
   await elements['ai-meeting-refresh'].events.click();
   await callbacks[1]();
   assert.equal(requestCount,beforeOverlap+1,'overlapping refresh must not fetch twice');
@@ -656,6 +659,8 @@ setImmediate(async()=>{
    await elements['ai-meeting-refresh'].events.click();
    assert.match(elements['ai-meeting-status'].textContent,message,String(code));
    assert.equal(elements['ai-meeting-rows'].children.length,0,String(code));
+   assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'disconnected');
+   assert.match(elements['ai-meeting-shortcut-status'].textContent,/요청 실패/);
    assert.equal(elements['ai-meeting-decision'].hidden,true,String(code));
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
    assert.equal(elements['ai-meeting-refresh'].disabled,false);
