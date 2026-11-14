@@ -674,6 +674,17 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,String(code));
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   }
+  // Optional transcript identity must be bounded and displayed as plain text.
+  data.payload.workflow_execution_id='a'.repeat(32);
+  await elements['ai-meeting-refresh'].events.click();
+  assert.match(elements['ai-meeting-status'].textContent,/실행 ID: a{32}/);
+  data.payload.workflow_execution_id='INVALID';
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.match(elements['ai-meeting-status'].textContent,/실행 ID 검증 실패/);
+  delete data.payload.workflow_execution_id;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
   // Connectivity recovery refreshes visible tabs and shares all request guards.
   assert.equal(typeof windowEvents.online,'function');
   document.hidden=true;
@@ -804,6 +815,7 @@ setImmediate(async()=>{
                                ('started_at_utc', 4), ('generated_at_utc', 3)]:
             report[field] = (now - timedelta(minutes=minutes)).isoformat()
         report['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
+        report['workflow_execution_id'] = 'a'*32
         target = Path(self.temp.name) / 'custom completed meeting.json'
         publish_report(report, target)
         with socket.socket() as reservation:
@@ -929,7 +941,7 @@ setImmediate(async()=>{
             observed.append(view['snapshot'])
         with patch.dict(os.environ, {'OPENAI_API_KEY': 'offline-workflow-key'}):
             with patch('ai_meeting_workflow.OpenAIProvider', return_value=Fixture()):
-                result = run_workflow(brief, transcript, 'test-model', enable_live=True, on_event=record)
+                result = run_workflow(brief, transcript, 'test-model', enable_live=True, on_event=record, execution_id=execution_id)
         self.assertEqual(result['status'], 'COMPLETED')
         self.assertEqual(result['model_calls_performed'], 0)
         progress = [item for item in observed if item['event'] == 'MODEL_PROGRESS']
@@ -942,6 +954,20 @@ setImmediate(async()=>{
         self.assertEqual(len(completed['transcript']), 7)
         self.assertFalse(completed['model_inference_performed'])
         self.assertFalse(completed['orders_enabled'])
+        self.assertEqual(completed['workflow_execution_id'], execution_id)
+        raw_report = json.loads(transcript.read_text())
+        for invalid_id in ['d'*32, None, 'not-an-id']:
+            altered = dict(raw_report)
+            if invalid_id is None:
+                altered.pop('workflow_execution_id')
+            else:
+                altered['workflow_execution_id'] = invalid_id
+            transcript.write_text(json.dumps(altered))
+            with self.assertRaises(HTTPError) as error:
+                self.get('/api/v1/meeting/transcript')
+            self.assertEqual(error.exception.code, 503)
+        transcript.write_text(json.dumps(raw_report))
+        self.assertEqual(self.get('/api/v1/meeting/transcript')[0], 200)
         # A new run overwriting this same path must not be mistaken for the pinned run.
         event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
                  'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
