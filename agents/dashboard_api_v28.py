@@ -54,9 +54,13 @@ def snapshot(history_path):
     }
 
 
-def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None, *, meeting_transcript_path=None, meeting_status_path=None):
+def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None, *, meeting_transcript_path=None, meeting_status_path=None, meeting_execution_id=None):
     configured_transcript = Path(meeting_transcript_path) if meeting_transcript_path is not None else None
     configured_status = Path(meeting_status_path) if meeting_status_path is not None else None
+    if meeting_execution_id is not None:
+        import re
+        if configured_status is None or not isinstance(meeting_execution_id, str) or not re.fullmatch('[a-f0-9]{32}', meeting_execution_id):
+            raise ValueError('INVALID_WORKFLOW_EXECUTION_SELECTION')
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
@@ -170,7 +174,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                 else:
                     try:
                         from ai_meeting_workflow_status import read_status
-                        value = read_status(configured_status)
+                        value = read_status(configured_status, expected_execution_id=meeting_execution_id)
                         self.reply(200, {"version": "MEETING_WORKFLOW_STATUS_VIEW_1", "snapshot": value,
                                          "read_only": True, "orders_enabled": False,
                                          "process_liveness_verified": False})
@@ -336,10 +340,15 @@ def main():
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY)
     parser.add_argument("--meeting-transcript", type=Path, help="Completed meeting JSON to display; default: reports/ai_meeting/latest.json")
     parser.add_argument("--meeting-status", type=Path, help="Optional local workflow status snapshot to display")
+    parser.add_argument("--meeting-execution-id", help="Optional 32-character lowercase hexadecimal workflow execution ID to pin")
     args = parser.parse_args()
+    if args.meeting_execution_id is not None:
+        import re
+        if args.meeting_status is None or not re.fullmatch('[a-f0-9]{32}', args.meeting_execution_id):
+            parser.error('--meeting-execution-id requires --meeting-status and a 32-character lowercase hexadecimal ID')
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535")
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.history, meeting_transcript_path=args.meeting_transcript, meeting_status_path=args.meeting_status))
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.history, meeting_transcript_path=args.meeting_transcript, meeting_status_path=args.meeting_status, meeting_execution_id=args.meeting_execution_id))
     print("Local paper-only API: http://127.0.0.1:%d/api/v1/agents" % args.port)
     try:
         server.serve_forever()
