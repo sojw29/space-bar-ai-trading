@@ -45,8 +45,13 @@ async function smoke(){
  }
  const csvPath=path.join(runDir,"BTC_5m.csv");
  await writeFile(csvPath,csv,"utf8");
+ const workflowStatusPath=path.join(runDir,"workflow-status.json");
+ const workflowStatus={version:"MEETING_WORKFLOW_STATUS_1",event:"WORKFLOW_FINISHED",
+  workflow_stage:"SETUP",status:"READY_NO_MODEL_CALLS",execution_id:"b".repeat(32),
+  updated_at_utc:new Date().toISOString()};
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
  server=spawn(process.env.PYTHON||"python3",
-  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath],
+  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath,"--meeting-status",workflowStatusPath],
   {cwd:repo,stdio:["ignore","pipe","pipe"]});
  server.stderr.on("data",data=>{apiStderr=(apiStderr+String(data)).slice(-8192);});
  await waitForApi();
@@ -81,6 +86,31 @@ async function smoke(){
  await serveThree(page);
  await page.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
  await page.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
+ // Use the real configured status file and actual API, with no route fixture.
+ const progressStatus=page.locator("#meeting-progress-status");
+ await page.locator('#meeting-progress-status[data-state="READY_NO_MODEL_CALLS"]').waitFor({timeout:12000});
+ assert.match(await progressStatus.textContent(),/모델 호출 없음/);
+ assert.match(await page.locator("#meeting-progress-detail").textContent(),/bbbbbbbb/);
+ workflowStatus.event="STAGE_STARTED";workflowStatus.workflow_stage="INFERENCE";workflowStatus.status="RUNNING";
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ await page.locator("#meeting-progress-refresh").click();
+ await page.locator('#meeting-progress-status[data-state="RUNNING"]').waitFor({timeout:12000});
+ assert.match(await progressStatus.textContent(),/기록된 진행 단계/);
+ assert.match(await progressStatus.textContent(),/모델 응답 수집/);
+ workflowStatus.updated_at_utc=new Date(Date.now()-6*60000).toISOString();
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ await page.locator("#meeting-progress-refresh").click();
+ await page.locator('#meeting-progress-status[data-state="unavailable"]').waitFor({timeout:12000});
+ assert.equal(await page.locator("#meeting-progress-detail").textContent(),"");
+ workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.event="WORKFLOW_FINISHED";
+ workflowStatus.workflow_stage="COMPLETED";workflowStatus.status="COMPLETED";
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ await page.locator("#meeting-progress-refresh").click();
+ await page.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor({timeout:12000});
+ assert.match(await progressStatus.textContent(),/회의 실행 완료 기록/);
+ // Restore the clearly labeled no-call fixture before other pages render.
+ workflowStatus.workflow_stage="SETUP";workflowStatus.status="READY_NO_MODEL_CALLS";
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
  const canvas=page.locator("#stage canvas");
  await canvas.waitFor();
  assert.ok(await canvas.evaluate(el=>el.width>0&&el.height>0));
@@ -133,6 +163,8 @@ async function smoke(){
   });
   await meetingPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await meetingPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
+  await meetingPage.locator('#meeting-progress-status[data-state="READY_NO_MODEL_CALLS"]').waitFor({timeout:12000});
+  assert.match(await meetingPage.locator("#meeting-progress-status").textContent(),/모델 호출 없음/);
   await meetingPage.locator("#ai-meeting-shortcut").click();
   assert.equal(await meetingPage.locator("#ai-meeting-panel").evaluate(el=>el.open),true);
   assert.equal(await meetingPage.locator("#ai-meeting-summary").evaluate(el=>el===document.activeElement),true);
