@@ -32,8 +32,11 @@ def validate_public_report(report, *, bundle=None, now=None):
         raise MeetingError('NAIVE_NOW')
     allowed = (FIELDS, FIELDS | {'market_source'}, FIELDS | {'statement_refs'},
                FIELDS | {'market_source', 'statement_refs'})
-    if not isinstance(report, dict) or set(report) not in allowed:
+    if not isinstance(report, dict) or (set(report) - {'workflow_execution_id'}) not in allowed:
         raise MeetingError('INVALID_REPORT_FIELDS')
+    if 'workflow_execution_id' in report and (not isinstance(report['workflow_execution_id'], str) or
+            not re.fullmatch('[a-f0-9]{32}', report['workflow_execution_id'])):
+        raise MeetingError('INVALID_WORKFLOW_EXECUTION_ID')
     with_market_source(report, {})
     for key, expected in {'version': 'AI_MEETING_1', 'status': 'COMPLETED',
                           'execution_mode': 'LIVE_PROVIDER', 'model_inference_performed': True,
