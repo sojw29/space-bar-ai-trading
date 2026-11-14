@@ -76,9 +76,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('private failure', json.dumps(result))
         self.assertEqual(self.target.read_bytes(), b'previous report')
 
-    def cli(self, *, key='private-fixture-key', events=False):
+    def cli(self, *, key='private-fixture-key', events=False, status_file=None):
         command = [sys.executable, str(Path(__file__).resolve().with_name('ai_meeting_workflow.py')),
                    str(self.brief), str(self.target), '--model', 'test-model', '--json']
+        if status_file is not None:
+            command.extend(['--status-file', str(status_file)])
         if events:
             command.append('--events')
         result = subprocess.run(command, cwd=self.temp.name,
@@ -153,6 +155,29 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(events), 4)
         self.assertEqual(events[-1]['event'], 'WORKFLOW_FINISHED')
         self.assertEqual(events[-1]['status'], payload['status'])
+
+    def test_cli_persists_check_only_status_without_touching_transcript(self):
+        from ai_meeting_workflow_status import read_status
+        path = Path(self.temp.name)/'workflow status.json'
+        result, payload = self.cli(status_file=path)
+        self.assertEqual(result.returncode, 0)
+        snapshot = read_status(path)
+        self.assertEqual(snapshot['status'], payload['status'])
+        self.assertEqual(snapshot['workflow_stage'], 'SETUP')
+        self.assertEqual(snapshot['event'], 'WORKFLOW_FINISHED')
+        self.assertNotIn('private-fixture-key', path.read_text())
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def test_cli_rejects_status_alias_and_handles_unwritable_status(self):
+        original = self.brief.read_bytes()
+        result, payload = self.cli(status_file=self.brief)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(payload['error_code'], 'STATUS_RECORDING_FAILED')
+        self.assertEqual(self.brief.read_bytes(), original)
+        result, payload = self.cli(status_file=Path(self.temp.name))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(payload['workflow_stage'], 'STATUS_RECORDING')
+        self.assertEqual(self.target.read_bytes(), b'previous report')
 
 
 if __name__ == '__main__':
