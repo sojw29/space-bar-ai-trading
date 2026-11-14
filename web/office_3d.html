@@ -87,6 +87,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <section class="panel"><h2>선택 에이전트 · 연구 정보</h2>
 <div class="metric"><small>AGENT</small><strong id="selected-name">COMMANDER</strong></div>
 <button id="ai-meeting-shortcut" type="button" aria-controls="ai-meeting-panel">모델 회의 기록 보기</button>
+<p id="ai-meeting-shortcut-status" role="status" aria-live="polite">모델 회의 기록 연결 확인 중…</p>
 <p class="notice">저장된 모델 회의 기록으로 이동합니다. 회의를 새로 실행하지 않습니다.</p>
 <div class="metric"><small>ROLE</small><strong id="selected-role">합의 판단</strong></div>
 <div class="metric"><small>결정 (주문 신호 아님)</small><strong id="selected-decision" class="WAIT">WAIT</strong></div>
@@ -2028,6 +2029,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    state==="loading"?"연결 상태: 조회 중":
    reason==="expired"?"연결 상태: 기록 만료 · 새로고침 필요":
    "연결 상태: 요청 실패 · 다시 확인 가능";
+  const shortcutStatus=document.getElementById("ai-meeting-shortcut-status");
+  if(shortcutStatus){
+   shortcutStatus.textContent=connectionLabel?connectionLabel.textContent:status.textContent;
+   shortcutStatus.setAttribute?.("data-connection",state);
+   shortcutStatus.setAttribute?.("data-reason",reason);
+  }
  }
  let loading=false;
  const verdicts=["OBSERVATION_ONLY","REVIEW_NEEDED","INSUFFICIENT_DATA"];
