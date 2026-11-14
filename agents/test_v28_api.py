@@ -809,9 +809,15 @@ setImmediate(async()=>{
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]
+        from ai_meeting_workflow_status import write_status
+        status_file = Path(self.temp.name)/'selected workflow status.json'
+        event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
+                 'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
+        write_status(event, status_file, 'a'*32)
         command = [sys.executable, str(Path(v28.__file__).resolve()),
                    '--port', str(port), '--history', str(self.history),
-                   '--meeting-transcript', str(target)]
+                   '--meeting-transcript', str(target), '--meeting-status', str(status_file),
+                   '--meeting-execution-id', 'a'*32]
         process = subprocess.Popen(command, cwd=self.temp.name,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         base = 'http://127.0.0.1:' + str(port)
@@ -835,6 +841,12 @@ setImmediate(async()=>{
             self.assertFalse(payload['model_inference_performed'])
             with urlopen(base + '/office3d', timeout=3) as response:
                 self.assertIn(b'ai-meeting-panel', response.read())
+            with urlopen(base + '/api/v1/meeting/workflow-status', timeout=3) as response:
+                self.assertEqual(json.load(response)['snapshot']['execution_id'], 'a'*32)
+            write_status(event, status_file, 'b'*32)
+            with self.assertRaises(HTTPError) as error:
+                urlopen(base + '/api/v1/meeting/workflow-status', timeout=3)
+            self.assertEqual(error.exception.code, 503)
             target.unlink()
             with self.assertRaises(HTTPError) as error:
                 urlopen(base + '/api/v1/meeting/transcript', timeout=3)
@@ -886,6 +898,71 @@ setImmediate(async()=>{
             self.get('/api/v1/meeting/workflow-status')
         self.assertEqual(error.exception.code, 503)
         self.assertNotIn('never expose', error.exception.read().decode())
+
+    def test_fixture_workflow_events_reach_pinned_api_and_completed_transcript(self):
+        import os
+        from ai_meeting_workflow import run_workflow
+        from ai_meeting_workflow_status import write_status
+        from test_ai_meeting_runtime import Fixture
+        from test_v233_agent_research_runtime import source
+        brief = Path(self.temp.name)/'brief.json'
+        transcript = Path(self.temp.name)/'meeting-output.json'
+        status_file = Path(self.temp.name)/'workflow-status.json'
+        payload = source()
+        now = datetime.now(timezone.utc)
+        payload.update(source_generated_at_utc=(now-timedelta(minutes=10)).isoformat(),
+                       generated_at_utc=(now-timedelta(minutes=5)).isoformat(),
+                       market_source='BYBIT_USDT_PERPETUAL_5M')
+        brief.write_text(json.dumps(payload), encoding='utf-8')
+        execution_id = 'c'*32
+        self.server.RequestHandlerClass = v28.make_handler(
+            self.history, meeting_transcript_path=transcript,
+            meeting_status_path=status_file, meeting_execution_id=execution_id)
+        observed = []
+        def record(event):
+            write_status(event, status_file, execution_id)
+            status, view = self.get('/api/v1/meeting/workflow-status')
+            self.assertEqual(status, 200)
+            self.assertFalse(view['orders_enabled'])
+            self.assertEqual(view['snapshot']['execution_id'], execution_id)
+            observed.append(view['snapshot'])
+        with patch.dict(os.environ, {'OPENAI_API_KEY': 'offline-workflow-key'}):
+            with patch('ai_meeting_workflow.OpenAIProvider', return_value=Fixture()):
+                result = run_workflow(brief, transcript, 'test-model', enable_live=True, on_event=record)
+        self.assertEqual(result['status'], 'COMPLETED')
+        self.assertEqual(result['model_calls_performed'], 0)
+        progress = [item for item in observed if item['event'] == 'MODEL_PROGRESS']
+        self.assertEqual(len(progress), 14)
+        self.assertEqual(progress[-1]['agent'], 'COMMANDER')
+        self.assertEqual(progress[-1]['validated_responses'], 7)
+        self.assertEqual(observed[-1]['status'], 'COMPLETED')
+        _, completed = self.get('/api/v1/meeting/transcript')
+        self.assertEqual(len(completed['transcript']), 7)
+        self.assertFalse(completed['model_inference_performed'])
+        self.assertFalse(completed['orders_enabled'])
+        # A new run overwriting this same path must not be mistaken for the pinned run.
+        event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
+                 'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
+        write_status(event, status_file, 'd'*32)
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/workflow-status')
+        self.assertEqual(error.exception.code, 503)
+        write_status(event, status_file, execution_id)
+        self.assertEqual(self.get('/api/v1/meeting/workflow-status')[0], 200)
+        self.assertNotIn('offline-workflow-key', status_file.read_text()+transcript.read_text())
+
+    def test_workflow_execution_selection_rejects_invalid_configuration(self):
+        for execution_id in ['', 'A'*32, 'a'*31, '../private', True]:
+            with self.subTest(execution_id=execution_id), self.assertRaises(ValueError):
+                v28.make_handler(self.history, meeting_status_path='status.json', meeting_execution_id=execution_id)
+        with self.assertRaises(ValueError):
+            v28.make_handler(self.history, meeting_execution_id='a'*32)
+        result = subprocess.run([sys.executable, str(Path(v28.__file__).resolve()),
+                                 '--meeting-execution-id', 'invalid'],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('requires --meeting-status', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
 
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
