@@ -365,3 +365,15 @@ remain on standard error; they are not part of the JSON. Exit code 0 means eithe
 READY_NO_MODEL_CALLS or COMPLETED, so always inspect `status` rather than treating
 exit code 0 as proof of model execution. BLOCKED returns exit code 1. This output
 mode does not change authorization: default execution still makes no model calls.
+
+
+Add `--events` to emit MEETING_WORKFLOW_EVENT_1 stage events on standard error.
+Each event contains only version, event, workflow_stage and status. STAGE_STARTED
+marks entry to INPUT, PREPARATION, SETUP and (only with explicit live execution)
+CONFIGURATION, INFERENCE and PUBLICATION. WORKFLOW_FINISHED is terminal and uses
+the final result's stage/status. Default check-only readiness stops at SETUP;
+it is never shown as a completed model meeting. Existing runtime per-agent
+progress remains separate. Pair `--events --json` to keep the final result alone
+on stdout. Stderr can also contain notices, so consumers should filter events by
+version. These are local process events; this does not add a dashboard API or
+persist progress across process restarts.
