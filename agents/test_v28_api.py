@@ -238,23 +238,61 @@ const assert=require('node:assert/strict'),vm=require('node:vm');
 const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 const makeElement=()=>({
  children:[],disabled:false,hidden:false,style:{},attrs:{},events:{},
+ focus(){this.focused=true},scrollIntoView(){this.scrolled=true},
  addEventListener(name,fn){this.events[name]=fn},
  setAttribute(name,value){this.attrs[name]=value},
  replaceChildren(...items){this.children=items},
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
+for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status',
+ 'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
-let requested=null;
-const document={hidden:false,getElementById:id=>elements[id],addEventListener:()=>{},
+let requested=null,failRequest=false,requestCount=0,holdResponse=null;
+const documentEvents={},windowEvents={};
+const window={addEventListener:(name,fn)=>{windowEvents[name]=fn}};
+const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
  createElement:makeElement};
-vm.runInNewContext(data.script,{document,Date,setInterval:()=>{},
- fetch:async url=>{requested=url;return {ok:true,text:async()=>JSON.stringify(data.payload)}}});
-setImmediate(()=>{
+const callbacks=[],timeouts=new Map();
+let timeoutId=0,timeoutPhase=null,bodyFault=null,httpStatus=null,networkFault=false;
+let now=Date.now();
+class Clock extends Date{static now(){return now}}
+vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,
+ setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
+ clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
+ fetch:async (url,options)=>{requested=url;requestCount++;
+ if(networkFault)throw new TypeError("Failed to fetch internal-host.example:1234");
+ if(httpStatus!==null)return {ok:false,status:httpStatus,text:async()=>{throw Error("error body must not be read")}};
+ if(bodyFault){
+  const fault=bodyFault;
+  return {ok:true,text:async()=>{
+   if(fault==='read-error')throw new TypeError('body stream interrupted');
+   if(fault==='truncated')return '{"version":';
+   if(fault==='oversized')return ' '.repeat(65537);
+   return 'null';
+  }};
+ }
+ if(timeoutPhase){
+  assert.ok(options.signal instanceof AbortSignal);
+  const pending=()=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>{
+   const error=new Error('aborted');error.name='AbortError';reject(error);
+  },{once:true}));
+  if(timeoutPhase==='headers')return await pending();
+  return {ok:true,text:pending};
+ }
+if(holdResponse)return await new Promise(resolve=>{holdResponse=resolve});return {ok:!failRequest,text:async()=>JSON.stringify(data.payload)}}});
+setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
+  assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'validated');
+  assert.match(elements['ai-meeting-shortcut-status'].textContent,/오프라인 테스트/);
+  const beforeShortcut=requestCount;
+  elements['ai-meeting-shortcut'].events.click();
+  assert.equal(elements['ai-meeting-panel'].open,true);
+  assert.equal(elements['ai-meeting-summary'].focused,true);
+  assert.equal(elements['ai-meeting-panel'].scrolled,true);
+  assert.equal(requestCount,beforeShortcut,'navigation must not fetch or start a meeting');
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.match(elements['ai-meeting-status'].textContent,/실제 AI 실행 아님/);
   assert.ok(elements['ai-meeting-rows'].children.every(x=>typeof x.textContent==='string'));
@@ -269,6 +307,8 @@ setImmediate(()=>{
   assert.equal(quant.attrs['aria-pressed'],'false');
   assert.equal(elements['ai-meeting-linked'].hidden,false);
   assert.match(elements['ai-meeting-linked'].textContent,/판단 비교/);
+  assert.ok(elements['ai-meeting-linked'].textContent.includes('\n'),'analysis details must use real line breaks');
+  assert.ok(!elements['ai-meeting-linked'].textContent.includes('\\n'),'analysis details must not show escaped newlines');
   assert.match(elements['ai-meeting-linked'].textContent,/재언급이 없다고 해결된 것은 아닙니다/);
   let prevented=false;
   quant.events.keydown({key:'Enter',preventDefault(){prevented=true}});
@@ -278,6 +318,395 @@ setImmediate(()=>{
   commander.events.click();
   assert.equal(commander.attrs['aria-pressed'],'true');
   assert.match(elements['ai-meeting-linked'].textContent,/COMMANDER 최종 결론/);
+  assert.ok(elements['ai-meeting-linked'].textContent.includes('\n'),'conclusion must use real line breaks');
+  assert.ok(!elements['ai-meeting-linked'].textContent.includes('\\n'),'conclusion must not show escaped newlines');
+  assert.ok(callbacks.length>=2,'expiry and polling callbacks must exist');
+  now=Date.parse(data.payload.source_generated_at_utc)+8*3600000+1000;
+  callbacks[0]();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(timeline.children.length,0);
+  assert.equal(timeline.hidden,true);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.match(elements['ai-meeting-status'].textContent,/만료/);
+  // Restore the clock to a valid instant, then exercise the actual refresh button.
+  now=Date.now();
+  assert.equal(typeof elements['ai-meeting-refresh'].events.click,'function');
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(timeline.children.length,5);
+  assert.equal(timeline.hidden,false);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,false);
+  assert.match(elements['ai-meeting-status'].textContent,/오프라인 테스트 기록/);
+  // A subsequent HTTP error must fail closed, not preserve a stale decision.
+  failRequest=true;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(timeline.children.length,0);
+  assert.equal(timeline.hidden,true);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  // A later successful retry must recover without reusing stale selections.
+  failRequest=false;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(timeline.children.length,5);
+  assert.equal(timeline.hidden,false);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,false);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  // A malformed but HTTP-successful response must also fail closed.
+  data.payload.call_count=6;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(timeline.children.length,0);
+  assert.equal(timeline.hidden,true);
+  assert.equal(elements['ai-meeting-linked'].hidden,true);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  data.payload.call_count=7;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  // Security-sensitive flags must never be accepted from a transcript response.
+  for(const [field,invalid] of [['orders_enabled',true],['trade_authorization','ALLOWED'],['research_only',false]]){
+   const original=data.payload[field];
+   data.payload[field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
+  // Offline fixtures must never masquerade as actual model inference.
+  for(const [field,invalid] of [['model_inference_performed',true],['ai_agents_running',true],['execution_mode','LIVE_PROVIDER']]){
+   const original=data.payload[field];
+   data.payload[field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
+  // Corrupted transcript order and peer-review references must fail closed.
+  for(const field of ['transcript','statement_refs']){
+   const original=data.payload[field];
+   assert.ok(Array.isArray(original)&&original.length===7,field);
+   const tampered=original.map(item=>({...item}));
+   if(field==='transcript'){
+    [tampered[0],tampered[1]]=[tampered[1],tampered[0]];
+   }else{
+    tampered[3]={...tampered[3],references:['M02']};
+   }
+   data.payload[field]=tampered;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
+  // Future and expired source timestamps must never be shown as current.
+  const originalSource=data.payload.source_generated_at_utc;
+  for(const invalidSource of [
+   new Date(Date.now()+60*60*1000).toISOString(),
+   new Date(Date.now()-9*60*60*1000).toISOString()
+  ]){
+   data.payload.source_generated_at_utc=invalidSource;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,'invalid source timestamp');
+   assert.equal(timeline.children.length,0,'invalid source timestamp');
+   assert.equal(elements['ai-meeting-decision'].hidden,true,'invalid source timestamp');
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+   data.payload.source_generated_at_utc=originalSource;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  }
+  // Chronologically impossible meeting timestamps must fail closed.
+  for(const [field,invalid] of [
+   ['started_at_utc',new Date(Date.parse(data.payload.source_generated_at_utc)-1000).toISOString()],
+   ['generated_at_utc',new Date(Date.parse(data.payload.started_at_utc)-1000).toISOString()],
+   ['generated_at_utc',new Date(Date.now()+60*60*1000).toISOString()]
+  ]){
+   const original=data.payload[field];
+   data.payload[field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
+  // Reject malformed model identity and request digest metadata.
+  for(const [field,invalid] of [
+   ['model',''],
+   ['model','x'.repeat(121)],
+   ['request_sha256',''],
+   ['request_sha256','g'.repeat(64)],
+   ['request_sha256','a'.repeat(63)]
+  ]){
+   const original=data.payload[field];
+   data.payload[field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload[field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
+  // Transcript statement content must satisfy strict bounds and types.
+  for(const [field,invalid] of [
+   ['summary',''],
+   ['summary','x'.repeat(1601)],
+   ['concerns',['']],
+   ['concerns',['x'.repeat(401)]],
+   ['concerns',Array(9).fill('concern')],
+   ['concerns','not-an-array']
+  ]){
+   const original=data.payload.transcript[0][field];
+   data.payload.transcript[0][field]=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,field);
+   assert.equal(timeline.children.length,0,field);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',field);
+   data.payload.transcript[0][field]=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,field);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
+  }
+  // Invalid verdicts or contradictory final verdicts must never be shown.
+  for(const [target,invalid] of [
+   ['statement','UNRECOGNIZED_VERDICT'],
+   ['final','UNRECOGNIZED_VERDICT']
+  ]){
+   const isFinal=target==='final';
+   const original=isFinal?data.payload.final_verdict:data.payload.transcript[0].verdict;
+   if(isFinal)data.payload.final_verdict=invalid;
+   else data.payload.transcript[0].verdict=invalid;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,target);
+   assert.equal(timeline.children.length,0,target);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,target);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',target);
+   if(isFinal)data.payload.final_verdict=original;
+   else data.payload.transcript[0].verdict=original;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,target);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',target);
+  }
+  // Rapid refresh and background polling must not create concurrent fetches.
+  holdResponse=true;
+  const beforeOverlap=requestCount;
+  const firstRefresh=elements['ai-meeting-refresh'].events.click();
+  assert.equal(requestCount,beforeOverlap+1);
+  assert.equal(elements['ai-meeting-refresh'].disabled,true);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'true');
+  assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'loading');
+  await elements['ai-meeting-refresh'].events.click();
+  await callbacks[1]();
+  assert.equal(requestCount,beforeOverlap+1,'overlapping refresh must not fetch twice');
+  assert.equal(elements['ai-meeting-rows'].children.length,0,'stale meeting cleared while loading');
+  const release=holdResponse;
+  holdResponse=null;
+  release({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await firstRefresh;
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false');
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(timeouts.size,0,'successful requests release deadline timers');
+  // Both stalled headers and a stalled response body must abort and allow retry.
+  for(const phase of ['headers','body']){
+   timeline.children[1].events.click();
+   timeoutPhase=phase;
+   const stalled=elements['ai-meeting-refresh'].events.click();
+   await Promise.resolve();
+   assert.equal(timeouts.size,1,phase);
+   assert.equal(elements['ai-meeting-refresh'].disabled,true,phase);
+   for(const fire of [...timeouts.values()])fire();
+   await stalled;
+   assert.equal(timeouts.size,0,phase);
+   assert.equal(elements['ai-meeting-rows'].children.length,0,phase);
+   assert.equal(timeline.children.length,0,phase);
+   assert.equal(elements['ai-meeting-linked'].hidden,true,phase);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,phase);
+   assert.match(elements['ai-meeting-status'].textContent,/응답 시간 초과/,phase);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',phase);
+   assert.equal(elements['ai-meeting-refresh'].disabled,false,phase);
+   assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false',phase);
+   timeoutPhase=null;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,phase);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',phase);
+   assert.equal(timeouts.size,0,phase);
+  }
+  // Returning from a hidden mobile tab must retry even after expiry or failure.
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  document.hidden=true;
+  const beforeHidden=requestCount;
+  callbacks[1]();
+  documentEvents.visibilitychange();
+  await flush();
+  assert.equal(requestCount,beforeHidden,'hidden tabs must not poll');
+  now=Date.parse(data.payload.source_generated_at_utc)+8*3600000+1000;
+  document.hidden=false;
+  documentEvents.visibilitychange();
+  await flush();
+  assert.equal(requestCount,beforeHidden+1,'returning after expiry must refresh');
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  now=Date.now();
+  failRequest=true;
+  document.hidden=true;documentEvents.visibilitychange();
+  document.hidden=false;documentEvents.visibilitychange();
+  await flush();
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  failRequest=false;
+  holdResponse=true;
+  document.hidden=true;documentEvents.visibilitychange();
+  const beforeReturn=requestCount;
+  document.hidden=false;documentEvents.visibilitychange();
+  documentEvents.visibilitychange();callbacks[1]();
+  assert.equal(requestCount,beforeReturn+1,'visibility and polling must share request guard');
+  const resume=holdResponse;holdResponse=null;
+  resume({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await flush();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
+  // BFCache restoration uses pageshow, which need not emit visibilitychange.
+  assert.equal(typeof windowEvents.pageshow,'function');
+  const beforeRestore=requestCount;
+  windowEvents.pageshow({persisted:false});
+  document.hidden=true;windowEvents.pageshow({persisted:true});
+  await flush();
+  assert.equal(requestCount,beforeRestore,'initial or hidden pageshow must not fetch');
+  document.hidden=false;
+  now=Date.parse(data.payload.source_generated_at_utc)+9*3600000;
+  holdResponse=true;
+  windowEvents.pageshow({persisted:true});
+  documentEvents.visibilitychange();callbacks[1]();
+  assert.equal(requestCount,beforeRestore+1,'restoration shares the request guard');
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  const restore=holdResponse;holdResponse=null;
+  restore({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await flush();
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  now=Date.now();
+  windowEvents.pageshow({persisted:true});
+  await flush();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
+  // HTTP 200 does not guarantee a complete, bounded, valid JSON body.
+  for(const fault of ['read-error','truncated','oversized','null']){
+   timeline.children[1].events.click();
+   bodyFault=fault;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,0,fault);
+   assert.equal(timeline.children.length,0,fault);
+   assert.equal(elements['ai-meeting-linked'].hidden,true,fault);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,fault);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected',fault);
+   assert.equal(elements['ai-meeting-refresh'].disabled,false,fault);
+   assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false',fault);
+   assert.equal(timeouts.size,0,fault);
+   if(fault==='oversized')assert.match(elements['ai-meeting-status'].textContent,/크기 초과/);
+   if(fault==='read-error')assert.match(elements['ai-meeting-status'].textContent,/수신이 중단/);
+   if(fault==='truncated')assert.match(elements['ai-meeting-status'].textContent,/JSON 형식 오류/);
+   if(fault==='null')assert.match(elements['ai-meeting-status'].textContent,/객체 형식 오류/);
+   bodyFault=null;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,fault);
+   assert.equal(elements['ai-meeting-linked'].hidden,true,fault);
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',fault);
+  }
+  // Distinguish transport failures without reading or exposing server error bodies.
+  for(const [code,message] of [[404,/API 경로/],[401,/접근이 거부/],[403,/접근이 거부/],
+   [429,/요청이 많습니다/],[502,/응답 지연/],[504,/응답 지연/],
+   [503,/완료된 모델 회의 결과/]]){
+   httpStatus=code;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.match(elements['ai-meeting-status'].textContent,message,String(code));
+   assert.equal(elements['ai-meeting-rows'].children.length,0,String(code));
+   assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'disconnected');
+   assert.match(elements['ai-meeting-shortcut-status'].textContent,/요청 실패/);
+   assert.equal(elements['ai-meeting-decision'].hidden,true,String(code));
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+   assert.equal(elements['ai-meeting-refresh'].disabled,false);
+   assert.equal(timeouts.size,0);
+   httpStatus=null;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,String(code));
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  }
+  // Connectivity recovery refreshes visible tabs and shares all request guards.
+  assert.equal(typeof windowEvents.online,'function');
+  document.hidden=true;
+  const beforeOnline=requestCount;
+  windowEvents.online();
+  await flush();
+  assert.equal(requestCount,beforeOnline,'hidden online event must not fetch');
+  document.hidden=false;
+  failRequest=true;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  failRequest=false;holdResponse=true;
+  const beforeReconnect=requestCount;
+  windowEvents.online();windowEvents.online();
+  documentEvents.visibilitychange();callbacks[1]();
+  assert.equal(requestCount,beforeReconnect+1,'reconnection must not duplicate requests');
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-refresh'].disabled,true);
+  const reconnect=holdResponse;holdResponse=null;
+  reconnect({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await flush();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
+  networkFault=true;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.match(elements['ai-meeting-status'].textContent,/네트워크 연결을 확인/);
+  assert.doesNotMatch(elements['ai-meeting-status'].textContent,/internal-host|Failed to fetch/);
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
+  networkFault=false;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });

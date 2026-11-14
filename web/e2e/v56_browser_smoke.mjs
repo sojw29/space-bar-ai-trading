@@ -133,7 +133,9 @@ async function smoke(){
   });
   await meetingPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await meetingPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
-  await meetingPage.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
+  await meetingPage.locator("#ai-meeting-shortcut").click();
+  assert.equal(await meetingPage.locator("#ai-meeting-panel").evaluate(el=>el.open),true);
+  assert.equal(await meetingPage.locator("#ai-meeting-summary").evaluate(el=>el===document.activeElement),true);
   await meetingPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
   assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
@@ -146,18 +148,24 @@ async function smoke(){
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
   // A validated historical transcript must fail closed if its source expires.
   await meetingPage.evaluate(()=>{
-   const now=Date.now;
-   Date.now=()=>now()+9*60*60*1000;
+   window.__meetingRealNow=Date.now;
+   Date.now=()=>window.__meetingRealNow()+9*60*60*1000;
    document.dispatchEvent(new Event("visibilitychange"));
-   Date.now=now;
+
   });
+  // Await the foreground refresh with the clock still advanced.
+  await meetingPage.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="disconnected"&&
+   document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
    "expired transcript must be cleared");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
    "expired transcript must not remain validated");
-  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/만료 또는 시계 변경/);
-  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"expired");
-  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/기록 만료/);
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/회의 원본 오래됨 또는 시각 오류/);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
+  assert.equal(transcriptCalls,2,"foreground expiry must fetch exactly once");
+  await meetingPage.evaluate(()=>{Date.now=window.__meetingRealNow;delete window.__meetingRealNow});
   // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
   // retaining old rows; a failed second reload must fail closed.
@@ -171,7 +179,15 @@ async function smoke(){
    "refresh after expiry must restore the complete meeting conclusion");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"none");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
-  assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
+  assert.equal(transcriptCalls,3,"manual refresh must fetch exactly once");
+  // Exercise the actual handler used by Safari's back/forward cache restore.
+  await meetingPage.evaluate(()=>window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true})));
+  await meetingPage.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="validated"&&
+   document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
+  assert.equal(transcriptCalls,4,"cached page restoration must refresh exactly once");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
+
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
    transcriptCalls++;
@@ -184,7 +200,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
-  assert.equal(transcriptCalls,3);
+  assert.equal(transcriptCalls,5);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
@@ -192,7 +208,7 @@ async function smoke(){
   // Non-Error rejections must show a useful fallback, not "undefined".
   await meetingPage.evaluate(()=>{window.fetch=()=>Promise.reject(null)});
   await meetingPage.locator("#ai-meeting-refresh").click();
-  await meetingPage.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록을 가져오지 못했습니다"));
+  await meetingPage.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록 서버에 연결하지 못했습니다"));
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.doesNotMatch(await meetingPage.locator("#ai-meeting-status").textContent(),/undefined|null/);

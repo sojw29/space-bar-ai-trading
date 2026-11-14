@@ -48,10 +48,15 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    now=mode==='rollback'?Date.parse(data.source_generated_at_utc)-1:now+1;
    if(mode==='timer')timers[0]();else events.visibilitychange();
    assert.equal(elements['ai-meeting-rows'].children.length,0,mode);
-   assert.match(elements['ai-meeting-status'].textContent,/만료/);
-   if(mode!=='timer')await new Promise(setImmediate);
+   if(mode==='timer')assert.match(elements['ai-meeting-status'].textContent,/만료/);
+   else{
+    await new Promise(setImmediate);
+    assert.equal(elements['ai-meeting-rows'].children.length,0,mode);
+    assert.match(elements['ai-meeting-status'].textContent,/미연결/);
+    assert.equal(elements['ai-meeting-refresh'].disabled,false);
+   }
   }
-  assert.equal(requests,1,'Expired or clock-rolled-back snapshots must not auto-refresh on foreground');
+  assert.equal(requests,['foreground','rollback'].includes(mode)?2:1,'Foreground must retry once; invalid snapshots stay cleared');
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
