@@ -253,13 +253,14 @@ const window={addEventListener:(name,fn)=>{windowEvents[name]=fn}};
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
  createElement:makeElement};
 const callbacks=[],timeouts=new Map();
-let timeoutId=0,timeoutPhase=null,bodyFault=null;
+let timeoutId=0,timeoutPhase=null,bodyFault=null,httpStatus=null;
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
 vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,
  setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
  clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
  fetch:async (url,options)=>{requested=url;requestCount++;
+ if(httpStatus!==null)return {ok:false,status:httpStatus,text:async()=>{throw Error("error body must not be read")}};
  if(bodyFault){
   const fault=bodyFault;
   return {ok:true,text:async()=>{
@@ -632,6 +633,23 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,fault);
    assert.equal(elements['ai-meeting-linked'].hidden,true,fault);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',fault);
+  }
+  // Distinguish transport failures without reading or exposing server error bodies.
+  for(const [code,message] of [[404,/API 경로/],[401,/접근이 거부/],[403,/접근이 거부/],
+   [429,/요청이 많습니다/],[502,/응답 지연/],[504,/응답 지연/],
+   [503,/완료된 모델 회의 결과/]]){
+   httpStatus=code;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.match(elements['ai-meeting-status'].textContent,message,String(code));
+   assert.equal(elements['ai-meeting-rows'].children.length,0,String(code));
+   assert.equal(elements['ai-meeting-decision'].hidden,true,String(code));
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+   assert.equal(elements['ai-meeting-refresh'].disabled,false);
+   assert.equal(timeouts.size,0);
+   httpStatus=null;
+   await elements['ai-meeting-refresh'].events.click();
+   assert.equal(elements['ai-meeting-rows'].children.length,7,String(code));
+   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   }
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
