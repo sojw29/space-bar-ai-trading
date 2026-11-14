@@ -431,3 +431,14 @@ The API and 3D panel now display the recorded agent, analysis/review/conclusion
 phase, and validated response count out of seven. Invalid roles, impossible
 counts and stale data clear the display. No model text or credentials are stored
 in progress snapshots.
+
+
+To follow one particular workflow execution, optionally launch the dashboard with
+`--meeting-status path/to/status.json --meeting-execution-id EXECUTION_ID`.
+The ID must be the 32-character lowercase hexadecimal execution_id from that
+run's status file. A file replaced by another run then returns the same sanitized
+503 as other unavailable progress data, and the progress panel clears it. Without
+the pin, the dashboard continues showing the latest valid record in its selected
+file. Restart/reconfigure the server to follow another pinned run. This pins
+progress only; the completed transcript remains separately validated and selected.
+Invalid IDs or an ID without --meeting-status are rejected at startup.
