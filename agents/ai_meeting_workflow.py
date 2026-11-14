@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import uuid
 
-from ai_meeting_workflow_status import protect_status_path, write_status
+from ai_meeting_workflow_status import protect_status_path, WorkflowStatusRecorder
 
 from ai_meeting_prepare import prepare_file
 from ai_meeting_setup import check_setup
@@ -88,6 +88,7 @@ def main():
     parser.add_argument("--status-file", type=Path, help="Atomically record the latest local workflow stage")
     args = parser.parse_args()
     execution_id = uuid.uuid4().hex
+    recorder = WorkflowStatusRecorder(args.status_file, execution_id) if args.status_file else None
     notice_stream = sys.stderr if args.json_output else sys.stdout
     if args.enable_live:
         print('Live research requested: up to seven paid calls; no orders.', file=notice_stream, flush=True)
@@ -96,7 +97,7 @@ def main():
                           'event': event['event'], 'validated_responses': event['validated_responses']}), file=notice_stream, flush=True)
     def workflow_event(event):
         if args.status_file:
-            write_status(event, args.status_file, execution_id)
+            recorder(event)
         if args.events:
             print(json.dumps(event), file=sys.stderr, flush=True)
     started = False
