@@ -257,6 +257,13 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                             len(raw["request_sha256"]) != 64 or
                             any(c not in "0123456789abcdef" for c in raw["request_sha256"])):
                         raise ValueError("invalid_metadata")
+                    execution_id = raw.get("workflow_execution_id")
+                    if "workflow_execution_id" in raw:
+                        import re
+                        if not isinstance(execution_id, str) or not re.fullmatch('[a-f0-9]{32}', execution_id):
+                            raise ValueError("invalid_workflow_execution_id")
+                    if meeting_execution_id is not None and execution_id != meeting_execution_id:
+                        raise ValueError("different_workflow_execution")
                     expected_final = entries[-1]["verdict"]
                     if any(e["verdict"] == "INSUFFICIENT_DATA" for e in entries):
                         expected_final = "INSUFFICIENT_DATA"
@@ -266,6 +273,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         raise ValueError("invalid_final_verdict")
                     self.reply(200, {"version": "AI_MEETING_TRANSCRIPT_VIEW_1",
                                      "status": "COMPLETED", "call_count": 7,
+                                     **({"workflow_execution_id": execution_id} if execution_id is not None else {}),
                                      "ai_agents_running": False,
                                      "trade_authorization": "DENIED",
                                      "execution_mode": raw["execution_mode"],
