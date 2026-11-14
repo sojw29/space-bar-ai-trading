@@ -54,8 +54,9 @@ def snapshot(history_path):
     }
 
 
-def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None, *, meeting_transcript_path=None):
+def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None, *, meeting_transcript_path=None, meeting_status_path=None):
     configured_transcript = Path(meeting_transcript_path) if meeting_transcript_path is not None else None
+    configured_status = Path(meeting_status_path) if meeting_status_path is not None else None
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
@@ -163,6 +164,18 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     self.reply(200, {"state": "HISTORICAL", "ready": False, "orders_enabled": False})
                 else:
                     self.reply(200, live_store.status())
+            elif path == "/api/v1/meeting/workflow-status":
+                if configured_status is None:
+                    self.reply(404, {"error": "workflow_status_not_configured", "orders_enabled": False})
+                else:
+                    try:
+                        from ai_meeting_workflow_status import read_status
+                        value = read_status(configured_status)
+                        self.reply(200, {"version": "MEETING_WORKFLOW_STATUS_VIEW_1", "snapshot": value,
+                                         "read_only": True, "orders_enabled": False,
+                                         "process_liveness_verified": False})
+                    except (OSError, ValueError, TypeError, KeyError):
+                        self.reply(503, {"error": "workflow_status_unavailable", "orders_enabled": False})
             elif path == "/api/v1/meeting/transcript":
                 # Separate from the offline quality gate. Never starts inference.
                 transcript_path = configured_transcript if configured_transcript is not None else MEETING_TRANSCRIPT_PATH
@@ -322,10 +335,11 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY)
     parser.add_argument("--meeting-transcript", type=Path, help="Completed meeting JSON to display; default: reports/ai_meeting/latest.json")
+    parser.add_argument("--meeting-status", type=Path, help="Optional local workflow status snapshot to display")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535")
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.history, meeting_transcript_path=args.meeting_transcript))
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.history, meeting_transcript_path=args.meeting_transcript, meeting_status_path=args.meeting_status))
     print("Local paper-only API: http://127.0.0.1:%d/api/v1/agents" % args.port)
     try:
         server.serve_forever()
