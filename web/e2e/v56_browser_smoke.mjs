@@ -206,7 +206,7 @@ async function smoke(){
   // Non-Error rejections must show a useful fallback, not "undefined".
   await meetingPage.evaluate(()=>{window.fetch=()=>Promise.reject(null)});
   await meetingPage.locator("#ai-meeting-refresh").click();
-  await meetingPage.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록을 가져오지 못했습니다"));
+  await meetingPage.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록 서버에 연결하지 못했습니다"));
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.doesNotMatch(await meetingPage.locator("#ai-meeting-status").textContent(),/undefined|null/);
