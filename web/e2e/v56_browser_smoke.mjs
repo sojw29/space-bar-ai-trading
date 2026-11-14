@@ -46,12 +46,13 @@ async function smoke(){
  const csvPath=path.join(runDir,"BTC_5m.csv");
  await writeFile(csvPath,csv,"utf8");
  const workflowStatusPath=path.join(runDir,"workflow-status.json");
+ const selectedTranscriptPath=path.join(runDir,"selected-transcript.json");
  const workflowStatus={version:"MEETING_WORKFLOW_STATUS_1",event:"WORKFLOW_FINISHED",
   workflow_stage:"SETUP",status:"READY_NO_MODEL_CALLS",execution_id:"b".repeat(32),
   updated_at_utc:new Date().toISOString()};
  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
  server=spawn(process.env.PYTHON||"python3",
-  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath,"--meeting-status",workflowStatusPath],
+  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath,"--meeting-status",workflowStatusPath,"--meeting-execution-id","b".repeat(32),"--meeting-transcript",selectedTranscriptPath],
   {cwd:repo,stdio:["ignore","pipe","pipe"]});
  server.stderr.on("data",data=>{apiStderr=(apiStderr+String(data)).slice(-8192);});
  await waitForApi();
@@ -155,10 +156,43 @@ async function smoke(){
   trade_authorization:"DENIED",call_count:7,model:"fixture",
   market_source:"BYBIT_USDT_PERPETUAL_5M",request_sha256:"a".repeat(64),
   source_generated_at_utc:source,started_at_utc:started,generated_at_utc:finished,
-  final_verdict:"OBSERVATION_ONLY",
+  final_verdict:"OBSERVATION_ONLY",workflow_execution_id:"b".repeat(32),
   transcript:names.map((agent,i)=>({agent,phase:phases[i],
    summary:"Offline fixture stage "+(i+1),concerns:[],verdict:"OBSERVATION_ONLY"}))
  };
+ // Identity is enforced by the real server, not a mocked transcript route.
+ const storedTranscript={...transcript,version:"AI_MEETING_1"};
+ for(const viewport of [{width:1360,height:900},{width:390,height:844}]){
+  await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
+  const identityPage=await context.newPage();
+  identityPage.on("pageerror",error=>errors.push(String(error)));
+  await identityPage.setViewportSize(viewport);await serveThree(identityPage);
+  await identityPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+  await identityPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
+  await identityPage.locator("#ai-meeting-shortcut").click();
+  await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
+  assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실행 ID: b{32}/);
+  assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+  for(const invalid of ["c".repeat(32),null]){
+   const altered={...storedTranscript};
+   if(invalid===null)delete altered.workflow_execution_id;else altered.workflow_execution_id=invalid;
+   await writeFile(selectedTranscriptPath,JSON.stringify(altered),"utf8");
+   await Promise.all([
+    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===503),
+    identityPage.locator("#ai-meeting-refresh").click()
+   ]);
+   await identityPage.locator('#ai-meeting-status[data-connection="disconnected"]').waitFor({timeout:12000});
+   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
+   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
+   await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
+   await identityPage.locator("#ai-meeting-refresh").click();
+   await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
+   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실행 ID: b{32}/);
+  }
+  await identityPage.close();
+ }
+ await rm(selectedTranscriptPath);
  for(const viewport of [{width:1360,height:900},{width:390,height:844}]){
   const meetingPage=await context.newPage();
   meetingPage.on("pageerror",e=>errors.push(String(e)));
