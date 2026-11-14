@@ -30,8 +30,13 @@ def validate_public_report(report, *, bundle=None, now=None):
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
         raise MeetingError('NAIVE_NOW')
-    if not isinstance(report, dict) or set(report) not in (FIELDS, FIELDS | {'market_source'}):
+    allowed = (FIELDS, FIELDS | {'market_source'}, FIELDS | {'statement_refs'},
+               FIELDS | {'market_source', 'statement_refs'})
+    if not isinstance(report, dict) or (set(report) - {'workflow_execution_id'}) not in allowed:
         raise MeetingError('INVALID_REPORT_FIELDS')
+    if 'workflow_execution_id' in report and (not isinstance(report['workflow_execution_id'], str) or
+            not re.fullmatch('[a-f0-9]{32}', report['workflow_execution_id'])):
+        raise MeetingError('INVALID_WORKFLOW_EXECUTION_ID')
     with_market_source(report, {})
     for key, expected in {'version': 'AI_MEETING_1', 'status': 'COMPLETED',
                           'execution_mode': 'LIVE_PROVIDER', 'model_inference_performed': True,
@@ -58,6 +63,19 @@ def validate_public_report(report, *, bundle=None, now=None):
                 or item['agent'] != agent or item['phase'] != phase):
             raise MeetingError('INVALID_TRANSCRIPT_ORDER')
         validate_statement({k: item[k] for k in ('summary', 'concerns', 'verdict')})
+    refs = report.get('statement_refs')
+    if refs is not None:
+        if not isinstance(refs, list) or len(refs) != 7:
+            raise MeetingError('INVALID_STATEMENT_REFS')
+        for index, (agent, entry) in enumerate(zip((*ANALYSTS, *ANALYSTS, 'COMMANDER'), refs)):
+            phase = 'ANALYSIS' if index < 3 else 'PEER_REVIEW' if index < 6 else 'CONCLUSION'
+            expected_refs = ['M%02d' % (index-2)] if 3 <= index <= 5 else []
+            if (not isinstance(entry, dict) or
+                    set(entry) != {'id', 'agent', 'phase', 'references'} or
+                    entry['id'] != 'M%02d' % (index+1) or
+                    entry['agent'] != agent or entry['phase'] != phase or
+                    entry['references'] != expected_refs):
+                raise MeetingError('INVALID_STATEMENT_REF')
     final = transcript[-1]['verdict']
     if any(t['verdict'] == 'INSUFFICIENT_DATA' for t in transcript):
         final = 'INSUFFICIENT_DATA'

@@ -11,12 +11,53 @@ small,.muted{color:#91a7c4}.badge{border:1px solid #4b6387;border-radius:999px;p
 .card{background:linear-gradient(150deg,#17273f,#101b2c);border:1px solid #304865;border-radius:18px;padding:22px;min-height:128px;box-shadow:0 14px 35px #0004}
 .label{font-size:12px;letter-spacing:.12em;color:#93b7e3}.value{font-size:clamp(22px,4vw,35px);font-weight:700;overflow-wrap:anywhere;margin-top:12px}
 footer{margin-top:28px;font-size:13px;line-height:1.7;color:#91a7c4}
-button{background:#203a5a;border:1px solid #52749e;color:white;border-radius:10px;padding:10px 16px;cursor:pointer}
+button{background:#203a5a;border:1px solid #52749e;color:white;border-radius:10px;padding:12px 16px;min-height:44px;cursor:pointer}
+button:focus-visible{outline:3px solid #9af1ce;outline-offset:3px}
+#testnet-staging-state{margin:12px 0;line-height:1.5;overflow-wrap:anywhere}
+#meeting-steps{list-style:none;padding:0;display:grid;gap:10px;counter-reset:meeting}
+#meeting-steps li{position:relative;border:1px solid #365172;background:#102238;border-radius:12px;padding:12px 14px 12px 46px;overflow-wrap:anywhere;counter-increment:meeting}
+#meeting-steps li::before{content:counter(meeting);position:absolute;left:13px;top:13px;border-radius:50%;width:23px;height:23px;display:grid;place-items:center;background:#294c70;color:#d9efff;font-size:12px;font-weight:700}
+#meeting-steps .meeting-phase{display:block;font-size:11px;color:#a8c9ec;letter-spacing:.07em;margin-bottom:5px}
+#meeting-steps .meeting-agent{display:block;font-weight:700;margin-bottom:5px}
+#meeting-steps .meeting-summary{display:block;white-space:pre-wrap;color:#c2d3e9;line-height:1.5}
+#meeting-steps li[data-phase="CONCLUSION"]{border-color:#63b9b5}
+#meeting-steps li[data-phase="PEER_REVIEW"]{border-left:3px solid #6888c6}
+#agent-roster > div{border:1px solid #304865;border-radius:12px;padding:12px;min-width:0}
+#agent-roster > div[data-meeting="recorded"]{border-color:#528caa;background:#172d43}
+#agent-roster > div[data-meeting="disabled"]{border-color:#6e5660}
+#agent-roster .meeting-role-state{font-size:12px;line-height:1.5;margin-top:8px;overflow-wrap:anywhere}
+
+
+@media(max-width:480px){body{padding:16px}.grid{gap:12px;margin-top:16px}.card{padding:16px;min-height:110px}h1{letter-spacing:.06em}}
 .error{color:#ffb8ac}.ok{color:#9af1ce}
 </style></head><body>
 <header><div><small>SPACE BAR AI TRADING / LOCAL RESEARCH</small><h1>AUDIT ROOM</h1></div><span class="badge" id="status" role="status" aria-live="polite">연결 확인 중</span></header>
 <p class="muted">검증된 과거 데이터만 표시합니다. 실시간 시세나 실거래 결과가 아닙니다.</p>
+<p class="muted" id="connection-help" role="note">이 화면은 로컬 Dashboard API가 실행 중일 때만 데이터를 표시합니다. GitHub 파일 미리보기만으로는 API에 연결되지 않습니다.</p>
 <button type="button" id="refresh">지금 새로고침</button>
+<p class="muted" id="audit-updated-at" aria-live="polite">마지막 검증: 없음</p>
+<section class="card" aria-label="테스트넷 안전 상태">
+ <div class="label">TESTNET STAGING · READ ONLY</div>
+ <div id="testnet-staging-state" role="status" aria-live="polite" class="muted">상태 확인 중 · 주문 불가</div>
+ <small>오프라인 기록 미연결 · 주문 생성 및 전송 불가</small>
+</section>
+<section class="card" aria-label="AI 회의 결과" style="margin-top:16px"><div class="label">AI MEETING · READ ONLY</div><div id="meeting-state" role="status" aria-live="polite">회의 기록 확인 중 · 거래 승인 없음</div><div id="meeting-detail" class="muted"></div><ol id="meeting-steps" aria-label="AI 회의 단계"></ol></section>
+<section class="card" aria-label="AI 팀 상태" style="margin-top:16px">
+ <div class="label">AI TEAM · TEN ROLES · READ ONLY</div>
+ <p class="muted">역할 목록은 설계 정보입니다. 실제 에이전트 실행 여부나 회의 참여를 의미하지 않습니다.</p>
+ <div class="grid" style="margin-top:12px" id="agent-roster">
+  <div><strong>COMMANDER</strong><div class="muted">결론 · 주문 승인 없음</div></div>
+  <div><strong>ATLAS</strong><div class="muted">시장 분석</div></div>
+  <div><strong>ORACLE</strong><div class="muted">예측 연구</div></div>
+  <div><strong>QUANT</strong><div class="muted">정량 분석</div></div>
+  <div><strong>SCALPER</strong><div class="muted">진입 연구</div></div>
+  <div><strong>TESTER</strong><div class="muted">백테스트</div></div>
+  <div><strong>GUARDIAN</strong><div class="muted">위험 관리</div></div>
+  <div><strong>EXECUTOR</strong><div class="muted">비활성화 · 주문 불가</div></div>
+  <div><strong>EVOLVE</strong><div class="muted">전략 개선</div></div>
+  <div><strong>AUDITOR</strong><div class="muted">무결성 점검</div></div>
+ </div>
+</section>
 <main class="grid" id="cards" aria-live="polite"></main>
 <footer><div id="detail">데이터 로딩 중…</div><div>READ ONLY · OFFLINE PAPER RESEARCH · NO ORDERS</div></footer>
 <script>
@@ -37,8 +78,139 @@ function validateAudit(a){
     typeof a.data_sha256!=="string"||!/^[a-f0-9]{64}$/.test(a.data_sha256))
    throw new Error("감사 결과 형식 오류");
 }
-async function refresh(){status.textContent="검증 데이터 조회 중";status.className="badge";try{const res=await fetch("/api/v1/replay/audit",{cache:"no-store"});if(!res.ok)throw new Error("HTTP "+res.status);const body=await res.json();if(body.mode!=="historical_offline_audit"||body.realtime!==false||body.orders_enabled!==false||body.signals_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");validateAudit(body.audit);render(body.audit);status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)"}catch(err){cards.replaceChildren();status.textContent="데이터 미연결";status.className="badge error";detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message}}
+let auditRequestId=0;
+async function refresh(){
+ const requestId=++auditRequestId;
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),5000);
+ status.textContent="검증 데이터 조회 중";status.className="badge";
+ try{
+  const res=await fetch("/api/v1/replay/audit",{cache:"no-store",signal:controller.signal});
+  if(!res.ok)throw new Error("HTTP "+res.status);
+  const body=await res.json();
+  if(requestId!==auditRequestId)return;
+  if(body.mode!=="historical_offline_audit"||body.realtime!==false||body.orders_enabled!==false||body.signals_enabled!==false||!body.audit)throw new Error("안전한 과거 데이터 응답이 아닙니다");
+  validateAudit(body.audit);render(body.audit);
+  document.getElementById("audit-updated-at").textContent="마지막 검증: "+new Date().toLocaleString("ko-KR");
+  status.textContent="HISTORICAL · VERIFIED";status.className="badge ok";
+  detail.textContent="데이터 SHA-256: "+body.audit.data_sha256+" · 마지막 캔들: "+body.audit.last_timestamp+" (epoch ms)";
+ }catch(err){
+  if(requestId!==auditRequestId)return;
+  cards.replaceChildren();document.getElementById("audit-updated-at").textContent="마지막 검증: 없음";status.textContent="데이터 미연결";status.className="badge error";
+  detail.textContent="검증 결과를 불러오지 못했습니다: "+err.message;
+ }finally{clearTimeout(timeout);}
 }
-document.getElementById("refresh").addEventListener("click",refresh);
-refresh();setInterval(()=>{if(!document.hidden)refresh()},30000);
+const meetingParticipants=new Set(["ATLAS","QUANT","GUARDIAN","COMMANDER"]);
+function setRosterMeetingState(transcript,sourceLabel){
+ const entries=Array.isArray(transcript)?transcript:[];
+ for(const node of document.querySelectorAll("#agent-roster > div")){
+  const agent=node.querySelector("strong")?.textContent;
+  const role=node.querySelector(".muted");
+  if(!role||!agent)continue;
+  let state=node.querySelector(".meeting-role-state");
+  if(!state){state=document.createElement("div");state.className="meeting-role-state muted";node.append(state)}
+  node.dataset.meeting="none";
+  if(agent==="EXECUTOR"){node.dataset.meeting="disabled";state.textContent="주문 기능 비활성화";continue}
+  if(!meetingParticipants.has(agent)){state.textContent="이 회의 기록에 참여하지 않음";continue}
+  const recorded=entries.filter(entry=>entry.agent===agent);
+  if(recorded.length){
+   node.dataset.meeting="recorded";
+   const phases=recorded.map(entry=>entry.phase==="ANALYSIS"?"분석":entry.phase==="PEER_REVIEW"?"상호 검토":"결론");
+   state.textContent=sourceLabel+" · 과거 기록 "+recorded.length+"단계 ("+phases.join(", ")+")";
+  }else state.textContent="회의 기록 미연결";
+ }
+}
+setRosterMeetingState(null,"");
+let meetingRequestId=0;
+async function refreshMeeting(){
+ const id=++meetingRequestId;
+ const state=document.getElementById("meeting-state");
+ const detail=document.getElementById("meeting-detail");
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),5000);
+ state.textContent="회의 기록 확인 중 · 거래 승인 없음";
+ detail.textContent="";
+ setRosterMeetingState(null,"");
+ document.getElementById("meeting-steps").replaceChildren();
+ try{
+  const res=await fetch("/api/v1/meeting/transcript",{cache:"no-store",signal:controller.signal});
+  if(!res.ok)throw new Error("meeting_unavailable");
+  const data=await res.json();
+  if(id!==meetingRequestId)return;
+  if(data.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||
+     data.status!=="COMPLETED"||data.call_count!==7||
+     data.ai_agents_running!==false||data.trade_authorization!=="DENIED"||
+     data.orders_enabled!==false||
+     data.research_only!==true||!Array.isArray(data.transcript)||
+     data.transcript.length!==7||
+     ![["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],
+       ["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],["GUARDIAN","PEER_REVIEW"],
+       ["COMMANDER","CONCLUSION"]].every(([agent,phase],i)=>
+         data.transcript[i]!==null&&typeof data.transcript[i]==="object"&&
+         data.transcript[i].agent===agent&&data.transcript[i].phase===phase)||
+     typeof data.generated_at_utc!=="string"||
+     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(data.generated_at_utc)||
+     !Number.isFinite(Date.parse(data.generated_at_utc))||
+     typeof data.final_verdict!=="string"||
+     !["OFFLINE_FIXTURE","LIVE_PROVIDER"].includes(data.execution_mode)||
+     typeof data.model_inference_performed!=="boolean"||
+     data.model_inference_performed!==(data.execution_mode==="LIVE_PROVIDER"))
+   throw new Error("invalid_meeting");
+  const steps=document.getElementById("meeting-steps");
+  const fragment=document.createDocumentFragment();
+  for(const entry of data.transcript){
+   if(typeof entry.summary!=="string"||entry.summary.length>2000||
+      typeof entry.verdict!=="string"||entry.verdict.length>100)throw new Error("invalid_entry");
+   const li=document.createElement("li");
+   li.dataset.phase=entry.phase;
+   const phase=document.createElement("span");phase.className="meeting-phase";
+   phase.textContent=entry.phase==="ANALYSIS"?"ANALYSIS · 분석":entry.phase==="PEER_REVIEW"?"PEER REVIEW · 상호 검토":"CONCLUSION · 최종 결론";
+   const agent=document.createElement("strong");agent.className="meeting-agent";agent.textContent=entry.agent+" · "+entry.verdict;
+   const summary=document.createElement("span");summary.className="meeting-summary";summary.textContent=entry.summary;
+   li.append(phase,agent,summary);
+   fragment.append(li);
+  }
+  steps.replaceChildren(fragment);
+  const sourceLabel=data.execution_mode==="OFFLINE_FIXTURE"?"오프라인 예시 데이터":"외부 AI 제공자 응답";
+  setRosterMeetingState(data.transcript,sourceLabel);
+  state.textContent="회의 기록 확인 완료 · "+sourceLabel+" · 거래 승인 없음";
+  const generatedMs=Date.parse(data.generated_at_utc);
+  const ageMs=Date.now()-generatedMs;
+  const ageLabel=ageMs<0?"생성 시각이 미래로 표시됨":ageMs<60000?"1분 이내 기록":ageMs<3600000?Math.floor(ageMs/60000)+"분 전 기록":ageMs<86400000?Math.floor(ageMs/3600000)+"시간 전 기록":Math.floor(ageMs/86400000)+"일 전 기록";
+  detail.textContent="COMMANDER 결론: "+data.final_verdict+" · 출처: "+data.execution_mode+" · 생성: "+data.generated_at_utc+" · "+ageLabel+" · 주문 권한: DENIED";
+ }catch(_){
+  if(id!==meetingRequestId)return;
+  state.textContent="회의 기록 미연결 · 거래 승인 없음";
+  detail.textContent="";
+  document.getElementById("meeting-steps").replaceChildren();
+  setRosterMeetingState(null,"");
+ }finally{clearTimeout(timeout);}
+}
+document.getElementById("refresh").addEventListener("click",()=>{refresh();refreshTestnetSafety();refreshMeeting()});
+refresh();refreshMeeting();setInterval(()=>{if(!document.hidden){refresh();refreshMeeting()}},30000);
+let testnetSafetyRequestId=0;
+async function refreshTestnetSafety(){
+ const requestId=++testnetSafetyRequestId;
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),5000);
+ const el=document.getElementById("testnet-staging-state");
+ el.textContent="상태 확인 중 · 주문 불가";
+ try{
+  const response=await fetch("/api/v1/testnet/staging/status",{cache:"no-store",signal:controller.signal});
+  if(!response.ok)throw new Error("unavailable");
+  const data=await response.json();
+  if(requestId!==testnetSafetyRequestId)return;
+  if(data.version!=="TESTNET_STAGING_STATUS_1"||
+     data.status!=="NOT_CONNECTED"||
+     data.staging_enabled!==false||
+     data.orders_enabled!==false||
+     data.network_enabled!==false||
+     data.live_trading_approved!==false||
+     data.research_only!==true)throw new Error("unsafe");
+  el.textContent="NOT CONNECTED · 주문 불가";
+ }catch(_){if(requestId!==testnetSafetyRequestId)return;el.textContent="상태 확인 불가 · 주문 불가";}
+ finally{clearTimeout(timeout);}
+}
+refreshTestnetSafety();
+setInterval(()=>{if(!document.hidden)refreshTestnetSafety()},30000);
 </script></body></html>

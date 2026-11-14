@@ -1,0 +1,40 @@
+name: Trading Room Pages Preview (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: trading-room-pages-preview
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare offline preview only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp web/space_bar_preview.html _site/index.html
+          python - <<'PY'
+          from pathlib import Path
+          page = Path("_site/index.html").read_text(encoding="utf-8")
+          assert "OFFLINE PREVIEW" in page
+          assert "NO ORDERS" in page
+          assert "<script" not in page.lower()
+          assert "fetch(" not in page.lower()
+          assert "DISABLED" in page
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

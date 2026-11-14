@@ -44,13 +44,19 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
    now=Date.parse(data.source_generated_at_utc)+8*3600000;
-   timers.forEach(fn=>fn());assert.equal(elements['ai-meeting-rows'].children.length,7,'inclusive expiry');
+   timers[0]();assert.equal(elements['ai-meeting-rows'].children.length,7,'inclusive expiry');
    now=mode==='rollback'?Date.parse(data.source_generated_at_utc)-1:now+1;
-   if(mode==='timer')timers.forEach(fn=>fn());else events.visibilitychange();
+   if(mode==='timer')timers[0]();else events.visibilitychange();
    assert.equal(elements['ai-meeting-rows'].children.length,0,mode);
-   assert.match(elements['ai-meeting-status'].textContent,/만료/);
+   if(mode==='timer')assert.match(elements['ai-meeting-status'].textContent,/만료/);
+   else{
+    await new Promise(setImmediate);
+    assert.equal(elements['ai-meeting-rows'].children.length,0,mode);
+    assert.match(elements['ai-meeting-status'].textContent,/미연결/);
+    assert.equal(elements['ai-meeting-refresh'].disabled,false);
+   }
   }
-  assert.equal(requests,1,'No implicit provider or refresh calls');
+  assert.equal(requests,['foreground','rollback'].includes(mode)?2:1,'Foreground must retry once; invalid snapshots stay cleared');
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
 """

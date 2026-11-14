@@ -1,0 +1,94 @@
+name: Testnet order guard (offline)
+on:
+  pull_request:
+    paths:
+      - 'agents/testnet_order_guard.py'
+      - 'agents/testnet_staging_preflight.py'
+      - 'agents/testnet_offline_staging.py'
+      - 'agents/dashboard_api_v28.py'
+      - 'web/command_center.html'
+      - 'web/audit_room_mobile_v153.html'
+      - 'tests/test_testnet_order_guard.py'
+      - 'tests/test_testnet_staging_preflight.py'
+      - 'tests/test_testnet_offline_staging.py'
+      - 'tests/test_testnet_dashboard_status.py'
+      - 'tests/test_testnet_dashboard_panel.py'
+      - 'tests/test_testnet_dashboard_js_syntax.py'
+      - 'tests/test_testnet_dashboard_js_runtime.py'
+      - 'tests/test_testnet_dashboard_browser.cjs'
+      - 'tests/test_testnet_guard_v310_compatibility.py'
+      - 'tests/test_testnet_offline_e2e.py'
+      - 'agents/bybit_testnet_order_dryrun_v310.py'
+      - 'tests/test_bybit_testnet_order_dryrun_v310.py'
+      - 'agents/bybit_testnet_intent_ledger_v311.py'
+      - 'agents/bybit_testnet_durable_ledger_v312.py'
+      - 'tests/test_bybit_testnet_intent_ledger_v311.py'
+      - 'tests/test_bybit_testnet_durable_ledger_v312.py'
+      - 'web/space_bar_preview.html'
+      - 'tests/test_trading_room_pages_preview.py'
+      - '.github/workflows/trading-room-pages-preview.yml'
+      - '.github/workflows/testnet-order-guard.yml'
+  push:
+    paths:
+      - 'agents/testnet_order_guard.py'
+      - 'agents/testnet_staging_preflight.py'
+      - 'agents/testnet_offline_staging.py'
+      - 'agents/dashboard_api_v28.py'
+      - 'web/command_center.html'
+      - 'web/audit_room_mobile_v153.html'
+      - 'tests/test_testnet_order_guard.py'
+      - 'tests/test_testnet_staging_preflight.py'
+      - 'tests/test_testnet_offline_staging.py'
+      - 'tests/test_testnet_dashboard_status.py'
+      - 'tests/test_testnet_dashboard_panel.py'
+      - 'tests/test_testnet_dashboard_js_syntax.py'
+      - 'tests/test_testnet_dashboard_js_runtime.py'
+      - 'tests/test_testnet_dashboard_browser.cjs'
+      - 'tests/test_testnet_guard_v310_compatibility.py'
+      - 'tests/test_testnet_offline_e2e.py'
+      - 'agents/bybit_testnet_order_dryrun_v310.py'
+      - 'tests/test_bybit_testnet_order_dryrun_v310.py'
+      - 'agents/bybit_testnet_intent_ledger_v311.py'
+      - 'agents/bybit_testnet_durable_ledger_v312.py'
+      - 'tests/test_bybit_testnet_intent_ledger_v311.py'
+      - 'tests/test_bybit_testnet_durable_ledger_v312.py'
+      - 'web/space_bar_preview.html'
+      - 'tests/test_trading_room_pages_preview.py'
+      - '.github/workflows/trading-room-pages-preview.yml'
+      - '.github/workflows/testnet-order-guard.yml'
+permissions:
+  contents: read
+jobs:
+  guard:
+    # Playwright 1.56.1 Chromium dependency installer does not support ubuntu-26.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run isolated offline tests
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m unittest discover -s tests -p 'test_testnet_order_guard.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_guard_v310_compatibility.py' -v
+          python -m unittest discover -s tests -p 'test_bybit_testnet_order_dryrun_v310.py' -v
+          python -m unittest discover -s tests -p 'test_bybit_testnet_intent_ledger_v311.py' -v
+          python -m unittest discover -s tests -p 'test_bybit_testnet_durable_ledger_v312.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_offline_e2e.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_staging_preflight.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_offline_staging.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_dashboard_status.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_dashboard_panel.py' -v
+          python -m unittest discover -s tests -p 'test_trading_room_pages_preview.py' -v
+          node --version
+          python -m unittest discover -s tests -p 'test_testnet_dashboard_js_syntax.py' -v
+          python -m unittest discover -s tests -p 'test_testnet_dashboard_js_runtime.py' -v
+      - name: Run Chromium dashboard smoke tests (mock HTTP only)
+        run: |
+          node --check tests/test_testnet_dashboard_browser.cjs
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node tests/test_testnet_dashboard_browser.cjs
