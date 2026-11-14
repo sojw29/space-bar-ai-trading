@@ -76,9 +76,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('private failure', json.dumps(result))
         self.assertEqual(self.target.read_bytes(), b'previous report')
 
-    def cli(self, *, key='private-fixture-key'):
+    def cli(self, *, key='private-fixture-key', events=False):
         command = [sys.executable, str(Path(__file__).resolve().with_name('ai_meeting_workflow.py')),
                    str(self.brief), str(self.target), '--model', 'test-model', '--json']
+        if events:
+            command.append('--events')
         result = subprocess.run(command, cwd=self.temp.name,
                                 env=dict(os.environ, OPENAI_API_KEY=key),
                                 capture_output=True, text=True, timeout=15)
@@ -114,6 +116,43 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(payload['error_code'], 'INVALID_JSON')
         self.assertNotIn('private invalid source', result.stdout + result.stderr)
         self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def test_check_only_stage_events_stop_before_inference(self):
+        events = []
+        result = run_workflow(self.brief, self.target, 'test-model', on_event=events.append)
+        self.assertEqual(result['status'], 'READY_NO_MODEL_CALLS')
+        self.assertEqual([event['workflow_stage'] for event in events],
+                         ['INPUT', 'PREPARATION', 'SETUP', 'SETUP'])
+        self.assertEqual(events[-1]['event'], 'WORKFLOW_FINISHED')
+        self.assertEqual(events[-1]['status'], 'READY_NO_MODEL_CALLS')
+        self.assertTrue(all(set(event) == {'version', 'event', 'workflow_stage', 'status'} for event in events))
+        self.assertNotIn(str(self.brief), json.dumps(events))
+        self.assertNotIn('private-fixture-key', json.dumps(events))
+
+    def test_fixture_execution_emits_stages_in_order_and_failure_is_terminal(self):
+        events = []
+        with patch('ai_meeting_workflow.OpenAIProvider', return_value=Fixture()):
+            result = run_workflow(self.brief, self.target, 'test-model', enable_live=True, on_event=events.append)
+        self.assertEqual(result['status'], 'COMPLETED')
+        self.assertEqual([event['workflow_stage'] for event in events],
+                         ['INPUT', 'PREPARATION', 'SETUP', 'CONFIGURATION', 'INFERENCE', 'PUBLICATION', 'COMPLETED'])
+        events.clear()
+        with patch('ai_meeting_workflow.run_meeting', side_effect=ValueError('private provider detail')):
+            result = run_workflow(self.brief, self.target, 'test-model', enable_live=True, on_event=events.append)
+        self.assertEqual(events[-1]['event'], 'WORKFLOW_FINISHED')
+        self.assertEqual(events[-1]['status'], 'BLOCKED')
+        self.assertEqual(events[-1]['workflow_stage'], 'INFERENCE')
+        self.assertNotIn('private provider detail', json.dumps(events))
+        self.assertNotIn('PUBLICATION', [event['workflow_stage'] for event in events])
+
+    def test_cli_stage_events_stay_separate_from_final_json(self):
+        result, payload = self.cli(events=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(payload['status'], 'READY_NO_MODEL_CALLS')
+        events = [json.loads(line) for line in result.stderr.splitlines() if line.startswith('{')]
+        self.assertEqual(len(events), 4)
+        self.assertEqual(events[-1]['event'], 'WORKFLOW_FINISHED')
+        self.assertEqual(events[-1]['status'], payload['status'])
 
 
 if __name__ == '__main__':
