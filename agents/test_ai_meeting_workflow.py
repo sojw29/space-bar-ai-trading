@@ -89,7 +89,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('private-fixture-key', result.stdout + result.stderr)
         self.assertNotIn('Traceback', result.stderr)
         self.assertEqual(len(result.stdout.splitlines()), 1)
-        return result, json.loads(result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertRegex(payload['execution_id'], r'^[a-f0-9]{32}$')
+        return result, payload
 
     def test_cli_json_default_has_one_result_and_preserves_existing_output(self):
         self.brief = self.brief.rename(self.brief.with_name('market brief with spaces.json'))
@@ -167,6 +169,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         snapshot = read_status(path)
         self.assertEqual(snapshot['status'], payload['status'])
+        self.assertEqual(snapshot['execution_id'], payload['execution_id'])
         self.assertEqual(snapshot['workflow_stage'], 'SETUP')
         self.assertEqual(snapshot['event'], 'WORKFLOW_FINISHED')
         self.assertNotIn('private-fixture-key', path.read_text())
@@ -181,6 +184,13 @@ class WorkflowTests(unittest.TestCase):
         result, payload = self.cli(status_file=Path(self.temp.name))
         self.assertEqual(result.returncode, 1)
         self.assertEqual(payload['workflow_stage'], 'STATUS_RECORDING')
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def test_cli_separate_invocations_have_distinct_execution_ids(self):
+        first, initial = self.cli()
+        second, repeated = self.cli()
+        self.assertEqual((first.returncode, second.returncode), (0, 0))
+        self.assertNotEqual(initial['execution_id'], repeated['execution_id'])
         self.assertEqual(self.target.read_bytes(), b'previous report')
 
 

@@ -113,6 +113,7 @@ def main():
         result = {'status': 'BLOCKED', 'workflow_stage': 'STATUS_RECORDING',
                   'error_code': 'STATUS_RECORDING_FAILED', 'model_calls_performed': None if started else 0,
                   'orders_enabled': False}
+    result = {**result, "execution_id": execution_id}
     print(json.dumps(result, ensure_ascii=False))
     if result['status'] == 'READY_NO_MODEL_CALLS':
         print('Local checks only; API access, billing and model compatibility remain unverified.', file=notice_stream)

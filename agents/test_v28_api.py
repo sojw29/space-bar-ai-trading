@@ -902,7 +902,7 @@ setImmediate(async()=>{
     def test_fixture_workflow_events_reach_pinned_api_and_completed_transcript(self):
         import os
         from ai_meeting_workflow import run_workflow
-        from ai_meeting_workflow_status import write_status
+        from ai_meeting_workflow_status import write_status, WorkflowStatusRecorder
         from test_ai_meeting_runtime import Fixture
         from test_v233_agent_research_runtime import source
         brief = Path(self.temp.name)/'brief.json'
@@ -919,8 +919,9 @@ setImmediate(async()=>{
             self.history, meeting_transcript_path=transcript,
             meeting_status_path=status_file, meeting_execution_id=execution_id)
         observed = []
+        recorder = WorkflowStatusRecorder(status_file, execution_id)
         def record(event):
-            write_status(event, status_file, execution_id)
+            recorder(event)
             status, view = self.get('/api/v1/meeting/workflow-status')
             self.assertEqual(status, 200)
             self.assertFalse(view['orders_enabled'])
@@ -936,6 +937,7 @@ setImmediate(async()=>{
         self.assertEqual(progress[-1]['agent'], 'COMMANDER')
         self.assertEqual(progress[-1]['validated_responses'], 7)
         self.assertEqual(observed[-1]['status'], 'COMPLETED')
+        self.assertEqual(recorder.counts, (7, 7))
         _, completed = self.get('/api/v1/meeting/transcript')
         self.assertEqual(len(completed['transcript']), 7)
         self.assertFalse(completed['model_inference_performed'])
