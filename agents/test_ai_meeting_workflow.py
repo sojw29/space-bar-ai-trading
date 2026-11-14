@@ -136,8 +136,12 @@ class WorkflowTests(unittest.TestCase):
         with patch('ai_meeting_workflow.OpenAIProvider', return_value=Fixture()):
             result = run_workflow(self.brief, self.target, 'test-model', enable_live=True, on_event=events.append)
         self.assertEqual(result['status'], 'COMPLETED')
-        self.assertEqual([event['workflow_stage'] for event in events],
+        self.assertEqual([event['workflow_stage'] for event in events if event['event'] != 'MODEL_PROGRESS'],
                          ['INPUT', 'PREPARATION', 'SETUP', 'CONFIGURATION', 'INFERENCE', 'PUBLICATION', 'COMPLETED'])
+        model_events = [event for event in events if event['event'] == 'MODEL_PROGRESS']
+        self.assertEqual(len(model_events), 14)
+        self.assertEqual(model_events[-1]['agent'], 'COMMANDER')
+        self.assertEqual(model_events[-1]['validated_responses'], 7)
         events.clear()
         with patch('ai_meeting_workflow.run_meeting', side_effect=ValueError('private provider detail')):
             result = run_workflow(self.brief, self.target, 'test-model', enable_live=True, on_event=events.append)
