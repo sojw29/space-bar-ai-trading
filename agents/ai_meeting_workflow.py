@@ -4,6 +4,9 @@ import json
 import sys
 from pathlib import Path
 import tempfile
+import uuid
+
+from ai_meeting_workflow_status import protect_status_path, write_status
 
 from ai_meeting_prepare import prepare_file
 from ai_meeting_setup import check_setup
@@ -75,7 +78,9 @@ def main():
     parser.add_argument('--enable-live', action='store_true', help='Authorize up to seven paid model calls')
     parser.add_argument("--json", action="store_true", dest="json_output", help="Print only the final JSON result to stdout; notices/progress go to stderr")
     parser.add_argument("--events", action="store_true", help="Emit structured workflow stage events to stderr")
+    parser.add_argument("--status-file", type=Path, help="Atomically record the latest local workflow stage")
     args = parser.parse_args()
+    execution_id = uuid.uuid4().hex
     notice_stream = sys.stderr if args.json_output else sys.stdout
     if args.enable_live:
         print('Live research requested: up to seven paid calls; no orders.', file=notice_stream, flush=True)
@@ -83,10 +88,23 @@ def main():
         print(json.dumps({'agent': event['agent'], 'phase': event['phase'],
                           'event': event['event'], 'validated_responses': event['validated_responses']}), file=notice_stream, flush=True)
     def workflow_event(event):
-        print(json.dumps(event), file=sys.stderr, flush=True)
-    result = run_workflow(args.source, args.destination, args.model,
-                          enable_live=args.enable_live, progress=progress,
-                          on_event=workflow_event if args.events else None)
+        if args.status_file:
+            write_status(event, args.status_file, execution_id)
+        if args.events:
+            print(json.dumps(event), file=sys.stderr, flush=True)
+    started = False
+    try:
+        if args.status_file:
+            protect_status_path(args.status_file, args.source, args.destination)
+        started = True
+        result = run_workflow(args.source, args.destination, args.model,
+                              enable_live=args.enable_live, progress=progress,
+                              on_event=workflow_event if args.events or args.status_file else None)
+    except (OSError, ValueError, TypeError, KeyError):
+        # A status observer can fail even after inference/publication. Do not claim zero use.
+        result = {'status': 'BLOCKED', 'workflow_stage': 'STATUS_RECORDING',
+                  'error_code': 'STATUS_RECORDING_FAILED', 'model_calls_performed': None if started else 0,
+                  'orders_enabled': False}
     print(json.dumps(result, ensure_ascii=False))
     if result['status'] == 'READY_NO_MODEL_CALLS':
         print('Local checks only; API access, billing and model compatibility remain unverified.', file=notice_stream)
