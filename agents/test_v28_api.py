@@ -3,6 +3,8 @@ import csv
 from datetime import datetime, timedelta, timezone
 import json
 import shutil
+import socket
+import time
 import subprocess
 import sys
 import tempfile
@@ -10,7 +12,7 @@ import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
@@ -207,7 +209,7 @@ class LocalApiTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node.js required for room script test")
     def test_offline_meeting_report_reaches_actual_room_script(self):
         # Full offline boundary: stored report -> loopback HTTP -> actual room JS.
-        from ai_meeting_runtime import run_meeting
+        from ai_meeting_runtime import publish_report, run_meeting
         from test_ai_meeting_runtime import Fixture
         from test_v240_provider_transport_preflight import request, NOW
         from copy import deepcopy
@@ -220,8 +222,10 @@ class LocalApiTests(unittest.TestCase):
         report["generated_at_utc"] = (now - timedelta(minutes=3)).isoformat()
         report["market_source"] = "BYBIT_USDT_PERPETUAL_5M"
         target = Path(self.temp.name) / "meeting.json"
-        target.write_text(json.dumps(report), encoding="utf-8")
-        with patch.object(v28, "MEETING_TRANSCRIPT_PATH", target):
+        publish_report(report, target)
+        self.server.RequestHandlerClass = v28.make_handler(
+            self.history, meeting_transcript_path=target)
+        with patch.object(v28, "MEETING_TRANSCRIPT_PATH", target.with_name("missing-default.json")):
             status, payload = self.get("/api/v1/meeting/transcript")
         self.assertEqual(status, 200)
         self.assertFalse(payload["model_inference_performed"])
@@ -737,6 +741,112 @@ setImmediate(async()=>{
         with urlopen(self.base + "/office3d?view=mobile", timeout=3) as response:
             self.assertEqual(response.status, 200)
             self.assertIn(b"ai-meeting-panel", response.read())
+
+    def test_configured_transcript_path_isolated_from_default(self):
+        from ai_meeting_runtime import publish_report, run_meeting
+        from test_ai_meeting_runtime import Fixture
+        from test_v240_provider_transport_preflight import request, NOW
+        report = run_meeting(request(), Fixture(), clock=lambda: NOW)
+        now = datetime.now(timezone.utc)
+        for field, minutes in [('source_generated_at_utc', 5),
+                               ('started_at_utc', 4), ('generated_at_utc', 3)]:
+            report[field] = (now - timedelta(minutes=minutes)).isoformat()
+        report['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
+        target = Path(self.temp.name) / 'runtime-output.json'
+        publish_report(report, target)
+        self.server.RequestHandlerClass = v28.make_handler(
+            self.history, meeting_transcript_path=str(target))
+        with patch.object(v28, 'MEETING_TRANSCRIPT_PATH', Path(self.temp.name) / 'missing.json'):
+            status, payload = self.get('/api/v1/meeting/transcript')
+        self.assertEqual(status, 200)
+        self.assertEqual(len(payload['transcript']), 7)
+        self.assertFalse(payload['orders_enabled'])
+        self.assertFalse(payload['model_inference_performed'])
+        # The real runtime publishes by atomic replacement; the handler must reread it.
+        report['transcript'][0]['summary'] = 'Updated completed meeting observation'
+        publish_report(report, target)
+        status, updated = self.get('/api/v1/meeting/transcript')
+        self.assertEqual(status, 200)
+        self.assertEqual(updated['transcript'][0]['summary'], report['transcript'][0]['summary'])
+        self.assertFalse(updated['orders_enabled'])
+        # A stale replacement must be rejected, not served from a prior valid read.
+        original_source = report['source_generated_at_utc']
+        report['source_generated_at_utc'] = (now - timedelta(hours=9)).isoformat()
+        publish_report(report, target)
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/transcript')
+        self.assertEqual(error.exception.code, 503)
+        report['source_generated_at_utc'] = original_source
+        publish_report(report, target)
+        self.assertEqual(self.get('/api/v1/meeting/transcript')[0], 200)
+
+        # A missing configured file must not silently fall back to another report.
+        with patch.object(v28, 'MEETING_TRANSCRIPT_PATH', target):
+            self.server.RequestHandlerClass = v28.make_handler(
+                self.history, meeting_transcript_path=target.with_name('absent.json'))
+            with self.assertRaises(HTTPError) as error:
+                self.get('/api/v1/meeting/transcript')
+            self.assertEqual(error.exception.code, 503)
+        target.write_text('{"orders_enabled": true}', encoding='utf-8')
+        self.server.RequestHandlerClass = v28.make_handler(
+            self.history, meeting_transcript_path=target)
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/transcript')
+        self.assertEqual(error.exception.code, 503)
+
+    def test_cli_selected_transcript_from_another_working_directory(self):
+        from ai_meeting_runtime import publish_report, run_meeting
+        from test_ai_meeting_runtime import Fixture
+        from test_v240_provider_transport_preflight import request, NOW
+        report = run_meeting(request(), Fixture(), clock=lambda: NOW)
+        now = datetime.now(timezone.utc)
+        for field, minutes in [('source_generated_at_utc', 5),
+                               ('started_at_utc', 4), ('generated_at_utc', 3)]:
+            report[field] = (now - timedelta(minutes=minutes)).isoformat()
+        report['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
+        target = Path(self.temp.name) / 'custom completed meeting.json'
+        publish_report(report, target)
+        with socket.socket() as reservation:
+            reservation.bind(('127.0.0.1', 0))
+            port = reservation.getsockname()[1]
+        command = [sys.executable, str(Path(v28.__file__).resolve()),
+                   '--port', str(port), '--history', str(self.history),
+                   '--meeting-transcript', str(target)]
+        process = subprocess.Popen(command, cwd=self.temp.name,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        base = 'http://127.0.0.1:' + str(port)
+        try:
+            deadline = time.monotonic() + 10
+            while True:
+                if process.poll() is not None:
+                    self.fail('Dashboard CLI exited before startup')
+                try:
+                    with urlopen(base + '/health', timeout=1) as response:
+                        self.assertEqual(response.status, 200)
+                    break
+                except URLError:
+                    if time.monotonic() >= deadline:
+                        self.fail('Dashboard CLI startup timed out')
+                    time.sleep(0.05)
+            with urlopen(base + '/api/v1/meeting/transcript', timeout=3) as response:
+                payload = json.load(response)
+            self.assertEqual(len(payload['transcript']), 7)
+            self.assertFalse(payload['orders_enabled'])
+            self.assertFalse(payload['model_inference_performed'])
+            with urlopen(base + '/office3d', timeout=3) as response:
+                self.assertIn(b'ai-meeting-panel', response.read())
+            target.unlink()
+            with self.assertRaises(HTTPError) as error:
+                urlopen(base + '/api/v1/meeting/transcript', timeout=3)
+            self.assertEqual(error.exception.code, 503)
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
+            process.stderr.close()
 
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
