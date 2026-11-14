@@ -738,6 +738,40 @@ setImmediate(async()=>{
             self.assertEqual(response.status, 200)
             self.assertIn(b"ai-meeting-panel", response.read())
 
+    def test_configured_transcript_path_isolated_from_default(self):
+        from ai_meeting_runtime import run_meeting
+        from test_ai_meeting_runtime import Fixture
+        from test_v240_provider_transport_preflight import request, NOW
+        report = run_meeting(request(), Fixture(), clock=lambda: NOW)
+        now = datetime.now(timezone.utc)
+        for field, minutes in [('source_generated_at_utc', 5),
+                               ('started_at_utc', 4), ('generated_at_utc', 3)]:
+            report[field] = (now - timedelta(minutes=minutes)).isoformat()
+        report['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
+        target = Path(self.temp.name) / 'runtime-output.json'
+        target.write_text(json.dumps(report), encoding='utf-8')
+        self.server.RequestHandlerClass = v28.make_handler(
+            self.history, meeting_transcript_path=str(target))
+        with patch.object(v28, 'MEETING_TRANSCRIPT_PATH', Path(self.temp.name) / 'missing.json'):
+            status, payload = self.get('/api/v1/meeting/transcript')
+        self.assertEqual(status, 200)
+        self.assertEqual(len(payload['transcript']), 7)
+        self.assertFalse(payload['orders_enabled'])
+        self.assertFalse(payload['model_inference_performed'])
+        # A missing configured file must not silently fall back to another report.
+        with patch.object(v28, 'MEETING_TRANSCRIPT_PATH', target):
+            self.server.RequestHandlerClass = v28.make_handler(
+                self.history, meeting_transcript_path=target.with_name('absent.json'))
+            with self.assertRaises(HTTPError) as error:
+                self.get('/api/v1/meeting/transcript')
+            self.assertEqual(error.exception.code, 503)
+        target.write_text('{"orders_enabled": true}', encoding='utf-8')
+        self.server.RequestHandlerClass = v28.make_handler(
+            self.history, meeting_transcript_path=target)
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/transcript')
+        self.assertEqual(error.exception.code, 503)
+
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/orders")
