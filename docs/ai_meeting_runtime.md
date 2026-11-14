@@ -302,3 +302,18 @@ The UI distinguishes `LIVE_PROVIDER` from `OFFLINE_FIXTURE`; a fixture
 is not evidence of real model inference. Neither view is live trading.
 Actual browser rendering and an end-to-end paid-provider run still require
 separate, explicitly authorized verification.
+
+
+### Check local setup before a paid meeting
+
+```sh
+python agents/ai_meeting_setup.py path/to/fresh_v236_bundle.json --model YOUR_SUPPORTED_MODEL
+```
+
+This reads a bounded existing bundle and validates its freshness/contracts plus
+local model-name and OPENAI_API_KEY presence. It performs no network requests,
+model calls, output publication or orders and never prints the key or source
+contents. LOCAL_SETUP_VALID means local checks only: credential validity, model
+access, billing and supported model behavior remain unverified. BLOCKED returns
+exit status 1 with a sanitized code. Source data can expire after this check;
+the runtime still validates it again when explicitly invoked.
