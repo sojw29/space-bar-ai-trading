@@ -70,7 +70,34 @@ class PreparationTests(unittest.TestCase):
                 result = prepare_file(brief, target, clock=lambda: next(times))
                 self.assertEqual(result['status'], 'BLOCKED')
                 self.assertEqual(result['stage'], 'PUBLICATION')
+                self.assertEqual(result['error_code'], 'CLOCK_CHANGED' if last < NOW else 'VALIDATION_FAILED')
                 self.assertEqual(target.read_bytes(), b'previous')
+
+    def test_failure_codes_and_guidance_are_sanitized(self):
+        with tempfile.TemporaryDirectory() as directory:
+            brief, target = Path(directory)/'brief.json', Path(directory)/'bundle.json'
+            self.assertEqual(prepare_file(brief, target, now=NOW)['error_code'], 'INPUT_UNAVAILABLE')
+            for data, expected in [(b'private source', 'INVALID_JSON'),
+                                   (b'\xff', 'INVALID_JSON'),
+                                   (b'x'*65537, 'INPUT_TOO_LARGE')]:
+                brief.write_bytes(data)
+                result = prepare_file(brief, target, now=NOW)
+                self.assertEqual(result['error_code'], expected)
+                self.assertTrue(result['guidance'])
+                self.assertNotIn('private source', json.dumps(result))
+            brief.write_text(json.dumps(source()), encoding='utf-8')
+            self.assertEqual(prepare_file(brief, brief, now=NOW)['error_code'], 'PATH_ALIAS')
+            with patch('ai_meeting_prepare.publish_report', side_effect=OSError('secret output path')):
+                result = prepare_file(brief, target, now=NOW)
+            self.assertEqual(result['error_code'], 'OUTPUT_WRITE_FAILED')
+            self.assertEqual(result['stage'], 'PUBLICATION')
+            self.assertNotIn('secret output path', json.dumps(result))
+            self.assertFalse(target.exists())
+            with patch('ai_meeting_prepare.build_research', side_effect=ValueError('private validation detail')):
+                result = prepare_file(brief, target, now=NOW)
+            self.assertEqual(result['error_code'], 'VALIDATION_FAILED')
+            self.assertEqual(result['stage'], 'SOURCE_VALIDATION')
+            self.assertNotIn('private validation detail', json.dumps(result))
 
 
 if __name__ == '__main__':
