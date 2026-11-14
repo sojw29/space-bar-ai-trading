@@ -39,6 +39,15 @@ const flush=()=>new Promise(setImmediate);
  view.orders_enabled=false;await button.events.click();assert.equal(status.attrs['data-state'],'READY_NO_MODEL_CALLS');
  snapshot.status='COMPLETED';snapshot.workflow_stage='SETUP';await button.events.click();assert.equal(status.attrs['data-state'],'unavailable');
  snapshot.workflow_stage='COMPLETED';await button.events.click();assert.match(status.textContent,/회의 실행 완료 기록/);
+ // Extended runtime progress shows only validated role/phase/count metadata.
+ snapshot.version='MEETING_WORKFLOW_STATUS_2';snapshot.event='MODEL_PROGRESS';snapshot.status='RUNNING';snapshot.workflow_stage='INFERENCE';
+ Object.assign(snapshot,{agent:'QUANT',phase:'PEER_REVIEW',attempted_calls:5,validated_responses:4});
+ await button.events.click();assert.match(detail.textContent,/QUANT · 상호 검토/);assert.match(detail.textContent,/검증된 응답: 4\/7/);
+ snapshot.validated_responses=1;await button.events.click();assert.equal(status.attrs['data-state'],'unavailable');assert.equal(detail.textContent,'');
+ snapshot.validated_responses=4;snapshot.agent='COMMANDER';await button.events.click();assert.equal(status.attrs['data-state'],'unavailable');
+ snapshot.agent='QUANT';await button.events.click();assert.equal(status.attrs['data-state'],'RUNNING');
+ snapshot.version='MEETING_WORKFLOW_STATUS_1';snapshot.event='WORKFLOW_FINISHED';snapshot.status='COMPLETED';snapshot.workflow_stage='COMPLETED';
+ for(const field of ['agent','phase','attempted_calls','validated_responses'])delete snapshot[field];
  document.hidden=true;const before=count;timers[1]();assert.equal(count,before);
  document.hidden=false;hold=true;const first=button.events.click();assert.equal(detail.textContent,'');
  await button.events.click();timers[1]();assert.equal(count,before+1);assert.equal(button.disabled,true);
