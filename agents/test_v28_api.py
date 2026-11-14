@@ -848,6 +848,37 @@ setImmediate(async()=>{
                 process.wait(timeout=3)
             process.stderr.close()
 
+    def test_workflow_status_endpoint_is_read_only_and_fails_closed(self):
+        from ai_meeting_workflow_status import write_status
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/workflow-status')
+        self.assertEqual(error.exception.code, 404)
+        target = Path(self.temp.name) / 'workflow-status.json'
+        event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
+                 'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
+        write_status(event, target, 'a'*32)
+        self.server.RequestHandlerClass = v28.make_handler(self.history, meeting_status_path=target)
+        with patch('ai_meeting_runtime.OpenAIProvider.complete', side_effect=AssertionError('model call')) as provider:
+            status, payload = self.get('/api/v1/meeting/workflow-status')
+        provider.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['snapshot']['status'], 'RUNNING')
+        self.assertTrue(payload['read_only'])
+        self.assertFalse(payload['process_liveness_verified'])
+        self.assertFalse(payload['orders_enabled'])
+        with self.assertRaises(HTTPError) as error:
+            urlopen(Request(self.base + '/api/v1/meeting/workflow-status', data=b'{}', method='POST'), timeout=3)
+        self.assertEqual(error.exception.code, 405)
+        write_status(event, target, 'a'*32, now=datetime.now(timezone.utc)-timedelta(minutes=6))
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/workflow-status')
+        self.assertEqual(error.exception.code, 503)
+        target.write_text('{"private": "never expose"}')
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/workflow-status')
+        self.assertEqual(error.exception.code, 503)
+        self.assertNotIn('never expose', error.exception.read().decode())
+
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/orders")
