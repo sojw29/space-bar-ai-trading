@@ -394,3 +394,27 @@ mode finishes as READY_NO_MODEL_CALLS at SETUP. A status recording failure exits
 nonzero; if execution already began its call count is unknown and the caller
 must inspect the transcript separately. Snapshot storage does not yet add a
 status API or 3D progress panel. No automatic meeting restart is performed.
+
+
+### Show recorded workflow progress in the 3D room
+
+Use the same status path in the two local commands:
+
+```sh
+python agents/ai_meeting_workflow.py path/to/commander_brief.json reports/ai_meeting/latest.json --model YOUR_SUPPORTED_MODEL --status-file reports/ai_meeting/workflow_status.json --json
+python agents/dashboard_api_v28.py --meeting-status reports/ai_meeting/workflow_status.json
+```
+
+The first command remains check-only unless --enable-live is explicitly added.
+The second command enables GET /api/v1/meeting/workflow-status and the 3D room's
+recorded-progress panel. Without a configured status path the API returns 404;
+missing, malformed or stale snapshots return 503 with a fixed sanitized error.
+POST is rejected. Reading status never runs a meeting or submits an order.
+
+The panel checks the snapshot again, polls visible tabs every five seconds,
+prevents overlapping fetches, clears old details during reload/failure, and
+expires records after five minutes or backward clock movement. Local readiness
+is labeled model-call-free; RUNNING is a recorded stage, not verified process
+liveness. A completed status does not verify the transcript or grant trade
+approval. The transcript panel remains separate. Neither command deploys the
+server or synchronizes files between machines.
