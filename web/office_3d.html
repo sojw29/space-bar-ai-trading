@@ -2315,17 +2315,28 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(!response.ok)throw Error(response.status===404?"진행 상태 미연결 · 서버의 상태 파일 설정 필요":"진행 기록 미연결 또는 만료");
    const raw=await response.text();if(raw.length>8192)throw Error("진행 기록 크기 오류");
    const d=JSON.parse(raw),v=d?.snapshot;
+   const extended=v?.version==="MEETING_WORKFLOW_STATUS_2";
+   const fields=extended?"agent,attempted_calls,event,execution_id,phase,status,updated_at_utc,validated_responses,version,workflow_stage":"event,execution_id,status,updated_at_utc,version,workflow_stage";
+
    if(d?.version!=="MEETING_WORKFLOW_STATUS_VIEW_1"||d.read_only!==true||d.orders_enabled!==false||d.process_liveness_verified!==false||
-      !v||typeof v!=="object"||Array.isArray(v)||Object.keys(v).sort().join(",")!=="event,execution_id,status,updated_at_utc,version,workflow_stage"||
-      v.version!=="MEETING_WORKFLOW_STATUS_1"||typeof v.execution_id!=="string"||!/^[a-f0-9]{32}$/.test(v.execution_id)||
+      !v||typeof v!=="object"||Array.isArray(v)||Object.keys(v).sort().join(",")!==fields||
+      !["MEETING_WORKFLOW_STATUS_1","MEETING_WORKFLOW_STATUS_2"].includes(v.version)||typeof v.execution_id!=="string"||!/^[a-f0-9]{32}$/.test(v.execution_id)||
       !Object.hasOwn(stages,v.workflow_stage)||!Object.hasOwn(labels,v.status))throw Error("진행 기록 검증 실패");
-   const valid=(v.status==="RUNNING"&&v.event==="STAGE_STARTED"&&v.workflow_stage!=="COMPLETED")||
+   const plan=[["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],["GUARDIAN","PEER_REVIEW"],["COMMANDER","CONCLUSION"]];
+   const valid=extended?(v.status==="RUNNING"&&v.event==="MODEL_PROGRESS"&&v.workflow_stage==="INFERENCE"&&
+    Number.isInteger(v.attempted_calls)&&Number.isInteger(v.validated_responses)&&v.attempted_calls>=1&&v.attempted_calls<=7&&
+    v.validated_responses>=0&&v.validated_responses<=v.attempted_calls&&v.attempted_calls-v.validated_responses<=1&&
+    v.agent===plan[v.attempted_calls-1][0]&&v.phase===plan[v.attempted_calls-1][1]):
+    ((v.status==="RUNNING"&&v.event==="STAGE_STARTED"&&v.workflow_stage!=="COMPLETED")||
     (v.event==="WORKFLOW_FINISHED"&&((v.status==="READY_NO_MODEL_CALLS"&&v.workflow_stage==="SETUP")||
-     (v.status==="COMPLETED"&&v.workflow_stage==="COMPLETED")||(v.status==="BLOCKED"&&v.workflow_stage!=="COMPLETED")));
+     (v.status==="COMPLETED"&&v.workflow_stage==="COMPLETED")||(v.status==="BLOCKED"&&v.workflow_stage!=="COMPLETED"))));
    const updated=typeof v.updated_at_utc==="string"?Date.parse(v.updated_at_utc):NaN;
    if(!valid||!Number.isFinite(updated)||Date.now()<updated||Date.now()-updated>300000)throw Error("진행 기록 만료 또는 형식 오류");
    observed=updated;status.textContent=labels[v.status]+" · "+stages[v.workflow_stage];status.setAttribute("data-state",v.status);
    detail.textContent="실행 ID: "+v.execution_id+"\n기록 시각: "+new Date(updated).toLocaleString();
+   if(extended)detail.textContent+="\n기록된 에이전트: "+v.agent+" · "+({ANALYSIS:"분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"})[v.phase]+
+    "\n응답 시도 기록: "+v.attempted_calls+"/7 · 검증된 응답: "+v.validated_responses+"/7 · 과금·실제 생존 확인 아님";
+
   }catch(error){clear(error?.name==="AbortError"?"진행 기록 응답 시간 초과":error instanceof SyntaxError?"진행 기록 형식 오류":error?.message||"진행 기록 조회 실패");}
   finally{clearTimeout(timer);loading=false;button.disabled=false;}
  }

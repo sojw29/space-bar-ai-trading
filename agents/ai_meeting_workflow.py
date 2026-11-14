@@ -55,7 +55,14 @@ def run_workflow(source, destination, model, *, enable_live=False, progress=None
             bundle = json.loads(bundle_path.read_text(encoding='utf-8'))
             enter('INFERENCE')
             attempted = True
-            report = run_meeting(bundle, provider, progress=progress)
+            def runtime_progress(event):
+                if on_event:
+                    on_event({'version': 'MEETING_WORKFLOW_EVENT_2', 'event': 'MODEL_PROGRESS',
+                              'workflow_stage': 'INFERENCE', 'status': 'RUNNING',
+                              **{key: event[key] for key in ('agent', 'phase', 'attempted_calls', 'validated_responses')}})
+                if progress:
+                    progress(event)
+            report = run_meeting(bundle, provider, progress=runtime_progress)
             enter('PUBLICATION')
             publish_report(report, destination)
             return finish({'status': 'COMPLETED', 'workflow_stage': 'COMPLETED',

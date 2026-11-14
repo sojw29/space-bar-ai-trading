@@ -866,6 +866,14 @@ setImmediate(async()=>{
         self.assertTrue(payload['read_only'])
         self.assertFalse(payload['process_liveness_verified'])
         self.assertFalse(payload['orders_enabled'])
+        progress = {'version': 'MEETING_WORKFLOW_EVENT_2', 'event': 'MODEL_PROGRESS',
+                    'workflow_stage': 'INFERENCE', 'status': 'RUNNING', 'agent': 'ATLAS',
+                    'phase': 'ANALYSIS', 'attempted_calls': 1, 'validated_responses': 0}
+        write_status(progress, target, 'a'*32)
+        _, payload = self.get('/api/v1/meeting/workflow-status')
+        self.assertEqual(payload['snapshot']['agent'], 'ATLAS')
+        self.assertEqual(payload['snapshot']['validated_responses'], 0)
+        write_status(event, target, 'a'*32)
         with self.assertRaises(HTTPError) as error:
             urlopen(Request(self.base + '/api/v1/meeting/workflow-status', data=b'{}', method='POST'), timeout=3)
         self.assertEqual(error.exception.code, 405)

@@ -418,3 +418,16 @@ is labeled model-call-free; RUNNING is a recorded stage, not verified process
 liveness. A completed status does not verify the transcript or grant trade
 approval. The transcript panel remains separate. Neither command deploys the
 server or synchronizes files between machines.
+
+
+During inference, the workflow also emits MEETING_WORKFLOW_EVENT_2 MODEL_PROGRESS
+records projected from runtime callbacks. Status files use the corresponding
+MEETING_WORKFLOW_STATUS_2 shape with agent, phase, attempted_calls and
+validated_responses. Only the fixed seven-step role/phase sequence and sequential
+counts are accepted. These counts describe response attempts/validation, not
+billing, process liveness or proof of real provider inference. Stage/terminal
+snapshots keep the existing version-1 format; readers support both versions.
+The API and 3D panel now display the recorded agent, analysis/review/conclusion
+phase, and validated response count out of seven. Invalid roles, impossible
+counts and stale data clear the display. No model text or credentials are stored
+in progress snapshots.

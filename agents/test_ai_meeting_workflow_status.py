@@ -48,6 +48,25 @@ class WorkflowStatusTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 read_status(path, now=NOW)
 
+    def test_model_progress_roles_counts_and_versions_are_strict(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'status.json'
+            event = {'version': 'MEETING_WORKFLOW_EVENT_2', 'event': 'MODEL_PROGRESS',
+                     'workflow_stage': 'INFERENCE', 'status': 'RUNNING', 'agent': 'QUANT',
+                     'phase': 'PEER_REVIEW', 'attempted_calls': 5, 'validated_responses': 4}
+            write_status(event, path, 'a'*32, now=NOW)
+            value = read_status(path, now=NOW)
+            self.assertEqual(value['version'], 'MEETING_WORKFLOW_STATUS_2')
+            self.assertEqual(value['agent'], 'QUANT')
+            original = path.read_bytes()
+            for update in [{'agent': 'COMMANDER'}, {'phase': 'ANALYSIS'},
+                           {'validated_responses': 1}, {'attempted_calls': True},
+                           {'validated_responses': 6}, {'attempted_calls': 8},
+                           {'workflow_stage': 'COMPLETED'}, {'status': 'COMPLETED'}]:
+                with self.assertRaises(ValueError):
+                    write_status({**event, **update}, path, 'a'*32, now=NOW)
+                self.assertEqual(path.read_bytes(), original)
+
     def test_status_alias_cannot_overwrite_inputs_or_transcript(self):
         with tempfile.TemporaryDirectory() as directory:
             source, target = Path(directory)/'source.json', Path(directory)/'target.json'
