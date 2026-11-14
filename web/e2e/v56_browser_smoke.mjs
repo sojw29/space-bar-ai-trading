@@ -133,7 +133,9 @@ async function smoke(){
   });
   await meetingPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await meetingPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
-  await meetingPage.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
+  await meetingPage.locator("#ai-meeting-shortcut").click();
+  assert.equal(await meetingPage.locator("#ai-meeting-panel").evaluate(el=>el.open),true);
+  assert.equal(await meetingPage.locator("#ai-meeting-summary").evaluate(el=>el===document.activeElement),true);
   await meetingPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
   assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
