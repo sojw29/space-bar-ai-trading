@@ -281,7 +281,16 @@ seven ordered statements, and a consistent final verdict. A successful
 HTTP response does **not** mean any trade was authorized.
 
 The runtime accepts any caller-selected destination, but the local API
-reads **only** `reports/ai_meeting/latest.json` under the repository root.
+reads `reports/ai_meeting/latest.json` under the repository root by default.
+To display a runtime output stored elsewhere, explicitly select that same file:
+
+```sh
+python agents/dashboard_api_v28.py --meeting-transcript path/to/completed-meeting.json
+```
+
+This option reads a local file only; it does not invoke a provider or synchronize
+remote output. Missing or invalid selected files return HTTP 503 without falling
+back to the default report. The same transcript validation applies.
 Writing `web/ai_meeting.json` or publishing to GitHub Pages does not
 populate this local API. Launch the dashboard from the repository root
 so other relative paths resolve as intended. A completed report generated
