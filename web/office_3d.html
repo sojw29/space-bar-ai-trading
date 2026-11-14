@@ -86,6 +86,8 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 </section>
 <section class="panel"><h2>선택 에이전트 · 연구 정보</h2>
 <div class="metric"><small>AGENT</small><strong id="selected-name">COMMANDER</strong></div>
+<button id="ai-meeting-shortcut" type="button" aria-controls="ai-meeting-panel">모델 회의 기록 보기</button>
+<p class="notice">저장된 모델 회의 기록으로 이동합니다. 회의를 새로 실행하지 않습니다.</p>
 <div class="metric"><small>ROLE</small><strong id="selected-role">합의 판단</strong></div>
 <div class="metric"><small>결정 (주문 신호 아님)</small><strong id="selected-decision" class="WAIT">WAIT</strong></div>
 <div class="metric"><small>분석 근거</small><strong id="selected-reason">데이터 확인 대기</strong></div>
@@ -1990,7 +1992,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 })();
 </script>
 <details id="ai-meeting-panel" style="position:relative;z-index:1006;margin:18px auto;max-width:1000px;background:#101c30;color:#e8f4ff;padding:16px;border:1px solid #426482;border-radius:12px">
-<summary>별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
+<summary id="ai-meeting-summary">별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
 <button id="ai-meeting-refresh" type="button" style="padding:6px 12px;margin:8px 0;background:#25435e;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">회의 기록 다시 확인</button>
 <p id="ai-meeting-status" role="status" aria-live="polite">회의 결과 연결 확인 중…</p>
 <p id="ai-meeting-connection-label" style="font-size:12px;color:#a9c5d9">연결 상태: 확인 중</p>
@@ -2009,6 +2011,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const decision=document.getElementById("ai-meeting-decision");
  const linked=document.getElementById("ai-meeting-linked");
  const timeline=document.getElementById("ai-meeting-timeline");
+ const shortcut=document.getElementById("ai-meeting-shortcut");
+ shortcut?.addEventListener("click",()=>{
+  const panel=document.getElementById("ai-meeting-panel");
+  if(!panel)return;
+  panel.open=true;
+  document.getElementById("ai-meeting-summary")?.focus?.({preventScroll:true});
+  panel.scrollIntoView?.({block:"start",behavior:"auto"});
+ });
  function clearTimeline(){if(timeline){timeline.replaceChildren();timeline.hidden=true;}}
  function clearLinked(){if(linked){linked.textContent="";linked.hidden=true;}}
  function clearDecision(){if(decision){decision.textContent="";decision.hidden=true;}}
