@@ -377,3 +377,20 @@ progress remains separate. Pair `--events --json` to keep the final result alone
 on stdout. Stderr can also contain notices, so consumers should filter events by
 version. These are local process events; this does not add a dashboard API or
 persist progress across process restarts.
+
+
+Add `--status-file path/to/workflow_status.json` to atomically persist the latest
+stage snapshot, even without `--events`. Each invocation has a new execution ID;
+the file contains only allowlisted stage/status metadata and update time, not
+prompts, keys, model output or input paths. Use a distinct status path for each
+concurrent run. It cannot alias the source or completed transcript (including
+hardlinks/symlinks). Status writes may create their parent directory.
+
+`ai_meeting_workflow_status.read_status` enforces a 4 KiB limit, exact fields,
+consistent stage/status combinations, optional expected execution ID and an
+inclusive five-minute freshness window. Old/future snapshots are rejected;
+RUNNING is a recorded stage, not proof that its process is still alive. Default
+mode finishes as READY_NO_MODEL_CALLS at SETUP. A status recording failure exits
+nonzero; if execution already began its call count is unknown and the caller
+must inspect the transcript separately. Snapshot storage does not yet add a
+status API or 3D progress panel. No automatic meeting restart is performed.
