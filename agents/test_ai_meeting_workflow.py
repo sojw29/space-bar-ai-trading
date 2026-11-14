@@ -2,6 +2,8 @@
 from datetime import datetime, timedelta, timezone
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -72,6 +74,45 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['status'], 'BLOCKED')
         self.assertIsNone(result['model_calls_performed'])
         self.assertNotIn('private failure', json.dumps(result))
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def cli(self, *, key='private-fixture-key'):
+        command = [sys.executable, str(Path(__file__).resolve().with_name('ai_meeting_workflow.py')),
+                   str(self.brief), str(self.target), '--model', 'test-model', '--json']
+        result = subprocess.run(command, cwd=self.temp.name,
+                                env=dict(os.environ, OPENAI_API_KEY=key),
+                                capture_output=True, text=True, timeout=15)
+        self.assertNotIn('private-fixture-key', result.stdout + result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assertEqual(len(result.stdout.splitlines()), 1)
+        return result, json.loads(result.stdout)
+
+    def test_cli_json_default_has_one_result_and_preserves_existing_output(self):
+        self.brief = self.brief.rename(self.brief.with_name('market brief with spaces.json'))
+        self.target = self.target.rename(self.target.with_name('previous transcript with spaces.json'))
+        result, payload = self.cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(payload['status'], 'READY_NO_MODEL_CALLS')
+        self.assertEqual(payload['model_calls_performed'], 0)
+        self.assertFalse(payload['provider_verified'])
+        self.assertIn('Local checks only', result.stderr)
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def test_cli_json_missing_key_fails_without_replacing_transcript(self):
+        result, payload = self.cli(key='')
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(payload['workflow_stage'], 'SETUP')
+        self.assertEqual(payload['error_code'], 'OPENAI_API_KEY_REQUIRED')
+        self.assertEqual(payload['model_calls_performed'], 0)
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def test_cli_json_invalid_input_has_sanitized_preparation_failure(self):
+        self.brief.write_text('private invalid source')
+        result, payload = self.cli()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(payload['workflow_stage'], 'PREPARATION')
+        self.assertEqual(payload['error_code'], 'INVALID_JSON')
+        self.assertNotIn('private invalid source', result.stdout + result.stderr)
         self.assertEqual(self.target.read_bytes(), b'previous report')
 
 

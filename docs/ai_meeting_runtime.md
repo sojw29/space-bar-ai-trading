@@ -357,3 +357,11 @@ an unknown call count rather than claiming zero usage; no automatic retry occurs
 The dashboard must be running and reading this destination to display the result.
 This workflow does not start/deploy a server, synchronize remote files, or enable
 orders. The paid path has been tested with fixture responses only, not a live API.
+
+
+For a script or remote command runner, add `--json` to the combined workflow.
+Standard output then contains exactly one final JSON result. Notices and progress
+remain on standard error; they are not part of the JSON. Exit code 0 means either
+READY_NO_MODEL_CALLS or COMPLETED, so always inspect `status` rather than treating
+exit code 0 as proof of model execution. BLOCKED returns exit code 1. This output
+mode does not change authorization: default execution still makes no model calls.

@@ -1,6 +1,7 @@
 """Local brief-to-meeting workflow; check-only unless live execution is explicit."""
 import argparse
 import json
+import sys
 from pathlib import Path
 import tempfile
 
@@ -56,17 +57,19 @@ def main():
     parser.add_argument('destination', help='Completed transcript path; untouched in default check-only mode')
     parser.add_argument('--model', required=True)
     parser.add_argument('--enable-live', action='store_true', help='Authorize up to seven paid model calls')
+    parser.add_argument("--json", action="store_true", dest="json_output", help="Print only the final JSON result to stdout; notices/progress go to stderr")
     args = parser.parse_args()
+    notice_stream = sys.stderr if args.json_output else sys.stdout
     if args.enable_live:
-        print('Live research requested: up to seven paid calls; no orders.', flush=True)
+        print('Live research requested: up to seven paid calls; no orders.', file=notice_stream, flush=True)
     def progress(event):
         print(json.dumps({'agent': event['agent'], 'phase': event['phase'],
-                          'event': event['event'], 'validated_responses': event['validated_responses']}), flush=True)
+                          'event': event['event'], 'validated_responses': event['validated_responses']}), file=notice_stream, flush=True)
     result = run_workflow(args.source, args.destination, args.model,
                           enable_live=args.enable_live, progress=progress)
     print(json.dumps(result, ensure_ascii=False))
     if result['status'] == 'READY_NO_MODEL_CALLS':
-        print('Local checks only; API access, billing and model compatibility remain unverified.')
+        print('Local checks only; API access, billing and model compatibility remain unverified.', file=notice_stream)
     return 0 if result['status'] in ('READY_NO_MODEL_CALLS', 'COMPLETED') else 1
 
 
