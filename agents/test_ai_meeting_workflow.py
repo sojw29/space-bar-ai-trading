@@ -1,6 +1,8 @@
 """Default workflow cannot execute a model; opt-in routing tested with fixtures only."""
 from datetime import datetime, timedelta, timezone
 import json
+import io
+from contextlib import redirect_stdout, redirect_stderr
 import os
 import subprocess
 import sys
@@ -191,6 +193,33 @@ class WorkflowTests(unittest.TestCase):
         second, repeated = self.cli()
         self.assertEqual((first.returncode, second.returncode), (0, 0))
         self.assertNotEqual(initial['execution_id'], repeated['execution_id'])
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def test_cli_fixture_result_status_and_transcript_share_one_execution_id(self):
+        from ai_meeting_workflow import main
+        from ai_meeting_workflow_status import read_status
+        status_file = Path(self.temp.name)/'workflow-status.json'
+        output, errors = io.StringIO(), io.StringIO()
+        arguments = ['workflow', str(self.brief), str(self.target), '--model', 'test-model',
+                     '--enable-live', '--json', '--status-file', str(status_file)]
+        with patch('sys.argv', arguments), redirect_stdout(output), redirect_stderr(errors):
+            with patch('ai_meeting_workflow.OpenAIProvider', return_value=Fixture()):
+                code = main()
+        self.assertEqual(code, 0)
+        result = json.loads(output.getvalue())
+        report = json.loads(self.target.read_text())
+        snapshot = read_status(status_file)
+        self.assertEqual(result['execution_id'], snapshot['execution_id'])
+        self.assertEqual(report['workflow_execution_id'], snapshot['execution_id'])
+        self.assertFalse(report['model_inference_performed'])
+        self.assertEqual(result['model_calls_performed'], 0)
+        self.assertNotIn('private-fixture-key', output.getvalue()+errors.getvalue())
+
+    def test_invalid_execution_id_stops_before_model_calls(self):
+        with patch('ai_meeting_workflow.run_meeting', side_effect=AssertionError('inference')):
+            result = run_workflow(self.brief, self.target, 'test-model', enable_live=True, execution_id='bad-id')
+        self.assertEqual(result['error_code'], 'INVALID_EXECUTION_ID')
+        self.assertEqual(result['model_calls_performed'], 0)
         self.assertEqual(self.target.read_bytes(), b'previous report')
 
 
