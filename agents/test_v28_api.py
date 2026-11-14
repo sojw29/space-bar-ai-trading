@@ -238,13 +238,15 @@ const assert=require('node:assert/strict'),vm=require('node:vm');
 const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 const makeElement=()=>({
  children:[],disabled:false,hidden:false,style:{},attrs:{},events:{},
+ focus(){this.focused=true},scrollIntoView(){this.scrolled=true},
  addEventListener(name,fn){this.events[name]=fn},
  setAttribute(name,value){this.attrs[name]=value},
  replaceChildren(...items){this.children=items},
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
+for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut',
+ 'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
 let requested=null,failRequest=false,requestCount=0,holdResponse=null;
@@ -283,6 +285,12 @@ if(holdResponse)return await new Promise(resolve=>{holdResponse=resolve});return
 setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
+  const beforeShortcut=requestCount;
+  elements['ai-meeting-shortcut'].events.click();
+  assert.equal(elements['ai-meeting-panel'].open,true);
+  assert.equal(elements['ai-meeting-summary'].focused,true);
+  assert.equal(elements['ai-meeting-panel'].scrolled,true);
+  assert.equal(requestCount,beforeShortcut,'navigation must not fetch or start a meeting');
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.match(elements['ai-meeting-status'].textContent,/실제 AI 실행 아님/);
   assert.ok(elements['ai-meeting-rows'].children.every(x=>typeof x.textContent==='string'));
