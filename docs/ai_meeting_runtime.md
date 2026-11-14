@@ -463,3 +463,15 @@ for the dashboard's --meeting-execution-id option. Without --status-file it stil
 identifies the command invocation but does not imply any progress file exists.
 Repeated invocations receive different IDs. The field identifies an execution,
 not proof of model inference, successful publication or verified API access.
+
+
+The combined workflow now stamps completed transcripts with its optional
+workflow_execution_id (the CLI always supplies its generated ID). The local
+transcript API validates/projects that field and displays it in the meeting
+record. When --meeting-execution-id is configured on the dashboard, both the
+progress snapshot and completed transcript must match; a missing, malformed or
+different transcript ID returns sanitized 503. This supersedes the earlier
+progress-only pinning behavior. Unpinned dashboards still accept older valid
+transcripts without the optional field. Publication validation also accepts only
+a well-formed optional ID. Identity correlates local artifacts; it is not a
+signature, verified inference claim or trade authorization.
