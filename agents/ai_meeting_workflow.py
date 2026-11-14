@@ -1,6 +1,7 @@
 """Local brief-to-meeting workflow; check-only unless live execution is explicit."""
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 import tempfile
@@ -14,7 +15,7 @@ from ai_meeting_runtime import (MeetingError, OpenAIProvider, publish_report,
                                 run_meeting, safe_error_code)
 
 
-def run_workflow(source, destination, model, *, enable_live=False, progress=None, on_event=None):
+def run_workflow(source, destination, model, *, enable_live=False, progress=None, on_event=None, execution_id=None):
     stage, attempted = 'INPUT', False
 
     def enter(name):
@@ -32,6 +33,8 @@ def run_workflow(source, destination, model, *, enable_live=False, progress=None
 
     try:
         enter('INPUT')
+        if execution_id is not None and (not isinstance(execution_id, str) or not re.fullmatch('[a-f0-9]{32}', execution_id)):
+            raise MeetingError('INVALID_EXECUTION_ID')
         if type(enable_live) is not bool:
             raise ValueError('INVALID_EXECUTION_SWITCH')
         source, destination = Path(source), Path(destination)
@@ -63,6 +66,8 @@ def run_workflow(source, destination, model, *, enable_live=False, progress=None
                 if progress:
                     progress(event)
             report = run_meeting(bundle, provider, progress=runtime_progress)
+            if execution_id is not None:
+                report['workflow_execution_id'] = execution_id
             enter('PUBLICATION')
             publish_report(report, destination)
             return finish({'status': 'COMPLETED', 'workflow_stage': 'COMPLETED',
@@ -107,7 +112,8 @@ def main():
         started = True
         result = run_workflow(args.source, args.destination, args.model,
                               enable_live=args.enable_live, progress=progress,
-                              on_event=workflow_event if args.events or args.status_file else None)
+                              on_event=workflow_event if args.events or args.status_file else None,
+                              execution_id=execution_id)
     except (OSError, ValueError, TypeError, KeyError):
         # A status observer can fail even after inference/publication. Do not claim zero use.
         result = {'status': 'BLOCKED', 'workflow_stage': 'STATUS_RECORDING',
