@@ -2087,6 +2087,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   try{d=JSON.parse(raw);}catch(_){throw Error("회의 기록 JSON 형식 오류 · 다시 확인해 주세요");}
   if(d===null||typeof d!=="object"||Array.isArray(d))throw Error("회의 기록 객체 형식 오류 · 다시 확인해 주세요");
   const live=d.execution_mode==="LIVE_PROVIDER";
+  if(d.workflow_execution_id!==undefined&&(typeof d.workflow_execution_id!=="string"||!/^[a-f0-9]{32}$/.test(d.workflow_execution_id)))throw Error("회의 실행 ID 검증 실패");
   const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
   if(marketLabel===null)throw Error("데이터 출처 검증 실패");
   if(d.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||d.status!=="COMPLETED"||
@@ -2285,6 +2286,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   status.textContent=(live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님")+
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
+  if(d.workflow_execution_id!==undefined)status.textContent+=" · 실행 ID: "+d.workflow_execution_id;
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
  }catch(error){rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
