@@ -2123,9 +2123,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const showLinked=()=>{
      const source=i>=3&&i<6?d.transcript[i-3]:null;
      const sourceId=i>=3&&i<6?(refs?refs[i].references[0]:"M"+String(i-2).padStart(2,"0")):null;
-     linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\\n"+t.summary+
-      (source?"\\n연결 초기 발언 ["+sourceId+"] "+source.agent+" · "+labels[source.verdict]+"\\n"+source.summary:
-       i<3?"\\n초기 분석 발언입니다. 같은 에이전트의 상호 검토 단계에서 이 발언을 참조합니다.":"\\n최종 결론 발언입니다.");
+     linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\n"+t.summary+
+      (source?"\n연결 초기 발언 ["+sourceId+"] "+source.agent+" · "+labels[source.verdict]+"\n"+source.summary:
+       i<3?"\n초기 분석 발언입니다. 같은 에이전트의 상호 검토 단계에서 이 발언을 참조합니다.":"\n최종 결론 발언입니다.");
      linked.hidden=false;
     };
     item.addEventListener?.("click",showLinked);
@@ -2182,16 +2182,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      const added=review.concerns.filter(value=>!initialSet.has(value));
      const notRepeated=initial.concerns.filter(value=>!reviewSet.has(value));
      const format=(values)=>values.length?values.join(" / "):"없음";
-     linked.textContent=initial.agent+" 판단 비교\\n"+
-      "["+initialId+"] 초기 분석 · "+labels[initial.verdict]+"\\n"+initial.summary+
-      (initial.concerns.length?"\\n초기 우려: "+initial.concerns.join(" / "):"")+
-      "\\n["+reviewId+"] 상호 검토 · "+labels[review.verdict]+"\\n"+review.summary+
-      (review.concerns.length?"\\n검토 우려: "+review.concerns.join(" / "):"")+
-      "\\n판단 상태: "+(initial.verdict===review.verdict?"유지":"변경")+
-      "\\n양쪽에서 언급: "+format(retained)+
-      "\\n검토 단계에서 새로 언급: "+format(added)+
-      "\\n검토 단계에서 재언급 없음: "+format(notRepeated)+
-      "\\n※ 문구가 정확히 일치하는 경우만 동일 우려로 분류합니다. 재언급이 없다고 해결된 것은 아닙니다.";
+     linked.textContent=initial.agent+" 판단 비교\n"+
+      "["+initialId+"] 초기 분석 · "+labels[initial.verdict]+"\n"+initial.summary+
+      (initial.concerns.length?"\n초기 우려: "+initial.concerns.join(" / "):"")+
+      "\n["+reviewId+"] 상호 검토 · "+labels[review.verdict]+"\n"+review.summary+
+      (review.concerns.length?"\n검토 우려: "+review.concerns.join(" / "):"")+
+      "\n판단 상태: "+(initial.verdict===review.verdict?"유지":"변경")+
+      "\n양쪽에서 언급: "+format(retained)+
+      "\n검토 단계에서 새로 언급: "+format(added)+
+      "\n검토 단계에서 재언급 없음: "+format(notRepeated)+
+      "\n※ 문구가 정확히 일치하는 경우만 동일 우려로 분류합니다. 재언급이 없다고 해결된 것은 아닙니다.";
      linked.hidden=false;
     };
     line.addEventListener?.("click",showDetails);
@@ -2213,8 +2213,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     if(!linked)return;
     markSelected(conclusion);
     const final=d.transcript[6];
-    linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\\n"+final.summary+
-     (final.concerns.length?"\\n최종 우려: "+final.concerns.join(" / "):"");
+    linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+final.summary+
+     (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
     linked.hidden=false;
    };
    conclusion.addEventListener?.("click",showConclusion);
