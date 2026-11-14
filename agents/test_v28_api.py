@@ -651,6 +651,31 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,String(code));
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   }
+  // Connectivity recovery refreshes visible tabs and shares all request guards.
+  assert.equal(typeof windowEvents.online,'function');
+  document.hidden=true;
+  const beforeOnline=requestCount;
+  windowEvents.online();
+  await flush();
+  assert.equal(requestCount,beforeOnline,'hidden online event must not fetch');
+  document.hidden=false;
+  failRequest=true;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'disconnected');
+  failRequest=false;holdResponse=true;
+  const beforeReconnect=requestCount;
+  windowEvents.online();windowEvents.online();
+  documentEvents.visibilitychange();callbacks[1]();
+  assert.equal(requestCount,beforeReconnect+1,'reconnection must not duplicate requests');
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-refresh'].disabled,true);
+  const reconnect=holdResponse;holdResponse=null;
+  reconnect({ok:true,text:async()=>JSON.stringify(data.payload)});
+  await flush();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
