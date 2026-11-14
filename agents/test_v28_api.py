@@ -297,6 +297,8 @@ setImmediate(async()=>{
   assert.equal(quant.attrs['aria-pressed'],'false');
   assert.equal(elements['ai-meeting-linked'].hidden,false);
   assert.match(elements['ai-meeting-linked'].textContent,/판단 비교/);
+  assert.ok(elements['ai-meeting-linked'].textContent.includes('\n'),'analysis details must use real line breaks');
+  assert.ok(!elements['ai-meeting-linked'].textContent.includes('\\n'),'analysis details must not show escaped newlines');
   assert.match(elements['ai-meeting-linked'].textContent,/재언급이 없다고 해결된 것은 아닙니다/);
   let prevented=false;
   quant.events.keydown({key:'Enter',preventDefault(){prevented=true}});
@@ -306,6 +308,8 @@ setImmediate(async()=>{
   commander.events.click();
   assert.equal(commander.attrs['aria-pressed'],'true');
   assert.match(elements['ai-meeting-linked'].textContent,/COMMANDER 최종 결론/);
+  assert.ok(elements['ai-meeting-linked'].textContent.includes('\n'),'conclusion must use real line breaks');
+  assert.ok(!elements['ai-meeting-linked'].textContent.includes('\\n'),'conclusion must not show escaped newlines');
   assert.ok(callbacks.length>=2,'expiry and polling callbacks must exist');
   now=Date.parse(data.payload.source_generated_at_utc)+8*3600000+1000;
   callbacks[0]();
