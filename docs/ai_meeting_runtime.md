@@ -317,3 +317,22 @@ contents. LOCAL_SETUP_VALID means local checks only: credential validity, model
 access, billing and supported model behavior remain unverified. BLOCKED returns
 exit status 1 with a sanitized code. Source data can expire after this check;
 the runtime still validates it again when explicitly invoked.
+
+
+### Prepare the runtime input from an existing brief
+
+```sh
+python agents/ai_meeting_prepare.py path/to/commander_brief.json path/to/meeting_bundle.json
+python agents/ai_meeting_setup.py path/to/meeting_bundle.json --model YOUR_SUPPORTED_MODEL
+```
+
+Preparation combines the existing source validation, handoff, consistency review,
+V236 adapter and dry-run transport checks. No credentials or model calls are
+needed to prepare the bundle. It checks freshness at each stage and immediately
+before atomic publication, preserves an existing output on validation failure,
+and rejects source/output aliases. The bundle is an unexecuted request, not a
+completed meeting transcript; never select it as the dashboard transcript.
+After local setup succeeds, the separate runtime command with explicit
+`--enable-live` is still required to run a paid meeting. Preparation never invokes
+that command automatically. A blocked preparation does not make an older output
+current; check the exit status and let the runtime revalidate before inference.
