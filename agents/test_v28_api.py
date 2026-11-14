@@ -3,6 +3,8 @@ import csv
 from datetime import datetime, timedelta, timezone
 import json
 import shutil
+import socket
+import time
 import subprocess
 import sys
 import tempfile
@@ -10,7 +12,7 @@ import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
@@ -791,6 +793,60 @@ setImmediate(async()=>{
         with self.assertRaises(HTTPError) as error:
             self.get('/api/v1/meeting/transcript')
         self.assertEqual(error.exception.code, 503)
+
+    def test_cli_selected_transcript_from_another_working_directory(self):
+        from ai_meeting_runtime import publish_report, run_meeting
+        from test_ai_meeting_runtime import Fixture
+        from test_v240_provider_transport_preflight import request, NOW
+        report = run_meeting(request(), Fixture(), clock=lambda: NOW)
+        now = datetime.now(timezone.utc)
+        for field, minutes in [('source_generated_at_utc', 5),
+                               ('started_at_utc', 4), ('generated_at_utc', 3)]:
+            report[field] = (now - timedelta(minutes=minutes)).isoformat()
+        report['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
+        target = Path(self.temp.name) / 'custom completed meeting.json'
+        publish_report(report, target)
+        with socket.socket() as reservation:
+            reservation.bind(('127.0.0.1', 0))
+            port = reservation.getsockname()[1]
+        command = [sys.executable, str(Path(v28.__file__).resolve()),
+                   '--port', str(port), '--history', str(self.history),
+                   '--meeting-transcript', str(target)]
+        process = subprocess.Popen(command, cwd=self.temp.name,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        base = 'http://127.0.0.1:' + str(port)
+        try:
+            deadline = time.monotonic() + 10
+            while True:
+                if process.poll() is not None:
+                    self.fail('Dashboard CLI exited before startup')
+                try:
+                    with urlopen(base + '/health', timeout=1) as response:
+                        self.assertEqual(response.status, 200)
+                    break
+                except URLError:
+                    if time.monotonic() >= deadline:
+                        self.fail('Dashboard CLI startup timed out')
+                    time.sleep(0.05)
+            with urlopen(base + '/api/v1/meeting/transcript', timeout=3) as response:
+                payload = json.load(response)
+            self.assertEqual(len(payload['transcript']), 7)
+            self.assertFalse(payload['orders_enabled'])
+            self.assertFalse(payload['model_inference_performed'])
+            with urlopen(base + '/office3d', timeout=3) as response:
+                self.assertIn(b'ai-meeting-panel', response.read())
+            target.unlink()
+            with self.assertRaises(HTTPError) as error:
+                urlopen(base + '/api/v1/meeting/transcript', timeout=3)
+            self.assertEqual(error.exception.code, 503)
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
+            process.stderr.close()
 
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
