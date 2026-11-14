@@ -11,9 +11,24 @@ from ai_meeting_runtime import (MeetingError, OpenAIProvider, publish_report,
                                 run_meeting, safe_error_code)
 
 
-def run_workflow(source, destination, model, *, enable_live=False, progress=None):
+def run_workflow(source, destination, model, *, enable_live=False, progress=None, on_event=None):
     stage, attempted = 'INPUT', False
+
+    def enter(name):
+        nonlocal stage
+        stage = name
+        if on_event:
+            on_event({'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
+                      'workflow_stage': name, 'status': 'RUNNING'})
+
+    def finish(result):
+        if on_event:
+            on_event({'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'WORKFLOW_FINISHED',
+                      'workflow_stage': result['workflow_stage'], 'status': result['status']})
+        return result
+
     try:
+        enter('INPUT')
         if type(enable_live) is not bool:
             raise ValueError('INVALID_EXECUTION_SWITCH')
         source, destination = Path(source), Path(destination)
@@ -22,33 +37,34 @@ def run_workflow(source, destination, model, *, enable_live=False, progress=None
             raise MeetingError('SOURCE_DESTINATION_ALIAS')
         with tempfile.TemporaryDirectory(prefix='spacebar-meeting-') as directory:
             bundle_path = Path(directory)/'bundle.json'
-            stage = 'PREPARATION'
+            enter('PREPARATION')
             prepared = prepare_file(source, bundle_path)
             if prepared['status'] != 'BUNDLE_PREPARED':
-                return {**prepared, 'workflow_stage': stage}
-            stage = 'SETUP'
+                return finish({**prepared, 'workflow_stage': stage})
+            enter('SETUP')
             checked = check_setup(bundle_path, model)
             if checked['status'] != 'LOCAL_SETUP_VALID':
-                return {**checked, 'workflow_stage': stage}
+                return finish({**checked, 'workflow_stage': stage})
             if not enable_live:
-                return {**checked, 'status': 'READY_NO_MODEL_CALLS', 'workflow_stage': stage}
-            stage = 'CONFIGURATION'
+                return finish({**checked, 'status': 'READY_NO_MODEL_CALLS', 'workflow_stage': stage})
+            enter('CONFIGURATION')
             provider = OpenAIProvider(enabled=True, model=model)
             bundle = json.loads(bundle_path.read_text(encoding='utf-8'))
-            stage, attempted = 'INFERENCE', True
+            enter('INFERENCE')
+            attempted = True
             report = run_meeting(bundle, provider, progress=progress)
-            stage = 'PUBLICATION'
+            enter('PUBLICATION')
             publish_report(report, destination)
-            return {'status': 'COMPLETED', 'workflow_stage': 'COMPLETED',
+            return finish({'status': 'COMPLETED', 'workflow_stage': 'COMPLETED',
                     'model_calls_performed': report['call_count'] if report['model_inference_performed'] else 0,
                     'validated_responses': report['call_count'],
                     'model_inference_performed': report['model_inference_performed'],
-                    'orders_enabled': False, 'error_code': None}
+                    'orders_enabled': False, 'error_code': None})
     except (ValueError, OSError, TypeError, KeyError) as error:
-        return {'status': 'BLOCKED', 'workflow_stage': stage,
+        return finish({'status': 'BLOCKED', 'workflow_stage': stage,
                 'error_code': safe_error_code(error),
                 'model_calls_performed': None if attempted else 0,
-                'orders_enabled': False}
+                'orders_enabled': False})
 
 
 def main():
@@ -58,6 +74,7 @@ def main():
     parser.add_argument('--model', required=True)
     parser.add_argument('--enable-live', action='store_true', help='Authorize up to seven paid model calls')
     parser.add_argument("--json", action="store_true", dest="json_output", help="Print only the final JSON result to stdout; notices/progress go to stderr")
+    parser.add_argument("--events", action="store_true", help="Emit structured workflow stage events to stderr")
     args = parser.parse_args()
     notice_stream = sys.stderr if args.json_output else sys.stdout
     if args.enable_live:
@@ -65,8 +82,11 @@ def main():
     def progress(event):
         print(json.dumps({'agent': event['agent'], 'phase': event['phase'],
                           'event': event['event'], 'validated_responses': event['validated_responses']}), file=notice_stream, flush=True)
+    def workflow_event(event):
+        print(json.dumps(event), file=sys.stderr, flush=True)
     result = run_workflow(args.source, args.destination, args.model,
-                          enable_live=args.enable_live, progress=progress)
+                          enable_live=args.enable_live, progress=progress,
+                          on_event=workflow_event if args.events else None)
     print(json.dumps(result, ensure_ascii=False))
     if result['status'] == 'READY_NO_MODEL_CALLS':
         print('Local checks only; API access, billing and model compatibility remain unverified.', file=notice_stream)
