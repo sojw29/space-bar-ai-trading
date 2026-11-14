@@ -7,12 +7,15 @@ import re
 from ai_meeting_runtime import publish_report
 
 STAGES = {'INPUT', 'PREPARATION', 'SETUP', 'CONFIGURATION', 'INFERENCE', 'PUBLICATION', 'COMPLETED'}
+PROGRESS_FIELDS = {'agent', 'phase', 'attempted_calls', 'validated_responses'}
+PLAN = [(agent, 'ANALYSIS') for agent in ('ATLAS', 'QUANT', 'GUARDIAN')] + [(agent, 'PEER_REVIEW') for agent in ('ATLAS', 'QUANT', 'GUARDIAN')] + [('COMMANDER', 'CONCLUSION')]
 FIELDS = {'version', 'event', 'workflow_stage', 'status', 'execution_id', 'updated_at_utc'}
 
 
 def validate_status(value, *, now=None, expected_execution_id=None):
     now = now or datetime.now(timezone.utc)
-    if not isinstance(value, dict) or set(value) != FIELDS or value['version'] != 'MEETING_WORKFLOW_STATUS_1':
+    extended = isinstance(value, dict) and value.get('version') == 'MEETING_WORKFLOW_STATUS_2'
+    if not isinstance(value, dict) or set(value) != (FIELDS | PROGRESS_FIELDS if extended else FIELDS) or value['version'] not in ('MEETING_WORKFLOW_STATUS_1', 'MEETING_WORKFLOW_STATUS_2'):
         raise ValueError('INVALID_STATUS_FIELDS')
     if not isinstance(value['execution_id'], str) or not re.fullmatch('[a-f0-9]{32}', value['execution_id']):
         raise ValueError('INVALID_EXECUTION_ID')
@@ -30,16 +33,26 @@ def validate_status(value, *, now=None, expected_execution_id=None):
              (status == 'READY_NO_MODEL_CALLS' and event == 'WORKFLOW_FINISHED' and stage == 'SETUP') or
              (status == 'COMPLETED' and event == 'WORKFLOW_FINISHED' and stage == 'COMPLETED') or
              (status == 'BLOCKED' and event == 'WORKFLOW_FINISHED' and stage != 'COMPLETED'))
+    if extended:
+        attempted, validated = value['attempted_calls'], value['validated_responses']
+        valid = (status == 'RUNNING' and event == 'MODEL_PROGRESS' and stage == 'INFERENCE'
+                 and type(attempted) is int and type(validated) is int
+                 and 1 <= attempted <= 7 and 0 <= validated <= attempted
+                 and attempted-validated <= 1)
+        if valid:
+            valid = (value['agent'], value['phase']) == PLAN[attempted-1]
     if not valid:
         raise ValueError('INCONSISTENT_STATUS')
     return dict(value)
 
 
 def write_status(event, path, execution_id, *, now=None):
-    if not isinstance(event, dict) or set(event) != {'version', 'event', 'workflow_stage', 'status'} or event['version'] != 'MEETING_WORKFLOW_EVENT_1':
+    extended = isinstance(event, dict) and event.get('version') == 'MEETING_WORKFLOW_EVENT_2'
+    expected = {'version', 'event', 'workflow_stage', 'status'} | (PROGRESS_FIELDS if extended else set())
+    if not isinstance(event, dict) or set(event) != expected or event['version'] not in ('MEETING_WORKFLOW_EVENT_1', 'MEETING_WORKFLOW_EVENT_2'):
         raise ValueError('INVALID_EVENT')
     now = now or datetime.now(timezone.utc)
-    value = {**event, 'version': 'MEETING_WORKFLOW_STATUS_1',
+    value = {**event, 'version': 'MEETING_WORKFLOW_STATUS_2' if extended else 'MEETING_WORKFLOW_STATUS_1',
              'execution_id': execution_id, 'updated_at_utc': now.isoformat()}
     publish_report(validate_status(value, now=now), path)
 
