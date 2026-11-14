@@ -336,3 +336,24 @@ After local setup succeeds, the separate runtime command with explicit
 `--enable-live` is still required to run a paid meeting. Preparation never invokes
 that command automatically. A blocked preparation does not make an older output
 current; check the exit status and let the runtime revalidate before inference.
+
+
+### Combined local workflow (check-only by default)
+
+```sh
+python agents/ai_meeting_workflow.py path/to/commander_brief.json reports/ai_meeting/latest.json --model YOUR_SUPPORTED_MODEL
+```
+
+The command prepares a temporary bundle and checks local configuration. By default
+it returns READY_NO_MODEL_CALLS, removes the temporary bundle, leaves the transcript
+destination untouched, and does not call a model. An API key must be configured
+locally for the setup check; local readiness does not verify that key or model.
+
+Only adding `--enable-live` explicitly authorizes up to seven paid research calls
+through the existing runtime. Successful completion atomically publishes the
+transcript at the specified destination. Failed preparation, setup or inference
+does not replace an existing transcript. A failure after inference begins reports
+an unknown call count rather than claiming zero usage; no automatic retry occurs.
+The dashboard must be running and reading this destination to display the result.
+This workflow does not start/deploy a server, synchronize remote files, or enable
+orders. The paid path has been tested with fixture responses only, not a live API.
