@@ -253,13 +253,14 @@ const window={addEventListener:(name,fn)=>{windowEvents[name]=fn}};
 const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
  createElement:makeElement};
 const callbacks=[],timeouts=new Map();
-let timeoutId=0,timeoutPhase=null,bodyFault=null,httpStatus=null;
+let timeoutId=0,timeoutPhase=null,bodyFault=null,httpStatus=null,networkFault=false;
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
 vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,
  setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
  clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
  fetch:async (url,options)=>{requested=url;requestCount++;
+ if(networkFault)throw new TypeError("Failed to fetch internal-host.example:1234");
  if(httpStatus!==null)return {ok:false,status:httpStatus,text:async()=>{throw Error("error body must not be read")}};
  if(bodyFault){
   const fault=bodyFault;
@@ -626,6 +627,7 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].attrs['aria-busy'],'false',fault);
    assert.equal(timeouts.size,0,fault);
    if(fault==='oversized')assert.match(elements['ai-meeting-status'].textContent,/크기 초과/);
+   if(fault==='read-error')assert.match(elements['ai-meeting-status'].textContent,/수신이 중단/);
    if(fault==='truncated')assert.match(elements['ai-meeting-status'].textContent,/JSON 형식 오류/);
    if(fault==='null')assert.match(elements['ai-meeting-status'].textContent,/객체 형식 오류/);
    bodyFault=null;
@@ -676,6 +678,18 @@ setImmediate(async()=>{
   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   assert.equal(elements['ai-meeting-refresh'].disabled,false);
   assert.equal(timeouts.size,0);
+  networkFault=true;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.match(elements['ai-meeting-status'].textContent,/네트워크 연결을 확인/);
+  assert.doesNotMatch(elements['ai-meeting-status'].textContent,/internal-host|Failed to fetch/);
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
+  networkFault=false;
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
