@@ -442,3 +442,15 @@ the pin, the dashboard continues showing the latest valid record in its selected
 file. Restart/reconfigure the server to follow another pinned run. This pins
 progress only; the completed transcript remains separately validated and selected.
 Invalid IDs or an ID without --meeting-status are rejected at startup.
+
+
+The workflow CLI's --status-file observer now validates ordering within its
+current process/run before writing. It requires INPUT first, consecutive
+preparation/setup/configuration/inference stages, and sequential response counts.
+PUBLICATION/COMPLETED require all seven responses to have been validated. Terminal
+records cannot restart; stage/count rollback, skipped response events and backward
+clock movement are rejected without replacing the prior snapshot. In-memory order
+state advances only after a successful atomic write. This is a per-run recorder,
+not a cross-process lock or restart recovery mechanism; use separate status files
+for concurrent runs and optional server execution-ID pinning when needed. The
+stateless snapshot reader still validates each saved record independently.
