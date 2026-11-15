@@ -16,8 +16,8 @@ const vm=require('node:vm'),assert=require('node:assert/strict');
 const script=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 const panelEvents=[];class ViewEvent{constructor(type,options){this.type=type;this.detail=options.detail}}
 const element=()=>({attrs:{},events:{},style:{},dataset:{},children:[],hidden:false,value:0,textContent:'',replaceChildren(...children){this.children=children},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,v,capture){this.events[k]=v;this.capture=capture}});
-const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),timers=[],events={},windowEvents={};
-const elements={'meeting-progress-status':status,'meeting-progress-detail':detail,'meeting-progress-refresh':button,'meeting-progress-stages':steps,'meeting-progress-count':countBar,'meeting-progress-open-record':openRecord};
+const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),retryNote=element(),timers=[],events={},windowEvents={};
+const elements={'meeting-progress-status':status,'meeting-progress-detail':detail,'meeting-progress-refresh':button,'meeting-progress-stages':steps,'meeting-progress-count':countBar,'meeting-progress-open-record':openRecord,'meeting-progress-retry':retryNote};
 const document={dispatchEvent:event=>{panelEvents.push(event);return true},createElement:element,hidden:false,getElementById:id=>elements[id],addEventListener:(k,v)=>events[k]=v};
 let now=Date.now(),code=200,count=0,hold=null,networkError=null,errorBodies=0;
 const snapshot={version:'MEETING_WORKFLOW_STATUS_1',event:'STAGE_STARTED',workflow_stage:'PREPARATION',status:'RUNNING',execution_id:'a'.repeat(32),updated_at_utc:new Date(now).toISOString()};
@@ -49,8 +49,8 @@ const flush=()=>new Promise(setImmediate);
  for(const [http,message] of [[401,/접근 설정/],[403,/접근 설정/],[429,/조회 요청이 많습니다/],[502,/응답 지연/],[504,/응답 지연/],[503,/상태 파일/],[500,/서버 오류/]]){
   code=http;await button.events.click();assert.match(status.textContent,message);
   assert.equal(status.attrs['data-state'],'unavailable');assert.equal(openRecord.disabled,true);
-  assert.equal(openRecord.dataset.executionId,undefined);assert.equal(detail.textContent,'');assert.equal(errorBodies,0);
-  code=200;await button.events.click();assert.equal(openRecord.disabled,false);
+  assert.equal(openRecord.dataset.executionId,undefined);assert.equal(detail.textContent,'');assert.equal(errorBodies,0);assert.equal(retryNote.hidden,false);assert.match(retryNote.textContent,/최소 10초/);assert.match(retryNote.textContent,/지금 조회/);
+  code=200;await button.events.click();assert.equal(openRecord.disabled,false);assert.equal(retryNote.hidden,true);assert.equal(retryNote.textContent,'');
  }
  networkError=new TypeError('private-network-detail');await button.events.click();assert.match(status.textContent,/네트워크 연결/);assert.ok(!status.textContent.includes('private'));
  networkError={name:'AbortError',message:'private-timeout-detail'};await button.events.click();assert.match(status.textContent,/시간 초과/);assert.ok(!status.textContent.includes('private'));
@@ -77,7 +77,7 @@ const flush=()=>new Promise(setImmediate);
  snapshot.version='MEETING_WORKFLOW_STATUS_1';snapshot.event='WORKFLOW_FINISHED';snapshot.status='COMPLETED';snapshot.workflow_stage='COMPLETED';
  for(const field of ['agent','phase','attempted_calls','validated_responses'])delete snapshot[field];
  document.hidden=true;const before=count;timers[1]();assert.equal(count,before);
- document.hidden=false;hold=true;const first=button.events.click();assert.equal(detail.textContent,'');
+ document.hidden=false;hold=true;const first=button.events.click();assert.equal(detail.textContent,'');assert.equal(retryNote.hidden,true);assert.equal(retryNote.textContent,'');
  await button.events.click();timers[1]();assert.equal(count,before+1);assert.equal(button.disabled,true);
  const release=hold;hold=null;release({ok:true,text:async()=>JSON.stringify(view)});await first;
  assert.equal(status.attrs['data-state'],'COMPLETED');assert.equal(button.disabled,false);
@@ -109,7 +109,7 @@ const flush=()=>new Promise(setImmediate);
  code=503;await button.events.click();
  for(const delay of [10000,20000,40000,60000,60000]){
   const attempts=count;now+=delay-1;timers[1]();assert.equal(count,attempts,'do not poll during backoff');
-  assert.match(status.title,new RegExp(String(delay/1000)+'초'));
+  assert.match(status.title,new RegExp(String(delay/1000)+'초'));assert.equal(retryNote.hidden,false);assert.match(retryNote.textContent,new RegExp('최소 '+delay/1000+'초'));
   now++;timers[1]();await flush();assert.equal(count,attempts+1);
  }
  const beforeManual=count;await button.events.click();assert.equal(count,beforeManual+1);assert.equal(button.disabled,false);
