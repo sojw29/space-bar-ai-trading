@@ -656,7 +656,7 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',fault);
   }
   // Distinguish transport failures without reading or exposing server error bodies.
-  for(const [code,message] of [[404,/API 경로/],[401,/접근이 거부/],[403,/접근이 거부/],
+  for(const [code,message] of [[409,/선택한 실행과 다른/],[404,/API 경로/],[401,/접근이 거부/],[403,/접근이 거부/],
    [429,/요청이 많습니다/],[502,/응답 지연/],[504,/응답 지연/],
    [503,/완료된 모델 회의 결과/]]){
    httpStatus=code;
@@ -892,7 +892,8 @@ setImmediate(async()=>{
             write_status(event, status_file, 'b'*32)
             with self.assertRaises(HTTPError) as error:
                 urlopen(base + '/api/v1/meeting/workflow-status', timeout=3)
-            self.assertEqual(error.exception.code, 503)
+            self.assertEqual(error.exception.code, 409)
+            self.assertEqual(json.load(error.exception)['error'], 'workflow_execution_mismatch')
             target.unlink()
             with self.assertRaises(HTTPError) as error:
                 urlopen(base + '/api/v1/meeting/transcript', timeout=3)
@@ -999,13 +1000,20 @@ setImmediate(async()=>{
             transcript.write_text(json.dumps(altered))
             with self.assertRaises(HTTPError) as error:
                 self.get('/api/v1/meeting/transcript')
-            self.assertEqual(error.exception.code, 503)
+            self.assertEqual(error.exception.code, 503 if invalid_id == 'not-an-id' else 409)
+            if invalid_id != 'not-an-id':
+                self.assertEqual(json.load(error.exception)['error'], 'meeting_execution_mismatch')
         transcript.write_text(json.dumps(raw_report))
         self.assertEqual(self.get('/api/v1/meeting/transcript')[0], 200)
         # A new run overwriting this same path must not be mistaken for the pinned run.
         event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
                  'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
         write_status(event, status_file, 'd'*32)
+        with self.assertRaises(HTTPError) as error:
+            self.get('/api/v1/meeting/workflow-status')
+        self.assertEqual(error.exception.code, 409)
+        self.assertEqual(json.load(error.exception)['error'], 'workflow_execution_mismatch')
+        write_status(event, status_file, 'd'*32, now=datetime.now(timezone.utc)-timedelta(minutes=6))
         with self.assertRaises(HTTPError) as error:
             self.get('/api/v1/meeting/workflow-status')
         self.assertEqual(error.exception.code, 503)
