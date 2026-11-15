@@ -117,8 +117,23 @@ const flush=()=>new Promise(setImmediate);
  now--;const beforeRollback=count;timers[1]();await flush();assert.equal(count,beforeRollback+1);
  code=200;snapshot.updated_at_utc=new Date(now).toISOString();await button.events.click();assert.equal(status.title,'');
  const afterRecovery=count;now+=5000;timers[1]();await flush();assert.equal(count,afterRecovery+1,'normal polling resumes after success');
+ // Offline events invalidate the display and pause polling and manual requests.
+ prior=count;windowEvents.offline();assert.match(status.textContent,/네트워크 연결 없음/);
+ assert.equal(button.disabled,true);assert.equal(openRecord.disabled,true);assert.equal(openRecord.dataset.executionId,undefined);
+ assert.equal(retryNote.hidden,true);timers[1]();await button.events.click();assert.equal(count,prior);
+ document.hidden=true;windowEvents.online();assert.equal(count,prior,'hidden reconnect waits for visibility');
+ document.hidden=false;events.visibilitychange();await flush();assert.equal(count,prior+1);assert.equal(status.attrs['data-state'],'COMPLETED');
+ // A response started before disconnection must not become current after reconnect.
+ prior=count;hold=true;const disconnected=button.events.click();windowEvents.offline();windowEvents.online();
+ const obsolete=hold;hold=null;obsolete({ok:false,status:503});await disconnected;await flush();
+ assert.equal(count,prior+2);assert.equal(status.attrs['data-state'],'COMPLETED');assert.equal(status.title,'');
  const emitted=panelEvents.filter(event=>event.type==='spacebar:workflow-view');assert.equal(emitted.at(-1).detail.state,'COMPLETED');assert.equal(emitted.at(-1).detail.execution_id,snapshot.execution_id);
  assert.ok(emitted.every(event=>Object.keys(event.detail).sort().join(',')==='execution_id,state'));
+ // Initial offline detection must also avoid a first request.
+ prior=count;context.navigator={onLine:false};vm.runInNewContext(script,context);await flush();
+ assert.equal(count,prior);assert.match(status.textContent,/네트워크 연결 없음/);assert.equal(button.disabled,true);
+ windowEvents.online();await flush();assert.equal(count,prior+1);assert.equal(status.attrs['data-state'],'COMPLETED');
+
 })().catch(error=>{console.error(error);process.exitCode=1});
 """
         result = subprocess.run([shutil.which('node'), '-e', harness], input=json.dumps(script),
