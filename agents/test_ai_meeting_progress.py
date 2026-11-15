@@ -82,9 +82,19 @@ const flush=()=>new Promise(setImmediate);
  windowEvents.online();windowEvents.pageshow({persisted:true});assert.equal(count,prior+1,'resume events share the existing in-flight guard');
  snapshot.updated_at_utc=new Date(now).toISOString();
  const restore=hold;hold=null;restore({ok:true,text:async()=>JSON.stringify(view)});await flush();
+ assert.equal(count,prior+2,'coalesced restore events trigger one follow-up request');
  assert.equal(status.attrs['data-state'],'COMPLETED');assert.equal(openRecord.disabled,false);
  code=503;windowEvents.online();await flush();assert.equal(status.attrs['data-state'],'unavailable');assert.equal(openRecord.disabled,true);
  code=200;prior=count;windowEvents.online();await flush();assert.equal(count,prior+1);assert.equal(status.attrs['data-state'],'COMPLETED');
+ // Discard the obsolete response and its error when a reconnect is queued.
+ prior=count;hold=true;const pending=button.events.click();windowEvents.online();windowEvents.online();
+ const failure=hold;hold=null;failure({ok:false,status:503});await pending;await flush();
+ assert.equal(count,prior+2);assert.equal(status.attrs['data-state'],'COMPLETED');
+ // Do not replay a queued reconnect after the tab becomes hidden.
+ prior=count;hold=true;const background=button.events.click();windowEvents.online();document.hidden=true;
+ const stale=hold;hold=null;stale({ok:true,text:async()=>{throw Error('obsolete body must not publish')}});await background;
+ assert.equal(count,prior+1);assert.equal(openRecord.disabled,true);assert.notEqual(status.attrs['data-state'],'COMPLETED');
+ document.hidden=false;windowEvents.online();await flush();assert.equal(count,prior+2);assert.equal(status.attrs['data-state'],'COMPLETED');
  const emitted=panelEvents.filter(event=>event.type==='spacebar:workflow-view');assert.equal(emitted.at(-1).detail.state,'COMPLETED');assert.equal(emitted.at(-1).detail.execution_id,snapshot.execution_id);
  assert.ok(emitted.every(event=>Object.keys(event.detail).sort().join(',')==='execution_id,state'));
 })().catch(error=>{console.error(error);process.exitCode=1});
