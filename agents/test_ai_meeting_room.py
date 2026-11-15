@@ -14,7 +14,7 @@ class MeetingRoomTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js required for meeting viewer lifecycle')
     def test_actual_viewer_validation_labels_and_expiry(self):
         html = (Path(__file__).resolve().parent.parent/'web'/'office_3d.html').read_text(encoding='utf-8')
-        script = html.split('id="ai-meeting-panel"', 1)[1].split('<script>', 1)[1].split('</script>', 1)[0]
+        script = '/* Completed'+html.split('/* Completed model meeting snapshots only.', 1)[1].split('</script>', 1)[0]
         report = run_meeting(request(), Fixture(), clock=lambda: NOW)
         harness = r"""
 const assert=require('node:assert/strict'),vm=require('node:vm');
