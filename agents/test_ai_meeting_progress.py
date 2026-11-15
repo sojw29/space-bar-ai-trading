@@ -15,7 +15,7 @@ class ProgressPanelTests(unittest.TestCase):
 const vm=require('node:vm'),assert=require('node:assert/strict');
 const script=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 const panelEvents=[];class ViewEvent{constructor(type,options){this.type=type;this.detail=options.detail}}
-const element=()=>({attrs:{},events:{},style:{},dataset:{},children:[],hidden:false,value:0,textContent:'',replaceChildren(...children){this.children=children},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,v){this.events[k]=v}});
+const element=()=>({attrs:{},events:{},style:{},dataset:{},children:[],hidden:false,value:0,textContent:'',replaceChildren(...children){this.children=children},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,v,capture){this.events[k]=v;this.capture=capture}});
 const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),timers=[],events={};
 const elements={'meeting-progress-status':status,'meeting-progress-detail':detail,'meeting-progress-refresh':button,'meeting-progress-stages':steps,'meeting-progress-count':countBar,'meeting-progress-open-record':openRecord};
 const document={dispatchEvent:event=>{panelEvents.push(event);return true},createElement:element,hidden:false,getElementById:id=>elements[id],addEventListener:(k,v)=>events[k]=v};
@@ -45,6 +45,15 @@ const flush=()=>new Promise(setImmediate);
  snapshot.status='COMPLETED';snapshot.workflow_stage='SETUP';await button.events.click();assert.equal(status.attrs['data-state'],'unavailable');
  snapshot.workflow_stage='COMPLETED';await button.events.click();assert.match(status.textContent,/회의 실행 완료 기록/);
  assert.equal(openRecord.disabled,false);assert.equal(openRecord.dataset.executionId,snapshot.execution_id);
+ // A suspended timer must not leave an expired completion action enabled.
+ assert.equal(openRecord.capture,true,'expiry guard runs before the viewer click handler');
+ const completedAt=now;
+ now=completedAt+300000;openRecord.events.click();assert.equal(openRecord.disabled,false);
+ now++;openRecord.events.click();assert.equal(openRecord.disabled,true);assert.equal(openRecord.dataset.executionId,undefined);
+ assert.equal(status.attrs['data-state'],'unavailable');assert.equal(panelEvents.at(-1).detail.state,'UNAVAILABLE');
+ now=completedAt;snapshot.updated_at_utc=new Date(now).toISOString();await button.events.click();
+ now--;openRecord.events.click();assert.equal(openRecord.disabled,true,'clock rollback also clears completion action');
+ now=completedAt;await button.events.click();assert.equal(openRecord.disabled,false,'fresh reload restores action');
  // Extended runtime progress shows only validated role/phase/count metadata.
  snapshot.version='MEETING_WORKFLOW_STATUS_2';snapshot.event='MODEL_PROGRESS';snapshot.status='RUNNING';snapshot.workflow_stage='INFERENCE';
  Object.assign(snapshot,{agent:'QUANT',phase:'PEER_REVIEW',attempted_calls:5,validated_responses:4});
