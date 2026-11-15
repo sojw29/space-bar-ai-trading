@@ -111,6 +111,7 @@ async function smoke(){
  assert.match(await progressStatus.textContent(),/모델 호출 없음/);
  assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"SETUP");
  assert.equal(await page.locator("#meeting-progress-count").isVisible(),false);
+ assert.equal(await page.locator("#meeting-progress-open-record").isDisabled(),true);
 
  assert.ok((await page.locator("#meeting-progress-detail").textContent()).includes(executionId));
  workflowStatus.event="STAGE_STARTED";workflowStatus.workflow_stage="INFERENCE";workflowStatus.status="RUNNING";
@@ -204,6 +205,15 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+  workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="COMPLETED";workflowStatus.workflow_stage="COMPLETED";
+  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+  await identityPage.locator("#meeting-progress-refresh").click();
+  await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor({timeout:12000});
+  await identityPage.locator("#meeting-progress-open-record").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor({timeout:12000});
+  assert.equal(await identityPage.locator("#ai-meeting-summary").evaluate(node=>node===document.activeElement),true);
+  assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
+
   for(const invalid of ["c".repeat(32),null]){
    const altered={...storedTranscript};
    if(invalid===null)delete altered.workflow_execution_id;else altered.workflow_execution_id=invalid;
@@ -221,6 +231,8 @@ async function smoke(){
    await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
    assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   }
+  workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
+  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
   await identityPage.close();
  }
  await rm(selectedTranscriptPath);
