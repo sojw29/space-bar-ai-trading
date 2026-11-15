@@ -71,7 +71,7 @@ async function smoke(){
  await assert.rejects(readFile(selectedTranscriptPath),{code:"ENOENT"});
  server=spawn(process.env.PYTHON||"python3",
   ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath,"--meeting-session",sessionDir],
-  {cwd:repo,stdio:["ignore","pipe","pipe"]});
+  {cwd:repo,env:{...process.env,PYTHONPATH:[repo,process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)},stdio:["ignore","pipe","pipe"]});
  server.stderr.on("data",data=>{apiStderr=(apiStderr+String(data)).slice(-8192);});
  await waitForApi();
  const market=await (await fetch(base+"/api/v1/market")).json();
@@ -174,6 +174,8 @@ async function smoke(){
  assert.equal(await page.locator('[data-quality="high"]').getAttribute("aria-pressed"),"true");
  assert.match(await page.locator("#perf-state").textContent(),/렌더링 중/);
  await page.screenshot({path:path.join(output,"v56-working-3d.png"),fullPage:true});
+ // Release this software-rendered scene before the independent meeting scenarios.
+ await page.close();
 
  // Real Chromium DOM rendering of a safe offline seven-stage meeting,
  // including a narrow mobile viewport. No provider calls or trading.
