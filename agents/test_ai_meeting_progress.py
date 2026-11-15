@@ -19,12 +19,12 @@ const element=()=>({attrs:{},events:{},style:{},dataset:{},children:[],hidden:fa
 const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),retryNote=element(),timers=[],events={},windowEvents={};
 const elements={'meeting-progress-status':status,'meeting-progress-detail':detail,'meeting-progress-refresh':button,'meeting-progress-stages':steps,'meeting-progress-count':countBar,'meeting-progress-open-record':openRecord,'meeting-progress-retry':retryNote};
 const document={dispatchEvent:event=>{panelEvents.push(event);return true},createElement:element,hidden:false,getElementById:id=>elements[id],addEventListener:(k,v)=>events[k]=v};
-let now=Date.now(),code=200,count=0,hold=null,networkError=null,errorBodies=0;
+let now=Date.now(),code=200,count=0,hold=null,networkError=null,errorBodies=0,waitForAbort=false,aborted=false;
 const snapshot={version:'MEETING_WORKFLOW_STATUS_1',event:'STAGE_STARTED',workflow_stage:'PREPARATION',status:'RUNNING',execution_id:'a'.repeat(32),updated_at_utc:new Date(now).toISOString()};
 const view={version:'MEETING_WORKFLOW_STATUS_VIEW_1',snapshot,read_only:true,orders_enabled:false,process_liveness_verified:false};
 class Clock extends Date{static now(){return now}}
 const context={document,window:{addEventListener:(name,fn)=>windowEvents[name]=fn},Date:Clock,AbortController,CustomEvent:ViewEvent,setTimeout,clearTimeout,setInterval:fn=>timers.push(fn),
- fetch:async(url,options)=>{assert.equal(url,'/api/v1/meeting/workflow-status');assert.equal(options.credentials,'omit');count++;if(networkError)throw networkError;if(hold)return await new Promise(resolve=>hold=resolve);return {ok:code===200,status:code,text:async()=>{if(code!==200){errorBodies++;return "private-server-detail";}return JSON.stringify(view)}}}};
+ fetch:async(url,options)=>{assert.equal(url,'/api/v1/meeting/workflow-status');assert.equal(options.credentials,'omit');count++;if(networkError)throw networkError;if(waitForAbort)return await new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>{aborted=true;const error=new Error('aborted');error.name='AbortError';reject(error)},{once:true}));if(hold)return await new Promise(resolve=>hold=resolve);return {ok:code===200,status:code,text:async()=>{if(code!==200){errorBodies++;return "private-server-detail";}return JSON.stringify(view)}}}};
 vm.runInNewContext(script,context);
 const flush=()=>new Promise(setImmediate);
 (async()=>{
@@ -127,6 +127,10 @@ const flush=()=>new Promise(setImmediate);
  prior=count;hold=true;const disconnected=button.events.click();windowEvents.offline();windowEvents.online();
  const obsolete=hold;hold=null;obsolete({ok:false,status:503});await disconnected;await flush();
  assert.equal(count,prior+2);assert.equal(status.attrs['data-state'],'COMPLETED');assert.equal(status.title,'');
+ waitForAbort=true;const canceled=button.events.click();windowEvents.offline();await canceled;
+ assert.equal(aborted,true,'offline immediately aborts the active progress request');assert.equal(button.disabled,true);
+ assert.match(status.textContent,/네트워크 연결 없음/);assert.equal(retryNote.hidden,true);
+ waitForAbort=false;windowEvents.online();await flush();assert.equal(status.attrs['data-state'],'COMPLETED');
  const emitted=panelEvents.filter(event=>event.type==='spacebar:workflow-view');assert.equal(emitted.at(-1).detail.state,'COMPLETED');assert.equal(emitted.at(-1).detail.execution_id,snapshot.execution_id);
  assert.ok(emitted.every(event=>Object.keys(event.detail).sort().join(',')==='execution_id,state'));
  // Initial offline detection must also avoid a first request.
