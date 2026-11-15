@@ -258,6 +258,23 @@ async function smoke(){
   await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
   await identityPage.locator("#ai-meeting-refresh").click();
   await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
+  // Simulate clicking before a throttled expiry timer wakes up (desktop and mobile).
+  await identityPage.locator("#meeting-progress-refresh").click();
+  await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+  const expiryClick=await identityPage.evaluate(()=>{
+   const button=document.getElementById("meeting-progress-open-record"),now=Date.now;
+   let transcriptRequests=0;const originalFetch=window.fetch;
+   window.fetch=(...args)=>{if(String(args[0]).includes("/api/v1/meeting/transcript"))transcriptRequests++;return originalFetch(...args)};
+   try{
+    Date.now=()=>now()+300001;
+    button.click();
+    return {disabled:button.disabled,id:button.dataset.executionId??null,requests:transcriptRequests,
+     state:document.getElementById("meeting-progress-status").getAttribute("data-state"),
+     summary:document.getElementById("meeting-session-summary").getAttribute("data-state"),
+     selected:!document.getElementById("ai-meeting-selected-run").hidden};
+   }finally{Date.now=now;window.fetch=originalFetch;}
+  });
+  assert.deepEqual(expiryClick,{disabled:true,id:null,requests:0,state:"unavailable",summary:"UNAVAILABLE",selected:false});
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
   await identityPage.close();
