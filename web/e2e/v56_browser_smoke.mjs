@@ -284,6 +284,21 @@ async function smoke(){
    assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
   }
 
+  // Reconnect while an older progress response is still pending; replay once.
+  let releaseProgress;
+  const heldProgress=new Promise(resolve=>{releaseProgress=resolve});
+  await identityPage.route("**/api/v1/meeting/workflow-status",async route=>{
+   await heldProgress;await route.fulfill({status:503,contentType:"application/json",body:'{"error":"obsolete response"}'});
+  },{times:1});
+  await Promise.all([
+   identityPage.waitForRequest(request=>request.url().endsWith("/api/v1/meeting/workflow-status")),
+   identityPage.locator("#meeting-progress-refresh").click()
+  ]);
+  await identityPage.evaluate(()=>{window.dispatchEvent(new Event("online"));window.dispatchEvent(new Event("online"));});
+  const recoveredProgress=identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/workflow-status")&&response.status()===200);
+  releaseProgress();await recoveredProgress;
+  await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+  assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
   await identityPage.close();
