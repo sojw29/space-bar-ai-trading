@@ -16,14 +16,14 @@ const vm=require('node:vm'),assert=require('node:assert/strict');
 const script=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 const panelEvents=[];class ViewEvent{constructor(type,options){this.type=type;this.detail=options.detail}}
 const element=()=>({attrs:{},events:{},style:{},dataset:{},children:[],hidden:false,value:0,textContent:'',replaceChildren(...children){this.children=children},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,v,capture){this.events[k]=v;this.capture=capture}});
-const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),timers=[],events={};
+const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),timers=[],events={},windowEvents={};
 const elements={'meeting-progress-status':status,'meeting-progress-detail':detail,'meeting-progress-refresh':button,'meeting-progress-stages':steps,'meeting-progress-count':countBar,'meeting-progress-open-record':openRecord};
 const document={dispatchEvent:event=>{panelEvents.push(event);return true},createElement:element,hidden:false,getElementById:id=>elements[id],addEventListener:(k,v)=>events[k]=v};
 let now=Date.now(),code=200,count=0,hold=null;
 const snapshot={version:'MEETING_WORKFLOW_STATUS_1',event:'STAGE_STARTED',workflow_stage:'PREPARATION',status:'RUNNING',execution_id:'a'.repeat(32),updated_at_utc:new Date(now).toISOString()};
 const view={version:'MEETING_WORKFLOW_STATUS_VIEW_1',snapshot,read_only:true,orders_enabled:false,process_liveness_verified:false};
 class Clock extends Date{static now(){return now}}
-const context={document,Date:Clock,AbortController,CustomEvent:ViewEvent,setTimeout,clearTimeout,setInterval:fn=>timers.push(fn),
+const context={document,window:{addEventListener:(name,fn)=>windowEvents[name]=fn},Date:Clock,AbortController,CustomEvent:ViewEvent,setTimeout,clearTimeout,setInterval:fn=>timers.push(fn),
  fetch:async(url,options)=>{assert.equal(url,'/api/v1/meeting/workflow-status');assert.equal(options.credentials,'omit');count++;if(hold)return await new Promise(resolve=>hold=resolve);return {ok:code===200,status:code,text:async()=>JSON.stringify(view)}}};
 vm.runInNewContext(script,context);
 const flush=()=>new Promise(setImmediate);
@@ -73,6 +73,18 @@ const flush=()=>new Promise(setImmediate);
  assert.equal(status.attrs['data-state'],'COMPLETED');assert.equal(button.disabled,false);
  assert.equal(countBar.hidden,true);assert.equal(countBar.value,0);
  assert.equal(steps.children.find(node=>node.attrs['aria-current']==='step').attrs['data-stage'],'COMPLETED');
+ // Safari restoration and reconnect refresh progress without waiting for polling.
+ let prior=count;windowEvents.pageshow({persisted:false});assert.equal(count,prior);
+ document.hidden=true;windowEvents.online();windowEvents.pageshow({persisted:true});assert.equal(count,prior);
+ document.hidden=false;now+=300001;hold=true;
+ windowEvents.pageshow({persisted:true});assert.equal(count,prior+1);assert.equal(openRecord.disabled,true);
+ assert.equal(openRecord.dataset.executionId,undefined);assert.equal(status.attrs['data-state'],'loading');
+ windowEvents.online();windowEvents.pageshow({persisted:true});assert.equal(count,prior+1,'resume events share the existing in-flight guard');
+ snapshot.updated_at_utc=new Date(now).toISOString();
+ const restore=hold;hold=null;restore({ok:true,text:async()=>JSON.stringify(view)});await flush();
+ assert.equal(status.attrs['data-state'],'COMPLETED');assert.equal(openRecord.disabled,false);
+ code=503;windowEvents.online();await flush();assert.equal(status.attrs['data-state'],'unavailable');assert.equal(openRecord.disabled,true);
+ code=200;prior=count;windowEvents.online();await flush();assert.equal(count,prior+1);assert.equal(status.attrs['data-state'],'COMPLETED');
  const emitted=panelEvents.filter(event=>event.type==='spacebar:workflow-view');assert.equal(emitted.at(-1).detail.state,'COMPLETED');assert.equal(emitted.at(-1).detail.execution_id,snapshot.execution_id);
  assert.ok(emitted.every(event=>Object.keys(event.detail).sort().join(',')==='execution_id,state'));
 })().catch(error=>{console.error(error);process.exitCode=1});
