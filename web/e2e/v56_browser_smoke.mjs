@@ -326,6 +326,11 @@ async function smoke(){
   }
   await context.setOffline(true);
   await identityPage.waitForFunction(()=>document.getElementById("meeting-progress-status").textContent.includes("브라우저 네트워크 연결 없음"));
+  await identityPage.waitForFunction(()=>document.getElementById("ai-meeting-status").textContent.includes("브라우저 네트워크 연결 없음"));
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
+  assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
+
   assert.equal(await identityPage.locator("#meeting-progress-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
   assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
@@ -333,9 +338,13 @@ async function smoke(){
   assert.equal(await identityPage.locator("#meeting-session-summary").getAttribute("data-state"),"UNAVAILABLE");
   await Promise.all([
    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/workflow-status")&&response.status()===200),
+   identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===200),
    context.setOffline(false)
   ]);
   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
+  assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),true);
   assert.equal(await identityPage.locator("#meeting-progress-refresh").isEnabled(),true);
   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";

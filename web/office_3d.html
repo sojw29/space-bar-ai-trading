@@ -2120,6 +2120,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
  }
  let loading=false;
+ let offline=typeof navigator!=="undefined"&&navigator.onLine===false,networkEpoch=0;
  const verdicts=["OBSERVATION_ONLY","REVIEW_NEEDED","INSUFFICIENT_DATA"];
  const labels={OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
  let validSince=null,validUntil=null;
@@ -2136,9 +2137,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  // Safari can restore a frozen page without a visibility transition.
  if(typeof window!=="undefined")window.addEventListener("pageshow",event=>{if(event.persisted&&!document.hidden){expire();if(!loading)loadMeeting();}});
  // Recheck completed records when connectivity returns, without waiting for polling.
- if(typeof window!=="undefined")window.addEventListener("online",()=>{if(!document.hidden){expire();if(!loading)loadMeeting();}});
+ if(typeof window!=="undefined"){
+  window.addEventListener("offline",()=>{offline=true;networkEpoch++;pendingSelectionReload=false;showOffline();});
+  window.addEventListener("online",()=>{offline=false;refreshButton.disabled=loading;if(!document.hidden){expire();if(loading)pendingSelectionReload=true;else loadMeeting();}});
+ }
+ function showOffline(){
+  rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
+  rows.setAttribute?.("aria-busy","false");refreshButton.disabled=true;
+  status.textContent="회의 기록 미연결 · 브라우저 네트워크 연결 없음 · 재연결 후 다시 확인합니다";
+  status.title="브라우저의 연결 보고이며 서버 중단 판정이 아닙니다.";setConnection("disconnected","request-failed");
+ }
  async function loadMeeting(){
+  if(offline){showOffline();return;}
   if(loading)return;
+  const readEpoch=networkEpoch;pendingSelectionReload=false;
   loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
   const controller=typeof AbortController==="function"?new AbortController():null;
   const timeout=controller&&typeof setTimeout==="function"?setTimeout(()=>controller.abort(),5000):null;
@@ -2148,6 +2160,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   let response;
   try{response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",...(controller?{signal:controller.signal}:{})});}
   catch(error){if(error&&error.name==="AbortError")throw error;throw Error("회의 기록 서버에 연결하지 못했습니다 · 네트워크 연결을 확인해 주세요");}
+  if(offline||readEpoch!==networkEpoch)return;
   if(!response.ok){
    if(response.status===409)throw Error("선택한 실행과 다른 회의 기록 · 실행 ID와 세션 폴더를 확인해 주세요");
    if(response.status===404)throw Error("회의 기록 API 경로를 찾을 수 없습니다 · 서버 버전을 확인해 주세요");
@@ -2159,6 +2172,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   let raw;
   try{raw=await response.text();}
   catch(error){if(error&&error.name==="AbortError")throw error;throw Error("회의 기록 수신이 중단되었습니다 · 다시 확인해 주세요");}
+  if(offline||readEpoch!==networkEpoch)return;
   if(raw.length>65536)throw Error("회의 기록 크기 초과");
   let d;
   try{d=JSON.parse(raw);}catch(_){throw Error("회의 기록 JSON 형식 오류 · 다시 확인해 주세요");}
@@ -2368,14 +2382,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   verifiedRecordId=d.workflow_execution_id??null;
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
- }catch(error){rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
- finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;rows.setAttribute?.("aria-busy","false");if(pendingSelectionReload){pendingSelectionReload=false;loadMeeting();}}
+ }catch(error){if(offline||readEpoch!==networkEpoch)return;rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
+ finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=offline;rows.setAttribute?.("aria-busy","false");if(pendingSelectionReload&&!offline&&!document.hidden){pendingSelectionReload=false;loadMeeting();}}
  }
  refreshButton.addEventListener("click",loadMeeting);
  await loadMeeting();
  // Poll completed research snapshots only; this never starts inference or orders.
  // Skip hidden tabs and overlapping requests; failed/stale responses fail closed.
- setInterval(()=>{if(!document.hidden&&!loading)loadMeeting();},60000);
+ setInterval(()=>{if(!offline&&!document.hidden&&!loading)loadMeeting();},60000);
 })();
 </script>
 <script>

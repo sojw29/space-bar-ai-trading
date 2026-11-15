@@ -771,6 +771,19 @@ setImmediate(async()=>{
   await elements['ai-meeting-clear-selection'].events.click();
   assert.equal(requestCount,afterClear,'clearing an absent selection must not fetch');
   assert.equal(timeouts.size,0);
+  // Network loss clears the entire transcript and pauses its read paths.
+  const beforeOffline=requestCount;windowEvents.offline();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-decision'].hidden,true);
+  assert.equal(elements['ai-meeting-timeline'].hidden,true);assert.equal(elements['ai-meeting-refresh'].disabled,true);
+  assert.match(elements['ai-meeting-status'].textContent,/브라우저 네트워크 연결 없음/);
+  callbacks[1]();await elements['ai-meeting-refresh'].events.click();assert.equal(requestCount,beforeOffline);
+  document.hidden=true;windowEvents.online();await flush();assert.equal(requestCount,beforeOffline);
+  document.hidden=false;documentEvents.visibilitychange();await flush();assert.equal(elements['ai-meeting-rows'].children.length,7);
+  holdResponse=true;const oldRead=elements['ai-meeting-refresh'].events.click();windowEvents.offline();windowEvents.online();
+  const priorNetwork=holdResponse;holdResponse=null;priorNetwork({ok:true,text:async()=>{throw Error('obsolete body must not be read')}});
+  await oldRead;await flush();assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');assert.equal(elements['ai-meeting-refresh'].disabled,false);
+  assert.equal(timeouts.size,0);
   const rendered=panelEvents.filter(event=>event.type==='spacebar:transcript-view');
   assert.ok(rendered.length>0);
   assert.equal(rendered.at(-1).detail.state,'validated');
