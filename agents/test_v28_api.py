@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record',
+for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -731,6 +731,9 @@ setImmediate(async()=>{
   await openRecord.events.click();
   assert.equal(elements['ai-meeting-rows'].children.length,0,'legacy transcript has no selected execution identity');
   assert.match(elements['ai-meeting-status'].textContent,/선택한 실행과 다른/);
+  assert.equal(elements['ai-meeting-selected-run'].hidden,false);
+  assert.match(elements['ai-meeting-selected-run'].textContent,/a{32}/);
+  assert.equal(elements['ai-meeting-clear-selection'].hidden,false);
   data.payload.workflow_execution_id='a'.repeat(32);
   await openRecord.events.click();
   assert.equal(elements['ai-meeting-rows'].children.length,7);
@@ -753,6 +756,18 @@ setImmediate(async()=>{
   assert.equal(requestCount,beforeSelection+2,'selection changes queue only one additional fetch');
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.match(elements['ai-meeting-status'].textContent,/실행 ID: b{32}/);
+  assert.match(elements['ai-meeting-selected-run'].textContent,/b{32}/);
+  // Reset is an explicit read-only return to the server's default record.
+  data.payload.workflow_execution_id='c'.repeat(32);
+  await elements['ai-meeting-clear-selection'].events.click();
+  assert.equal(elements['ai-meeting-selected-run'].hidden,true);
+  assert.equal(elements['ai-meeting-selected-run'].textContent,'');
+  assert.equal(elements['ai-meeting-clear-selection'].hidden,true);
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.match(elements['ai-meeting-status'].textContent,/실행 ID: c{32}/);
+  const afterClear=requestCount;
+  await elements['ai-meeting-clear-selection'].events.click();
+  assert.equal(requestCount,afterClear,'clearing an absent selection must not fetch');
   assert.equal(timeouts.size,0);
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
