@@ -241,7 +241,7 @@ class LocalApiTests(unittest.TestCase):
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 const makeElement=()=>({
- children:[],disabled:false,hidden:false,style:{},attrs:{},events:{},
+ children:[],disabled:false,hidden:false,style:{},attrs:{},events:{},dataset:{},
  focus(){this.focused=true},scrollIntoView(){this.scrolled=true},
  addEventListener(name,fn){this.events[name]=fn},
  setAttribute(name,value){this.attrs[name]=value},
@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status',
+for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -722,6 +722,38 @@ setImmediate(async()=>{
   await elements['ai-meeting-refresh'].events.click();
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  // Explicit completed-run navigation cannot reuse a different or legacy transcript.
+  const openRecord=elements['meeting-progress-open-record'];
+  openRecord.disabled=true;openRecord.dataset.executionId='a'.repeat(32);
+  const beforeDisabled=requestCount;
+  await openRecord.events.click();assert.equal(requestCount,beforeDisabled);
+  openRecord.disabled=false;
+  await openRecord.events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,0,'legacy transcript has no selected execution identity');
+  assert.match(elements['ai-meeting-status'].textContent,/선택한 실행과 다른/);
+  data.payload.workflow_execution_id='a'.repeat(32);
+  await openRecord.events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.equal(elements['ai-meeting-panel'].open,true);
+  assert.equal(elements['ai-meeting-summary'].focused,true);
+  data.payload.workflow_execution_id='b'.repeat(32);
+  await elements['ai-meeting-refresh'].events.click();
+  assert.equal(elements['ai-meeting-rows'].children.length,0);
+  // A new selection while loading queues one reload and rejects the old response.
+  data.payload.workflow_execution_id='a'.repeat(32);holdResponse=true;
+  const beforeSelection=requestCount;
+  const loadingOld=elements['ai-meeting-refresh'].events.click();
+  openRecord.dataset.executionId='b'.repeat(32);
+  await openRecord.events.click();
+  await openRecord.events.click();
+  data.payload.workflow_execution_id='b'.repeat(32);
+  const releaseOld=holdResponse;holdResponse=null;
+  releaseOld({ok:true,text:async()=>JSON.stringify({...data.payload,workflow_execution_id:'a'.repeat(32)})});
+  await loadingOld;await flush();
+  assert.equal(requestCount,beforeSelection+2,'selection changes queue only one additional fetch');
+  assert.equal(elements['ai-meeting-rows'].children.length,7);
+  assert.match(elements['ai-meeting-status'].textContent,/실행 ID: b{32}/);
+  assert.equal(timeouts.size,0);
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });
