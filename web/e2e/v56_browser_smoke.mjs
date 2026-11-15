@@ -299,6 +299,19 @@ async function smoke(){
   releaseProgress();await recoveredProgress;
   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
+  for(const [code,message] of [[403,/접근 설정/],[429,/조회 요청이 많습니다/],[502,/응답 지연/],[503,/상태 파일/]]){
+   await identityPage.route("**/api/v1/meeting/workflow-status",route=>route.fulfill({status:code,contentType:"text/plain",body:"private-server-detail"}));
+   await identityPage.locator("#meeting-progress-refresh").click();
+   await identityPage.locator('#meeting-progress-status[data-state="unavailable"]').waitFor();
+   assert.match(await identityPage.locator("#meeting-progress-status").textContent(),message);
+   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
+   assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
+   assert.equal(await identityPage.locator("#meeting-progress-detail").textContent(),"");
+   assert.ok(!(await identityPage.locator("#meeting-progress-status").textContent()).includes("private-server-detail"));
+   await identityPage.unroute("**/api/v1/meeting/workflow-status");
+   await identityPage.locator("#meeting-progress-refresh").click();
+   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+  }
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
   await identityPage.close();

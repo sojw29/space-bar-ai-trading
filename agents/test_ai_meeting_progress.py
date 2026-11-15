@@ -19,12 +19,12 @@ const element=()=>({attrs:{},events:{},style:{},dataset:{},children:[],hidden:fa
 const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),timers=[],events={},windowEvents={};
 const elements={'meeting-progress-status':status,'meeting-progress-detail':detail,'meeting-progress-refresh':button,'meeting-progress-stages':steps,'meeting-progress-count':countBar,'meeting-progress-open-record':openRecord};
 const document={dispatchEvent:event=>{panelEvents.push(event);return true},createElement:element,hidden:false,getElementById:id=>elements[id],addEventListener:(k,v)=>events[k]=v};
-let now=Date.now(),code=200,count=0,hold=null;
+let now=Date.now(),code=200,count=0,hold=null,networkError=null,errorBodies=0;
 const snapshot={version:'MEETING_WORKFLOW_STATUS_1',event:'STAGE_STARTED',workflow_stage:'PREPARATION',status:'RUNNING',execution_id:'a'.repeat(32),updated_at_utc:new Date(now).toISOString()};
 const view={version:'MEETING_WORKFLOW_STATUS_VIEW_1',snapshot,read_only:true,orders_enabled:false,process_liveness_verified:false};
 class Clock extends Date{static now(){return now}}
 const context={document,window:{addEventListener:(name,fn)=>windowEvents[name]=fn},Date:Clock,AbortController,CustomEvent:ViewEvent,setTimeout,clearTimeout,setInterval:fn=>timers.push(fn),
- fetch:async(url,options)=>{assert.equal(url,'/api/v1/meeting/workflow-status');assert.equal(options.credentials,'omit');count++;if(hold)return await new Promise(resolve=>hold=resolve);return {ok:code===200,status:code,text:async()=>JSON.stringify(view)}}};
+ fetch:async(url,options)=>{assert.equal(url,'/api/v1/meeting/workflow-status');assert.equal(options.credentials,'omit');count++;if(networkError)throw networkError;if(hold)return await new Promise(resolve=>hold=resolve);return {ok:code===200,status:code,text:async()=>{if(code!==200){errorBodies++;return "private-server-detail";}return JSON.stringify(view)}}}};
 vm.runInNewContext(script,context);
 const flush=()=>new Promise(setImmediate);
 (async()=>{
@@ -45,6 +45,16 @@ const flush=()=>new Promise(setImmediate);
  snapshot.status='COMPLETED';snapshot.workflow_stage='SETUP';await button.events.click();assert.equal(status.attrs['data-state'],'unavailable');
  snapshot.workflow_stage='COMPLETED';await button.events.click();assert.match(status.textContent,/회의 실행 완료 기록/);
  assert.equal(openRecord.disabled,false);assert.equal(openRecord.dataset.executionId,snapshot.execution_id);
+ // Failed reads clear completion metadata and never display an HTTP error body.
+ for(const [http,message] of [[401,/접근 설정/],[403,/접근 설정/],[429,/조회 요청이 많습니다/],[502,/응답 지연/],[504,/응답 지연/],[503,/상태 파일/],[500,/서버 오류/]]){
+  code=http;await button.events.click();assert.match(status.textContent,message);
+  assert.equal(status.attrs['data-state'],'unavailable');assert.equal(openRecord.disabled,true);
+  assert.equal(openRecord.dataset.executionId,undefined);assert.equal(detail.textContent,'');assert.equal(errorBodies,0);
+  code=200;await button.events.click();assert.equal(openRecord.disabled,false);
+ }
+ networkError=new TypeError('private-network-detail');await button.events.click();assert.match(status.textContent,/네트워크 연결/);assert.ok(!status.textContent.includes('private'));
+ networkError={name:'AbortError',message:'private-timeout-detail'};await button.events.click();assert.match(status.textContent,/시간 초과/);assert.ok(!status.textContent.includes('private'));
+ networkError=null;await button.events.click();assert.equal(openRecord.disabled,false);
  // A suspended timer must not leave an expired completion action enabled.
  assert.equal(openRecord.capture,true,'expiry guard runs before the viewer click handler');
  const completedAt=now;
