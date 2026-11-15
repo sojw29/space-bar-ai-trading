@@ -212,6 +212,9 @@ async function smoke(){
   await identityPage.locator("#meeting-progress-open-record").click();
   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor({timeout:12000});
   assert.equal(await identityPage.locator("#ai-meeting-summary").evaluate(node=>node===document.activeElement),true);
+  assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
+  assert.equal(await identityPage.locator("#ai-meeting-clear-selection").isVisible(),true);
+
   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
 
   for(const invalid of ["c".repeat(32),null]){
@@ -225,12 +228,29 @@ async function smoke(){
    await identityPage.locator('#ai-meeting-status[data-connection="disconnected"]').waitFor({timeout:12000});
    assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
    assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/선택한 실행과 다른 회의 기록/);
+   assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
    assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
    await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
    await identityPage.locator("#ai-meeting-refresh").click();
    await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
    assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   }
+  await identityPage.locator("#ai-meeting-clear-selection").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor({timeout:12000});
+  assert.equal(await identityPage.locator("#ai-meeting-selected-run").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-clear-selection").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-summary").evaluate(node=>node===document.activeElement),true);
+  // Clearing the viewer selection must not override the server's execution pin.
+  await writeFile(selectedTranscriptPath,JSON.stringify({...storedTranscript,workflow_execution_id:"c".repeat(32)}),"utf8");
+  await Promise.all([
+   identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===409),
+   identityPage.locator("#ai-meeting-refresh").click()
+  ]);
+  await identityPage.locator('#ai-meeting-status[data-connection="disconnected"]').waitFor({timeout:12000});
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
+  await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
   await identityPage.close();
