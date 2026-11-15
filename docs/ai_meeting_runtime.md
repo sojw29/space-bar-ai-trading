@@ -499,3 +499,21 @@ while an absent or differently identified transcript remains unavailable.
 The server keeps the chosen ID for its lifetime; restart it to follow a new run.
 Manual path/ID options remain available. This is a local launcher convenience,
 not deployment, remote synchronization or paid execution.
+
+
+### Use one session folder for preparation and display
+
+```sh
+python agents/ai_meeting_workflow.py path/to/commander_brief.json --meeting-session reports/ai_meeting --model YOUR_SUPPORTED_MODEL --json
+python agents/dashboard_api_v28.py --meeting-session reports/ai_meeting
+```
+
+The workflow folder option selects `latest.json` as the transcript destination
+and `workflow_status.json` as the ordered progress file. An explicit destination
+or --status-file cannot be combined with this option. Existing explicit-path
+commands remain supported. The default still performs local checks only: it
+writes a readiness snapshot but preserves any existing transcript, and a
+mismatched old transcript will not display under the new run's ID. Only the
+separate explicit --enable-live switch runs paid model inference and publishes a
+new completed transcript. A preparation failure records BLOCKED without replacing
+the prior transcript. The two commands do not deploy or synchronize anything.

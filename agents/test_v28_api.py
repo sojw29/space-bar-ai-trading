@@ -834,6 +834,30 @@ setImmediate(async()=>{
         event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
                  'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
         write_status(event, status_file, 'a'*32)
+        execution_id = 'a'*32
+        if use_session:
+            import io
+            import os
+            from contextlib import redirect_stdout, redirect_stderr
+            from ai_meeting_workflow import main as workflow_main
+            from test_v233_agent_research_runtime import source
+            brief = Path(self.temp.name)/'source brief.json'
+            payload = source()
+            payload.update(source_generated_at_utc=(now-timedelta(minutes=10)).isoformat(),
+                           generated_at_utc=(now-timedelta(minutes=5)).isoformat(),
+                           market_source='BYBIT_USDT_PERPETUAL_5M')
+            brief.write_text(json.dumps(payload))
+            output, errors = io.StringIO(), io.StringIO()
+            arguments = ['workflow', str(brief), '--meeting-session', str(artifact_dir),
+                         '--model', 'test-model', '--enable-live', '--json']
+            with patch.dict(os.environ, {'OPENAI_API_KEY': 'fixture-session-key'}), patch('sys.argv', arguments):
+                with redirect_stdout(output), redirect_stderr(errors), patch('ai_meeting_workflow.OpenAIProvider', return_value=Fixture()):
+                    self.assertEqual(workflow_main(), 0)
+            result = json.loads(output.getvalue())
+            execution_id = result['execution_id']
+            self.assertEqual(result['model_calls_performed'], 0)
+            self.assertNotIn('fixture-session-key', output.getvalue()+errors.getvalue())
+
         command = [sys.executable, str(Path(v28.__file__).resolve()),
                    '--port', str(port), '--history', str(self.history),
                    '--meeting-transcript', str(target), '--meeting-status', str(status_file),
@@ -864,7 +888,7 @@ setImmediate(async()=>{
             with urlopen(base + '/office3d', timeout=3) as response:
                 self.assertIn(b'ai-meeting-panel', response.read())
             with urlopen(base + '/api/v1/meeting/workflow-status', timeout=3) as response:
-                self.assertEqual(json.load(response)['snapshot']['execution_id'], 'a'*32)
+                self.assertEqual(json.load(response)['snapshot']['execution_id'], execution_id)
             write_status(event, status_file, 'b'*32)
             with self.assertRaises(HTTPError) as error:
                 urlopen(base + '/api/v1/meeting/workflow-status', timeout=3)
