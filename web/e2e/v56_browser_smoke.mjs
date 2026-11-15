@@ -261,8 +261,9 @@ async function smoke(){
   // Simulate clicking before a throttled expiry timer wakes up (desktop and mobile).
   await identityPage.locator("#meeting-progress-refresh").click();
   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
-  const expiryClick=await identityPage.evaluate(()=>{
+  const expiryClick=await (await identityPage.waitForFunction(()=>{
    const button=document.getElementById("meeting-progress-open-record"),now=Date.now;
+   if(button.disabled||document.getElementById("meeting-progress-status").getAttribute("data-state")!=="COMPLETED")return false;
    let transcriptRequests=0;const originalFetch=window.fetch;
    window.fetch=(...args)=>{if(String(args[0]).includes("/api/v1/meeting/transcript"))transcriptRequests++;return originalFetch(...args)};
    try{
@@ -273,7 +274,7 @@ async function smoke(){
      summary:document.getElementById("meeting-session-summary").getAttribute("data-state"),
      selected:!document.getElementById("ai-meeting-selected-run").hidden};
    }finally{Date.now=now;window.fetch=originalFetch;}
-  });
+  })).jsonValue();
   assert.deepEqual(expiryClick,{disabled:true,id:null,requests:0,state:"unavailable",summary:"UNAVAILABLE",selected:false});
   for(const eventName of ["pageshow","online"]){
    await Promise.all([
@@ -304,6 +305,9 @@ async function smoke(){
    await identityPage.locator("#meeting-progress-refresh").click();
    await identityPage.locator('#meeting-progress-status[data-state="unavailable"]').waitFor();
    assert.match(await identityPage.locator("#meeting-progress-status").textContent(),message);
+   // Polling can fail just before the manual click, so the streak need not be one.
+   // Exact retry boundaries are covered with a controlled clock in the progress script test.
+   assert.match(await identityPage.locator("#meeting-progress-status").getAttribute("title"),/^자동 재조회 대기: (10|20|40|60)초 ·/);
    assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
    assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
    assert.equal(await identityPage.locator("#meeting-progress-detail").textContent(),"");
@@ -311,6 +315,7 @@ async function smoke(){
    await identityPage.unroute("**/api/v1/meeting/workflow-status");
    await identityPage.locator("#meeting-progress-refresh").click();
    await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+   assert.equal(await identityPage.locator("#meeting-progress-status").getAttribute("title"),"");
   }
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
