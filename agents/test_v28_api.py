@@ -784,6 +784,16 @@ setImmediate(async()=>{
   await oldRead;await flush();assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');assert.equal(elements['ai-meeting-refresh'].disabled,false);
   assert.equal(timeouts.size,0);
+  // Disconnection cancels both waiting headers and a pending body read immediately.
+  for(const phase of ['headers','body']){
+   timeoutPhase=phase;const interrupted=elements['ai-meeting-refresh'].events.click();await flush();
+   windowEvents.offline();await interrupted;
+   assert.equal(timeouts.size,0,'canceled request releases its timeout');
+   assert.match(elements['ai-meeting-status'].textContent,/브라우저 네트워크 연결 없음/);
+   assert.doesNotMatch(elements['ai-meeting-status'].textContent,/시간 초과/);
+   assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-refresh'].disabled,true);
+   timeoutPhase=null;windowEvents.online();await flush();assert.equal(elements['ai-meeting-rows'].children.length,7);
+  }
   const rendered=panelEvents.filter(event=>event.type==='spacebar:transcript-view');
   assert.ok(rendered.length>0);
   assert.equal(rendered.at(-1).detail.state,'validated');
