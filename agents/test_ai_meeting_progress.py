@@ -14,15 +14,16 @@ class ProgressPanelTests(unittest.TestCase):
         harness = r"""
 const vm=require('node:vm'),assert=require('node:assert/strict');
 const script=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+const panelEvents=[];class ViewEvent{constructor(type,options){this.type=type;this.detail=options.detail}}
 const element=()=>({attrs:{},events:{},style:{},dataset:{},children:[],hidden:false,value:0,textContent:'',replaceChildren(...children){this.children=children},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,v){this.events[k]=v}});
 const status=element(),detail=element(),button=element(),steps=element(),countBar=element(),openRecord=element(),timers=[],events={};
 const elements={'meeting-progress-status':status,'meeting-progress-detail':detail,'meeting-progress-refresh':button,'meeting-progress-stages':steps,'meeting-progress-count':countBar,'meeting-progress-open-record':openRecord};
-const document={createElement:element,hidden:false,getElementById:id=>elements[id],addEventListener:(k,v)=>events[k]=v};
+const document={dispatchEvent:event=>{panelEvents.push(event);return true},createElement:element,hidden:false,getElementById:id=>elements[id],addEventListener:(k,v)=>events[k]=v};
 let now=Date.now(),code=200,count=0,hold=null;
 const snapshot={version:'MEETING_WORKFLOW_STATUS_1',event:'STAGE_STARTED',workflow_stage:'PREPARATION',status:'RUNNING',execution_id:'a'.repeat(32),updated_at_utc:new Date(now).toISOString()};
 const view={version:'MEETING_WORKFLOW_STATUS_VIEW_1',snapshot,read_only:true,orders_enabled:false,process_liveness_verified:false};
 class Clock extends Date{static now(){return now}}
-const context={document,Date:Clock,AbortController,setTimeout,clearTimeout,setInterval:fn=>timers.push(fn),
+const context={document,Date:Clock,AbortController,CustomEvent:ViewEvent,setTimeout,clearTimeout,setInterval:fn=>timers.push(fn),
  fetch:async(url,options)=>{assert.equal(url,'/api/v1/meeting/workflow-status');assert.equal(options.credentials,'omit');count++;if(hold)return await new Promise(resolve=>hold=resolve);return {ok:code===200,status:code,text:async()=>JSON.stringify(view)}}};
 vm.runInNewContext(script,context);
 const flush=()=>new Promise(setImmediate);
@@ -63,6 +64,8 @@ const flush=()=>new Promise(setImmediate);
  assert.equal(status.attrs['data-state'],'COMPLETED');assert.equal(button.disabled,false);
  assert.equal(countBar.hidden,true);assert.equal(countBar.value,0);
  assert.equal(steps.children.find(node=>node.attrs['aria-current']==='step').attrs['data-stage'],'COMPLETED');
+ const emitted=panelEvents.filter(event=>event.type==='spacebar:workflow-view');assert.equal(emitted.at(-1).detail.state,'COMPLETED');assert.equal(emitted.at(-1).detail.execution_id,snapshot.execution_id);
+ assert.ok(emitted.every(event=>Object.keys(event.detail).sort().join(',')==='execution_id,state'));
 })().catch(error=>{console.error(error);process.exitCode=1});
 """
         result = subprocess.run([shutil.which('node'), '-e', harness], input=json.dumps(script),
