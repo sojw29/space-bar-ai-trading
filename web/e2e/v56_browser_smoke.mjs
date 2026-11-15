@@ -304,7 +304,9 @@ async function smoke(){
    await identityPage.locator("#meeting-progress-refresh").click();
    await identityPage.locator('#meeting-progress-status[data-state="unavailable"]').waitFor();
    assert.match(await identityPage.locator("#meeting-progress-status").textContent(),message);
-   assert.match(await identityPage.locator("#meeting-progress-status").getAttribute("title"),/10초/);
+   // Polling can fail just before the manual click, so the streak need not be one.
+   // Exact retry boundaries are covered with a controlled clock in the progress script test.
+   assert.match(await identityPage.locator("#meeting-progress-status").getAttribute("title"),/^자동 재조회 대기: (10|20|40|60)초 ·/);
    assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
    assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
    assert.equal(await identityPage.locator("#meeting-progress-detail").textContent(),"");
