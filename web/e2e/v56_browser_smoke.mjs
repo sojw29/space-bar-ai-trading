@@ -304,6 +304,7 @@ async function smoke(){
    await identityPage.locator("#meeting-progress-refresh").click();
    await identityPage.locator('#meeting-progress-status[data-state="unavailable"]').waitFor();
    assert.match(await identityPage.locator("#meeting-progress-status").textContent(),message);
+   assert.match(await identityPage.locator("#meeting-progress-status").getAttribute("title"),/10초/);
    assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
    assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
    assert.equal(await identityPage.locator("#meeting-progress-detail").textContent(),"");
@@ -311,6 +312,7 @@ async function smoke(){
    await identityPage.unroute("**/api/v1/meeting/workflow-status");
    await identityPage.locator("#meeting-progress-refresh").click();
    await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+   assert.equal(await identityPage.locator("#meeting-progress-status").getAttribute("title"),"");
   }
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
