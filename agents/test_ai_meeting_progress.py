@@ -105,6 +105,18 @@ const flush=()=>new Promise(setImmediate);
  const stale=hold;hold=null;stale({ok:true,text:async()=>{throw Error('obsolete body must not publish')}});await background;
  assert.equal(count,prior+1);assert.equal(openRecord.disabled,true);assert.notEqual(status.attrs['data-state'],'COMPLETED');
  document.hidden=false;windowEvents.online();await flush();assert.equal(count,prior+2);assert.equal(status.attrs['data-state'],'COMPLETED');
+ // Automatic failures back off at 10/20/40/60 seconds; manual checks stay available.
+ code=503;await button.events.click();
+ for(const delay of [10000,20000,40000,60000,60000]){
+  const attempts=count;now+=delay-1;timers[1]();assert.equal(count,attempts,'do not poll during backoff');
+  assert.match(status.title,new RegExp(String(delay/1000)+'초'));
+  now++;timers[1]();await flush();assert.equal(count,attempts+1);
+ }
+ const beforeManual=count;await button.events.click();assert.equal(count,beforeManual+1);assert.equal(button.disabled,false);
+ // A clock rollback cannot strand polling behind a future retry timestamp.
+ now--;const beforeRollback=count;timers[1]();await flush();assert.equal(count,beforeRollback+1);
+ code=200;snapshot.updated_at_utc=new Date(now).toISOString();await button.events.click();assert.equal(status.title,'');
+ const afterRecovery=count;now+=5000;timers[1]();await flush();assert.equal(count,afterRecovery+1,'normal polling resumes after success');
  const emitted=panelEvents.filter(event=>event.type==='spacebar:workflow-view');assert.equal(emitted.at(-1).detail.state,'COMPLETED');assert.equal(emitted.at(-1).detail.execution_id,snapshot.execution_id);
  assert.ok(emitted.every(event=>Object.keys(event.detail).sort().join(',')==='execution_id,state'));
 })().catch(error=>{console.error(error);process.exitCode=1});
