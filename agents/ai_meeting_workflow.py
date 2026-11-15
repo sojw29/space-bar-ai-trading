@@ -85,13 +85,25 @@ def run_workflow(source, destination, model, *, enable_live=False, progress=None
 def main():
     parser = argparse.ArgumentParser(description='Prepare and check a meeting; no model calls by default')
     parser.add_argument('source', help='Local V229 brief JSON')
-    parser.add_argument('destination', help='Completed transcript path; untouched in default check-only mode')
+    parser.add_argument('destination', nargs='?', help='Completed transcript path; untouched in default check-only mode')
     parser.add_argument('--model', required=True)
     parser.add_argument('--enable-live', action='store_true', help='Authorize up to seven paid model calls')
     parser.add_argument("--json", action="store_true", dest="json_output", help="Print only the final JSON result to stdout; notices/progress go to stderr")
     parser.add_argument("--events", action="store_true", help="Emit structured workflow stage events to stderr")
     parser.add_argument("--status-file", type=Path, help="Atomically record the latest local workflow stage")
+    parser.add_argument("--meeting-session", type=Path, help="Use latest.json and workflow_status.json within one session folder")
     args = parser.parse_args()
+    if args.meeting_session is not None:
+        if args.destination is not None or args.status_file is not None:
+            parser.error('--meeting-session cannot be combined with a destination or --status-file')
+        try:
+            session = args.meeting_session.resolve()
+        except (OSError, RuntimeError):
+            parser.error('Meeting session folder could not be resolved')
+        args.destination = session / 'latest.json'
+        args.status_file = session / 'workflow_status.json'
+    elif args.destination is None:
+        parser.error('A destination is required unless --meeting-session is supplied')
     execution_id = uuid.uuid4().hex
     recorder = WorkflowStatusRecorder(args.status_file, execution_id) if args.status_file else None
     notice_stream = sys.stderr if args.json_output else sys.stdout
