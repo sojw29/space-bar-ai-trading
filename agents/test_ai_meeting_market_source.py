@@ -124,7 +124,7 @@ class MarketSourceTests(unittest.TestCase):
         _, bundle = pipeline(build(okx_response, provider='okx'))
         report = run_meeting(bundle, Fixture())
         room = (Path(__file__).resolve().parent.parent/'web/office_3d.html').read_text()
-        script = room.split('id="ai-meeting-panel"',1)[1].split('<script>',1)[1].split('</script>',1)[0]
+        script = '/* Completed'+room.split('/* Completed model meeting snapshots only.', 1)[1].split('</script>', 1)[0]
         harness = r"""
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
