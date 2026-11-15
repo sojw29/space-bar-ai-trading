@@ -570,3 +570,5 @@ liveness, billing verification or trade authorization. Reload/error/expiry event
 remove the prior linked state. The detailed panels and server execution pin remain
 unchanged; the summary consumes allowlisted identity/state/provenance metadata
 only, not model text or credentials.
+
+완료 기록 버튼은 클릭 직전에도 진행 기록의 5분 유효 시간과 시계 역행을 확인한다. 백그라운드 탭의 타이머가 지연돼도 만료된 버튼으로 실행 ID를 선택하거나 결과를 요청하지 않으며, 진행 상태를 새로 조회해 검증하면 다시 사용할 수 있다.
