@@ -236,7 +236,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(payload["ai_agents_running"])
         html = (Path(__file__).resolve().parent.parent / "web" /
                 "office_3d.html").read_text(encoding="utf-8")
-        script = html.split('id="ai-meeting-panel"', 1)[1].split("<script>", 1)[1].split("</script>", 1)[0]
+        script = '/* Completed'+html.split('/* Completed model meeting snapshots only.', 1)[1].split("</script>", 1)[0]
         harness = r"""
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
@@ -255,14 +255,16 @@ for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','
  elements[id]=makeElement();
 let requested=null,failRequest=false,requestCount=0,holdResponse=null;
 const documentEvents={},windowEvents={};
+const panelEvents=[];
+class ViewEvent{constructor(type,options){this.type=type;this.detail=options.detail}}
 const window={addEventListener:(name,fn)=>{windowEvents[name]=fn}};
-const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
+const document={dispatchEvent:event=>{panelEvents.push(event);return true},hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
  createElement:makeElement};
 const callbacks=[],timeouts=new Map();
 let timeoutId=0,timeoutPhase=null,bodyFault=null,httpStatus=null,networkFault=false;
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
-vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,
+vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,CustomEvent:ViewEvent,
  setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
  clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
  fetch:async (url,options)=>{requested=url;requestCount++;
@@ -769,6 +771,13 @@ setImmediate(async()=>{
   await elements['ai-meeting-clear-selection'].events.click();
   assert.equal(requestCount,afterClear,'clearing an absent selection must not fetch');
   assert.equal(timeouts.size,0);
+  const rendered=panelEvents.filter(event=>event.type==='spacebar:transcript-view');
+  assert.ok(rendered.length>0);
+  assert.equal(rendered.at(-1).detail.state,'validated');
+  assert.equal(rendered.at(-1).detail.execution_id,'c'.repeat(32));
+  assert.equal(rendered.at(-1).detail.provenance,'OFFLINE_FIXTURE');
+  assert.ok(rendered.every(event=>Object.keys(event.detail).sort().join(',')==='execution_id,provenance,state'));
+  assert.ok(rendered.filter(event=>event.detail.state!=='validated').every(event=>event.detail.execution_id===null&&event.detail.provenance===null));
   process.exit(0);
  }catch(e){console.error(e);process.exit(1)}
 });

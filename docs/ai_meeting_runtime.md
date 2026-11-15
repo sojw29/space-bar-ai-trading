@@ -557,3 +557,16 @@ the selection banner and keeps focus in the transcript panel. It does not change
 a server execution-ID pin or bypass API validation. Selection changes and resets
 share the single queued-reload guard during an in-flight request; neither starts
 inference or orders. Reloading the page also resets the viewer's local selection.
+
+
+The sidebar now summarizes the relationship between the two independently
+validated views without making extra API calls. Readiness remains model-call-free;
+a running/blocked progress record is not a completed result. A completed progress
+record needs a validated transcript with the same execution ID before the summary
+labels them linked. Missing result/identity, differing IDs and unavailable progress
+remain separate states. Linked offline fixtures explicitly say no real AI
+execution. Provider linkage describes stored API-completion metadata, not current
+liveness, billing verification or trade authorization. Reload/error/expiry events
+remove the prior linked state. The detailed panels and server execution pin remain
+unchanged; the summary consumes allowlisted identity/state/provenance metadata
+only, not model text or credentials.
