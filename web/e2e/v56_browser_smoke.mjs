@@ -2,7 +2,7 @@
  * No Binance network access, private API keys or trading actions.
  */
 import assert from "node:assert/strict";
-import {spawn} from "node:child_process";
+import {spawn,spawnSync} from "node:child_process";
 import {mkdtemp, writeFile, readFile, mkdir, rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import path from "node:path";
@@ -45,14 +45,32 @@ async function smoke(){
  }
  const csvPath=path.join(runDir,"BTC_5m.csv");
  await writeFile(csvPath,csv,"utf8");
- const workflowStatusPath=path.join(runDir,"workflow-status.json");
- const selectedTranscriptPath=path.join(runDir,"selected-transcript.json");
- const workflowStatus={version:"MEETING_WORKFLOW_STATUS_1",event:"WORKFLOW_FINISHED",
-  workflow_stage:"SETUP",status:"READY_NO_MODEL_CALLS",execution_id:"b".repeat(32),
-  updated_at_utc:new Date().toISOString()};
- await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ const sessionDir=path.join(runDir,"meeting session");
+ const workflowStatusPath=path.join(sessionDir,"workflow_status.json");
+ const selectedTranscriptPath=path.join(sessionDir,"latest.json");
+ const briefPath=path.join(runDir,"commander brief.json");
+ const brief={version:"V229.0",report_type:"DETERMINISTIC_COMMANDER_RESEARCH_BRIEF",
+  research_only:true,orders_enabled:false,realtime:false,ai_agents_running:false,
+  trade_signals_available:false,backtest_verified:false,commander:{status:"COMPILED_NOT_AI"},
+  source_generated_at_utc:new Date(Date.now()-10*60000).toISOString(),
+  generated_at_utc:new Date(Date.now()-5*60000).toISOString(),market_source:"BYBIT_USDT_PERPETUAL_5M",
+  markets:["BTCUSDT","ETHUSDT","SOLUSDT"].map(symbol=>({symbol,trend_observation:"SMA50_ABOVE_SMA200",
+   volume_ratio_20:1.2,risk_status:"NO_TRADE_AUTHORIZATION",research_conclusion:"DESCRIPTIVE_ONLY"}))};
+ await writeFile(briefPath,JSON.stringify(brief),"utf8");
+ // This is the actual check-only CLI. A dummy key replaces inherited credentials.
+ const preparation=spawnSync(process.env.PYTHON||"python3",
+  ["agents/ai_meeting_workflow.py",briefPath,"--meeting-session",sessionDir,"--model","fixture-model","--json"],
+  {cwd:repo,encoding:"utf8",timeout:15000,env:{...process.env,OPENAI_API_KEY:"browser-fixture-key-not-real"}});
+ assert.equal(preparation.status,0,preparation.stderr);
+ assert.ok(!(preparation.stdout+preparation.stderr).includes("browser-fixture-key-not-real"));
+ const prepared=JSON.parse(preparation.stdout),executionId=prepared.execution_id;
+ assert.equal(prepared.status,"READY_NO_MODEL_CALLS");assert.equal(prepared.model_calls_performed,0);
+ assert.equal(prepared.provider_verified,false);assert.equal(prepared.orders_enabled,false);
+ const workflowStatus=JSON.parse(await readFile(workflowStatusPath,"utf8"));
+ assert.equal(workflowStatus.execution_id,executionId);assert.equal(workflowStatus.workflow_stage,"SETUP");
+ await assert.rejects(readFile(selectedTranscriptPath),{code:"ENOENT"});
  server=spawn(process.env.PYTHON||"python3",
-  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath,"--meeting-status",workflowStatusPath,"--meeting-execution-id","b".repeat(32),"--meeting-transcript",selectedTranscriptPath],
+  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath,"--meeting-session",sessionDir],
   {cwd:repo,stdio:["ignore","pipe","pipe"]});
  server.stderr.on("data",data=>{apiStderr=(apiStderr+String(data)).slice(-8192);});
  await waitForApi();
@@ -91,7 +109,7 @@ async function smoke(){
  const progressStatus=page.locator("#meeting-progress-status");
  await page.locator('#meeting-progress-status[data-state="READY_NO_MODEL_CALLS"]').waitFor({timeout:12000});
  assert.match(await progressStatus.textContent(),/모델 호출 없음/);
- assert.match(await page.locator("#meeting-progress-detail").textContent(),/bbbbbbbb/);
+ assert.ok((await page.locator("#meeting-progress-detail").textContent()).includes(executionId));
  workflowStatus.event="STAGE_STARTED";workflowStatus.workflow_stage="INFERENCE";workflowStatus.status="RUNNING";
  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
  await page.locator("#meeting-progress-refresh").click();
@@ -156,7 +174,7 @@ async function smoke(){
   trade_authorization:"DENIED",call_count:7,model:"fixture",
   market_source:"BYBIT_USDT_PERPETUAL_5M",request_sha256:"a".repeat(64),
   source_generated_at_utc:source,started_at_utc:started,generated_at_utc:finished,
-  final_verdict:"OBSERVATION_ONLY",workflow_execution_id:"b".repeat(32),
+  final_verdict:"OBSERVATION_ONLY",workflow_execution_id:executionId,
   transcript:names.map((agent,i)=>({agent,phase:phases[i],
    summary:"Offline fixture stage "+(i+1),concerns:[],verdict:"OBSERVATION_ONLY"}))
  };
@@ -172,7 +190,7 @@ async function smoke(){
   await identityPage.locator("#ai-meeting-shortcut").click();
   await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
-  assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실행 ID: b{32}/);
+  assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
   for(const invalid of ["c".repeat(32),null]){
    const altered={...storedTranscript};
@@ -188,7 +206,7 @@ async function smoke(){
    await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
    await identityPage.locator("#ai-meeting-refresh").click();
    await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
-   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실행 ID: b{32}/);
+   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   }
   await identityPage.close();
  }
