@@ -806,6 +806,12 @@ setImmediate(async()=>{
         self.assertEqual(error.exception.code, 503)
 
     def test_cli_selected_transcript_from_another_working_directory(self):
+        self.check_cli_selected_transcript(use_session=False)
+
+    def test_cli_meeting_session_from_another_working_directory(self):
+        self.check_cli_selected_transcript(use_session=True)
+
+    def check_cli_selected_transcript(self, *, use_session):
         from ai_meeting_runtime import publish_report, run_meeting
         from test_ai_meeting_runtime import Fixture
         from test_v240_provider_transport_preflight import request, NOW
@@ -816,13 +822,15 @@ setImmediate(async()=>{
             report[field] = (now - timedelta(minutes=minutes)).isoformat()
         report['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
         report['workflow_execution_id'] = 'a'*32
-        target = Path(self.temp.name) / 'custom completed meeting.json'
+        artifact_dir = Path(self.temp.name)/'meeting session with spaces' if use_session else Path(self.temp.name)
+        artifact_dir.mkdir(exist_ok=True)
+        target = artifact_dir / ('latest.json' if use_session else 'custom completed meeting.json')
         publish_report(report, target)
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]
         from ai_meeting_workflow_status import write_status
-        status_file = Path(self.temp.name)/'selected workflow status.json'
+        status_file = artifact_dir/('workflow_status.json' if use_session else 'selected workflow status.json')
         event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
                  'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
         write_status(event, status_file, 'a'*32)
@@ -830,6 +838,8 @@ setImmediate(async()=>{
                    '--port', str(port), '--history', str(self.history),
                    '--meeting-transcript', str(target), '--meeting-status', str(status_file),
                    '--meeting-execution-id', 'a'*32]
+        if use_session:
+            command = command[:command.index('--meeting-transcript')] + ['--meeting-session', str(artifact_dir)]
         process = subprocess.Popen(command, cwd=self.temp.name,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         base = 'http://127.0.0.1:' + str(port)
@@ -991,6 +1001,29 @@ setImmediate(async()=>{
         self.assertEqual(result.returncode, 2)
         self.assertIn('requires --meeting-status', result.stderr)
         self.assertNotIn('Traceback', result.stderr)
+
+    def test_cli_meeting_session_rejects_stale_invalid_and_conflicting_options(self):
+        from ai_meeting_workflow_status import write_status
+        session = Path(self.temp.name)/'session with spaces'
+        session.mkdir()
+        status_file = session/'workflow_status.json'
+        event = {'version': 'MEETING_WORKFLOW_EVENT_1', 'event': 'STAGE_STARTED',
+                 'workflow_stage': 'PREPARATION', 'status': 'RUNNING'}
+        base = [sys.executable, str(Path(v28.__file__).resolve()), '--meeting-session', str(session)]
+        for mode in ('missing', 'malformed', 'stale', 'conflict'):
+            if mode == 'malformed':
+                status_file.write_text('private invalid content')
+            elif mode == 'stale':
+                write_status(event, status_file, 'a'*32, now=datetime.now(timezone.utc)-timedelta(minutes=6))
+            elif mode == 'conflict':
+                write_status(event, status_file, 'a'*32)
+            command = base + (['--meeting-execution-id', 'a'*32] if mode == 'conflict' else [])
+            result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 2, mode)
+            self.assertNotIn('Traceback', result.stderr)
+            self.assertNotIn('private invalid content', result.stderr)
+        # Resolving/serving a session must not alter its saved state.
+        self.assertEqual(json.loads(status_file.read_text())['execution_id'], 'a'*32)
 
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:

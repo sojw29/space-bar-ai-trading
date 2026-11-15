@@ -349,7 +349,20 @@ def main():
     parser.add_argument("--meeting-transcript", type=Path, help="Completed meeting JSON to display; default: reports/ai_meeting/latest.json")
     parser.add_argument("--meeting-status", type=Path, help="Optional local workflow status snapshot to display")
     parser.add_argument("--meeting-execution-id", help="Optional 32-character lowercase hexadecimal workflow execution ID to pin")
+    parser.add_argument("--meeting-session", type=Path, help="Select latest.json, workflow_status.json and the recorded execution ID from one folder")
     args = parser.parse_args()
+    if args.meeting_session is not None:
+        if any(value is not None for value in (args.meeting_transcript, args.meeting_status, args.meeting_execution_id)):
+            parser.error('--meeting-session cannot be combined with explicit meeting file or execution-ID options')
+        try:
+            from ai_meeting_workflow_status import read_status
+            session = args.meeting_session.resolve()
+            args.meeting_status = session / 'workflow_status.json'
+            snapshot = read_status(args.meeting_status)
+            args.meeting_execution_id = snapshot['execution_id']
+            args.meeting_transcript = session / 'latest.json'
+        except (OSError, ValueError, TypeError, KeyError):
+            parser.error('Meeting session requires a valid recent workflow_status.json; check the session folder and run the workflow check again if needed')
     if args.meeting_execution_id is not None:
         import re
         if args.meeting_status is None or not re.fullmatch('[a-f0-9]{32}', args.meeting_execution_id):

@@ -475,3 +475,27 @@ progress-only pinning behavior. Unpinned dashboards still accept older valid
 transcripts without the optional field. Publication validation also accepts only
 a well-formed optional ID. Identity correlates local artifacts; it is not a
 signature, verified inference claim or trade authorization.
+
+
+### Launch a recorded meeting session with one folder option
+
+```sh
+python agents/dashboard_api_v28.py --meeting-session reports/ai_meeting
+```
+
+This selects `latest.json` and `workflow_status.json` in that folder, validates
+the recent status snapshot at startup and pins both progress and transcript APIs
+to its execution ID. It replaces the three explicit meeting-path/ID options;
+combining either style is rejected. No meeting is started, no credentials are
+read, and no files are modified by selecting the session.
+
+The status must satisfy the existing five-minute freshness window. Missing,
+invalid or stale status stops startup with a sanitized CLI error instead of
+choosing some other run. To prepare a recent check-only status, use the combined
+workflow with `--status-file reports/ai_meeting/workflow_status.json` and the
+transcript destination `reports/ai_meeting/latest.json`. That default workflow
+check does not create a new transcript; the progress panel can show readiness
+while an absent or differently identified transcript remains unavailable.
+The server keeps the chosen ID for its lifetime; restart it to follow a new run.
+Manual path/ID options remain available. This is a local launcher convenience,
+not deployment, remote synchronization or paid execution.
