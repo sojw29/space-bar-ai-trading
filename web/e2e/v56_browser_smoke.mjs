@@ -197,11 +197,12 @@ async function smoke(){
    if(invalid===null)delete altered.workflow_execution_id;else altered.workflow_execution_id=invalid;
    await writeFile(selectedTranscriptPath,JSON.stringify(altered),"utf8");
    await Promise.all([
-    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===503),
+    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===409),
     identityPage.locator("#ai-meeting-refresh").click()
    ]);
    await identityPage.locator('#ai-meeting-status[data-connection="disconnected"]').waitFor({timeout:12000});
    assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
+   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/선택한 실행과 다른 회의 기록/);
    assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
    await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
    await identityPage.locator("#ai-meeting-refresh").click();
