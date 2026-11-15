@@ -261,8 +261,9 @@ async function smoke(){
   // Simulate clicking before a throttled expiry timer wakes up (desktop and mobile).
   await identityPage.locator("#meeting-progress-refresh").click();
   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
-  const expiryClick=await identityPage.evaluate(()=>{
+  const expiryClick=await (await identityPage.waitForFunction(()=>{
    const button=document.getElementById("meeting-progress-open-record"),now=Date.now;
+   if(button.disabled||document.getElementById("meeting-progress-status").getAttribute("data-state")!=="COMPLETED")return false;
    let transcriptRequests=0;const originalFetch=window.fetch;
    window.fetch=(...args)=>{if(String(args[0]).includes("/api/v1/meeting/transcript"))transcriptRequests++;return originalFetch(...args)};
    try{
@@ -273,7 +274,7 @@ async function smoke(){
      summary:document.getElementById("meeting-session-summary").getAttribute("data-state"),
      selected:!document.getElementById("ai-meeting-selected-run").hidden};
    }finally{Date.now=now;window.fetch=originalFetch;}
-  });
+  })).jsonValue();
   assert.deepEqual(expiryClick,{disabled:true,id:null,requests:0,state:"unavailable",summary:"UNAVAILABLE",selected:false});
   for(const eventName of ["pageshow","online"]){
    await Promise.all([
