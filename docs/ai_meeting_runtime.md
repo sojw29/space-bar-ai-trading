@@ -548,3 +548,12 @@ refresh and rejects the old response. Readiness, running, failed, stale or
 unavailable progress disables the button and removes its saved target ID. A
 completed status only enables checking the transcript; it does not prove the
 transcript exists or authorize inference, retries or trading.
+
+
+The transcript panel now keeps the explicitly selected workflow ID visible even
+when fetching fails. “화면 선택 해제” removes only the viewer's local identity
+filter and refreshes the default record provided by the server. It hides/clears
+the selection banner and keeps focus in the transcript panel. It does not change
+a server execution-ID pin or bypass API validation. Selection changes and resets
+share the single queued-reload guard during an in-flight request; neither starts
+inference or orders. Reloading the page also resets the viewer's local selection.
