@@ -92,6 +92,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <progress id="meeting-progress-count" max="7" value="0" aria-label="기록된 검증 응답 수" style="width:100%;accent-color:#80c8e8" hidden></progress>
 <p id="meeting-progress-detail" style="white-space:pre-wrap"></p>
 <button id="meeting-progress-refresh" type="button">진행 기록 다시 확인</button>
+<button id="meeting-progress-open-record" type="button" aria-controls="ai-meeting-panel" disabled>이 실행의 회의 기록 확인</button>
 <p class="notice">파일에 기록된 단계입니다. 프로세스 생존·상시 실행·거래 승인을 뜻하지 않습니다.</p>
 </section>
 <section class="panel"><h2>선택 에이전트 · 연구 정보</h2>
@@ -2023,6 +2024,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const linked=document.getElementById("ai-meeting-linked");
  const timeline=document.getElementById("ai-meeting-timeline");
  const shortcut=document.getElementById("ai-meeting-shortcut");
+ const completedRecord=document.getElementById("meeting-progress-open-record");
+ let selectedExecutionId=null,pendingSelectionReload=false;
+ completedRecord?.addEventListener("click",()=>{
+  if(completedRecord.disabled)return;
+  const id=completedRecord.dataset?.executionId,panel=document.getElementById("ai-meeting-panel");
+  if(typeof id!=="string"||!/^[a-f0-9]{32}$/.test(id)||!panel)return;
+  selectedExecutionId=id;panel.open=true;
+  document.getElementById("ai-meeting-summary")?.focus?.({preventScroll:true});
+  panel.scrollIntoView?.({block:"start",behavior:"auto"});
+  if(loading){pendingSelectionReload=true;return;}
+  return loadMeeting();
+ });
  shortcut?.addEventListener("click",()=>{
   const panel=document.getElementById("ai-meeting-panel");
   if(!panel)return;
@@ -2092,6 +2105,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(d===null||typeof d!=="object"||Array.isArray(d))throw Error("회의 기록 객체 형식 오류 · 다시 확인해 주세요");
   const live=d.execution_mode==="LIVE_PROVIDER";
   if(d.workflow_execution_id!==undefined&&(typeof d.workflow_execution_id!=="string"||!/^[a-f0-9]{32}$/.test(d.workflow_execution_id)))throw Error("회의 실행 ID 검증 실패");
+  if(selectedExecutionId!==null&&d.workflow_execution_id!==selectedExecutionId)throw Error("선택한 실행과 다른 회의 기록 · 실행 ID와 세션 폴더를 확인해 주세요");
   const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
   if(marketLabel===null)throw Error("데이터 출처 검증 실패");
   if(d.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||d.status!=="COMPLETED"||
@@ -2294,7 +2308,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
  }catch(error){rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
- finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;rows.setAttribute?.("aria-busy","false");}
+ finally{if(timeout!==null)clearTimeout(timeout);loading=false;refreshButton.disabled=false;rows.setAttribute?.("aria-busy","false");if(pendingSelectionReload){pendingSelectionReload=false;loadMeeting();}}
  }
  refreshButton.addEventListener("click",loadMeeting);
  await loadMeeting();
@@ -2307,11 +2321,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 /* Read-only persisted workflow progress. */
 (()=>{
  const status=document.getElementById("meeting-progress-status"),detail=document.getElementById("meeting-progress-detail"),button=document.getElementById("meeting-progress-refresh");
+ const recordButton=document.getElementById("meeting-progress-open-record");
  const steps=document.getElementById("meeting-progress-stages"),countBar=document.getElementById("meeting-progress-count");
  const stages={INPUT:"입력 확인",PREPARATION:"회의 입력 준비",SETUP:"로컬 설정 점검",CONFIGURATION:"실행 설정",INFERENCE:"모델 응답 수집",PUBLICATION:"결과 저장",COMPLETED:"완료"};
  const labels={RUNNING:"기록된 진행 단계",READY_NO_MODEL_CALLS:"준비 점검 완료 · 모델 호출 없음",COMPLETED:"회의 실행 완료 기록",BLOCKED:"실행 중단 기록"};
  let loading=false,observed=null;
  function clear(message){
+  if(recordButton){recordButton.disabled=true;delete recordButton.dataset.executionId;}
   observed=null;detail.textContent="";status.textContent=message;status.setAttribute("data-state","unavailable");
   if(steps){steps.replaceChildren();steps.hidden=true;}
   if(countBar){countBar.hidden=true;countBar.value=0;countBar.setAttribute("aria-valuetext","검증된 응답 기록 없음");}
@@ -2361,6 +2377,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const updated=typeof v.updated_at_utc==="string"?Date.parse(v.updated_at_utc):NaN;
    if(!valid||!Number.isFinite(updated)||Date.now()<updated||Date.now()-updated>300000)throw Error("진행 기록 만료 또는 형식 오류");
    renderOverview(v,extended);
+   if(recordButton&&v.status==="COMPLETED"){recordButton.dataset.executionId=v.execution_id;recordButton.disabled=false;}
    observed=updated;status.textContent=labels[v.status]+" · "+stages[v.workflow_stage];status.setAttribute("data-state",v.status);
    detail.textContent="실행 ID: "+v.execution_id+"\n기록 시각: "+new Date(updated).toLocaleString();
    if(extended)detail.textContent+="\n기록된 에이전트: "+v.agent+" · "+({ANALYSIS:"분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"})[v.phase]+

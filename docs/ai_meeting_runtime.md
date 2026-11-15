@@ -537,3 +537,14 @@ version-1 completion records hide the numeric bar, because those snapshots do
 not carry response counts. Reload, expiry, invalid data and execution mismatch
 clear the highlighted steps and reset/hide the bar. This remains recorded status,
 not live process verification, real-provider proof or trade authorization.
+
+
+A fresh COMPLETED progress snapshot now enables “이 실행의 회의 기록 확인”.
+The button opens/focuses the transcript panel and performs a read-only refresh,
+requiring the clicked execution ID to match the returned transcript even on an
+unpinned dashboard. Missing/different transcript identity clears the viewer.
+If another query is already running, a selection change queues one follow-up
+refresh and rejects the old response. Readiness, running, failed, stale or
+unavailable progress disables the button and removes its saved target ID. A
+completed status only enables checking the transcript; it does not prove the
+transcript exists or authorize inference, retries or trading.
