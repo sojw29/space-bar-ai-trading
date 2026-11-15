@@ -436,8 +436,8 @@ in progress snapshots.
 To follow one particular workflow execution, optionally launch the dashboard with
 `--meeting-status path/to/status.json --meeting-execution-id EXECUTION_ID`.
 The ID must be the 32-character lowercase hexadecimal execution_id from that
-run's status file. A file replaced by another run then returns the same sanitized
-503 as other unavailable progress data, and the progress panel clears it. Without
+run's status file. A valid record replaced by another run returns a fixed HTTP
+409 mismatch error, and the progress panel clears it. Without
 the pin, the dashboard continues showing the latest valid record in its selected
 file. Restart/reconfigure the server to follow another pinned run. This pins
 progress only; the completed transcript remains separately validated and selected.
@@ -469,8 +469,8 @@ The combined workflow now stamps completed transcripts with its optional
 workflow_execution_id (the CLI always supplies its generated ID). The local
 transcript API validates/projects that field and displays it in the meeting
 record. When --meeting-execution-id is configured on the dashboard, both the
-progress snapshot and completed transcript must match; a missing, malformed or
-different transcript ID returns sanitized 503. This supersedes the earlier
+progress snapshot and completed transcript must match. A missing or different
+transcript ID returns a fixed HTTP 409 mismatch error; malformed IDs return 503. This supersedes the earlier
 progress-only pinning behavior. Unpinned dashboards still accept older valid
 transcripts without the optional field. Publication validation also accepts only
 a well-formed optional ID. Identity correlates local artifacts; it is not a
@@ -517,3 +517,13 @@ mismatched old transcript will not display under the new run's ID. Only the
 separate explicit --enable-live switch runs paid model inference and publishes a
 new completed transcript. A preparation failure records BLOCKED without replacing
 the prior transcript. The two commands do not deploy or synchronize anything.
+
+
+Execution mismatch now has a distinct HTTP 409 response: workflow status uses
+`workflow_execution_mismatch`, and completed transcripts use
+`meeting_execution_mismatch`. Error bodies contain fixed codes and disabled-order
+flags, not paths, expected/actual IDs, source text or provider responses. Other
+invalid/missing/stale records remain 503, and an unconfigured status source remains
+404. Both 3D panels show Korean execution-mismatch guidance and clear old content;
+restoring matching records permits a normal refresh. No automatic meeting run or
+server reconfiguration is triggered by an error.
