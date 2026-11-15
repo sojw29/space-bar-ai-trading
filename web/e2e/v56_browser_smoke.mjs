@@ -275,6 +275,15 @@ async function smoke(){
    }finally{Date.now=now;window.fetch=originalFetch;}
   });
   assert.deepEqual(expiryClick,{disabled:true,id:null,requests:0,state:"unavailable",summary:"UNAVAILABLE",selected:false});
+  for(const eventName of ["pageshow","online"]){
+   await Promise.all([
+    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/workflow-status")&&response.status()===200),
+    identityPage.evaluate(name=>window.dispatchEvent(name==="pageshow"?new PageTransitionEvent("pageshow",{persisted:true}):new Event("online")),eventName)
+   ]);
+   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
+  }
+
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
   await identityPage.close();
