@@ -308,6 +308,9 @@ async function smoke(){
    // Polling can fail just before the manual click, so the streak need not be one.
    // Exact retry boundaries are covered with a controlled clock in the progress script test.
    assert.match(await identityPage.locator("#meeting-progress-status").getAttribute("title"),/^자동 재조회 대기: (10|20|40|60)초 ·/);
+   assert.equal(await identityPage.locator("#meeting-progress-retry").isVisible(),true);
+   assert.match(await identityPage.locator("#meeting-progress-retry").textContent(),/최소 (10|20|40|60)초/);
+   assert.equal(await identityPage.locator("#meeting-progress-refresh").getAttribute("aria-describedby"),"meeting-progress-retry");
    assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
    assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
    assert.equal(await identityPage.locator("#meeting-progress-detail").textContent(),"");
@@ -316,6 +319,8 @@ async function smoke(){
    await identityPage.locator("#meeting-progress-refresh").click();
    await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
    assert.equal(await identityPage.locator("#meeting-progress-status").getAttribute("title"),"");
+   assert.equal(await identityPage.locator("#meeting-progress-retry").isVisible(),false);
+   assert.equal(await identityPage.locator("#meeting-progress-retry").textContent(),"");
   }
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
