@@ -527,3 +527,13 @@ invalid/missing/stale records remain 503, and an unconfigured status source rema
 404. Both 3D panels show Korean execution-mismatch guidance and clear old content;
 restoring matching records permits a normal refresh. No automatic meeting run or
 server reconfiguration is triggered by an error.
+
+
+The 3D recorded-progress panel now highlights the currently recorded workflow
+stage in a compact step list. It does not mark earlier stages as independently
+verified. A native accessible progress bar shows validated_responses out of seven
+only for validated version-2 MODEL_PROGRESS snapshots. Check-only readiness and
+version-1 completion records hide the numeric bar, because those snapshots do
+not carry response counts. Reload, expiry, invalid data and execution mismatch
+clear the highlighted steps and reset/hide the bar. This remains recorded status,
+not live process verification, real-provider proof or trade authorization.

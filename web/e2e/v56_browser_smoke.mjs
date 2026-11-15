@@ -109,6 +109,9 @@ async function smoke(){
  const progressStatus=page.locator("#meeting-progress-status");
  await page.locator('#meeting-progress-status[data-state="READY_NO_MODEL_CALLS"]').waitFor({timeout:12000});
  assert.match(await progressStatus.textContent(),/모델 호출 없음/);
+ assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"SETUP");
+ assert.equal(await page.locator("#meeting-progress-count").isVisible(),false);
+
  assert.ok((await page.locator("#meeting-progress-detail").textContent()).includes(executionId));
  workflowStatus.event="STAGE_STARTED";workflowStatus.workflow_stage="INFERENCE";workflowStatus.status="RUNNING";
  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
@@ -122,11 +125,17 @@ async function smoke(){
  await page.locator("#meeting-progress-refresh").click();
  await page.waitForFunction(()=>document.querySelector("#meeting-progress-detail")?.textContent?.includes("QUANT · 상호 검토"));
  assert.match(await page.locator("#meeting-progress-detail").textContent(),/검증된 응답: 4\/7/);
+ assert.equal(await page.getByRole("progressbar",{name:"기록된 검증 응답 수"}).evaluate(node=>node.value),4);
+ assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"INFERENCE");
+
  workflowStatus.updated_at_utc=new Date(Date.now()-6*60000).toISOString();
  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
  await page.locator("#meeting-progress-refresh").click();
  await page.locator('#meeting-progress-status[data-state="unavailable"]').waitFor({timeout:12000});
  assert.equal(await page.locator("#meeting-progress-detail").textContent(),"");
+ assert.equal(await page.locator("#meeting-progress-stages").isVisible(),false);
+ assert.equal(await page.locator("#meeting-progress-count").isVisible(),false);
+
  workflowStatus.version="MEETING_WORKFLOW_STATUS_1";
  for(const field of ["agent","phase","attempted_calls","validated_responses"])delete workflowStatus[field];
  workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.event="WORKFLOW_FINISHED";
@@ -135,6 +144,9 @@ async function smoke(){
  await page.locator("#meeting-progress-refresh").click();
  await page.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor({timeout:12000});
  assert.match(await progressStatus.textContent(),/회의 실행 완료 기록/);
+ assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"COMPLETED");
+ assert.equal(await page.locator("#meeting-progress-count").isVisible(),false,"completion without counts must not invent 7/7");
+
  // Restore the clearly labeled no-call fixture before other pages render.
  workflowStatus.workflow_stage="SETUP";workflowStatus.status="READY_NO_MODEL_CALLS";
  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
