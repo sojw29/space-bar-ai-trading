@@ -78,9 +78,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('private failure', json.dumps(result))
         self.assertEqual(self.target.read_bytes(), b'previous report')
 
-    def cli(self, *, key='private-fixture-key', events=False, status_file=None):
+    def cli(self, *, key='private-fixture-key', events=False, status_file=None, session=None):
         command = [sys.executable, str(Path(__file__).resolve().with_name('ai_meeting_workflow.py')),
-                   str(self.brief), str(self.target), '--model', 'test-model', '--json']
+                   str(self.brief)]
+        if session is None:
+            command.append(str(self.target))
+        else:
+            command.extend(['--meeting-session', str(session)])
+        command.extend(['--model', 'test-model', '--json'])
         if status_file is not None:
             command.extend(['--status-file', str(status_file)])
         if events:
@@ -220,6 +225,66 @@ class WorkflowTests(unittest.TestCase):
             result = run_workflow(self.brief, self.target, 'test-model', enable_live=True, execution_id='bad-id')
         self.assertEqual(result['error_code'], 'INVALID_EXECUTION_ID')
         self.assertEqual(result['model_calls_performed'], 0)
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+
+    def test_cli_session_checks_only_and_preserves_prior_transcript(self):
+        from ai_meeting_workflow_status import read_status
+        session = Path(self.temp.name)/'meeting session with spaces'
+        session.mkdir()
+        self.target = self.target.rename(session/'latest.json')
+        result, payload = self.cli(session=session)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(payload['status'], 'READY_NO_MODEL_CALLS')
+        self.assertEqual(payload['model_calls_performed'], 0)
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+        snapshot = read_status(session/'workflow_status.json')
+        self.assertEqual(snapshot['execution_id'], payload['execution_id'])
+        self.assertEqual(snapshot['status'], 'READY_NO_MODEL_CALLS')
+
+    def test_session_cli_fixture_writes_correlated_status_and_transcript(self):
+        from ai_meeting_workflow import main
+        from ai_meeting_workflow_status import read_status
+        session = Path(self.temp.name)/'new session folder'
+        arguments = ['workflow', str(self.brief), '--meeting-session', str(session),
+                     '--model', 'test-model', '--enable-live', '--json']
+        output, errors = io.StringIO(), io.StringIO()
+        with patch('sys.argv', arguments), redirect_stdout(output), redirect_stderr(errors):
+            with patch('ai_meeting_workflow.OpenAIProvider', return_value=Fixture()):
+                self.assertEqual(main(), 0)
+        payload = json.loads(output.getvalue())
+        report = json.loads((session/'latest.json').read_text())
+        snapshot = read_status(session/'workflow_status.json')
+        self.assertEqual(report['workflow_execution_id'], payload['execution_id'])
+        self.assertEqual(snapshot['execution_id'], payload['execution_id'])
+        self.assertEqual(snapshot['status'], 'COMPLETED')
+        self.assertFalse(report['model_inference_performed'])
+        self.assertEqual(payload['model_calls_performed'], 0)
+
+    def test_cli_session_input_failure_records_blocked_without_replacing_result(self):
+        from ai_meeting_workflow_status import read_status
+        session = Path(self.temp.name)/'failed session'
+        session.mkdir()
+        self.target = self.target.rename(session/'latest.json')
+        self.brief.write_text('private invalid source')
+        result, payload = self.cli(session=session)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(payload['error_code'], 'INVALID_JSON')
+        self.assertEqual(read_status(session/'workflow_status.json')['status'], 'BLOCKED')
+        self.assertEqual(self.target.read_bytes(), b'previous report')
+        self.assertNotIn('private invalid source', result.stdout+result.stderr)
+
+    def test_cli_session_conflicting_and_missing_arguments_fail_before_writes(self):
+        script = str(Path(__file__).resolve().with_name('ai_meeting_workflow.py'))
+        session = Path(self.temp.name)/'unused session'
+        cases = [[str(self.brief), str(self.target), '--meeting-session', str(session)],
+                 [str(self.brief), '--meeting-session', str(session), '--status-file', str(session/'status.json')],
+                 [str(self.brief)]]
+        for arguments in cases:
+            result = subprocess.run([sys.executable, script, *arguments, '--model', 'test-model', '--json'],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 2)
+            self.assertNotIn('Traceback', result.stderr)
+            self.assertFalse(session.exists())
         self.assertEqual(self.target.read_bytes(), b'previous report')
 
 
