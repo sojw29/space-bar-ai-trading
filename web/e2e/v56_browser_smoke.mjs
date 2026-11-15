@@ -109,6 +109,7 @@ async function smoke(){
  const progressStatus=page.locator("#meeting-progress-status");
  await page.locator('#meeting-progress-status[data-state="READY_NO_MODEL_CALLS"]').waitFor({timeout:12000});
  assert.match(await progressStatus.textContent(),/모델 호출 없음/);
+ await page.locator('#meeting-session-summary[data-state="READY_ONLY"]').waitFor({timeout:12000});
  assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"SETUP");
  assert.equal(await page.locator("#meeting-progress-count").isVisible(),false);
  assert.equal(await page.locator("#meeting-progress-open-record").isDisabled(),true);
@@ -145,6 +146,7 @@ async function smoke(){
  await page.locator("#meeting-progress-refresh").click();
  await page.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor({timeout:12000});
  assert.match(await progressStatus.textContent(),/회의 실행 완료 기록/);
+ await page.locator('#meeting-session-summary[data-state="RECORD_PENDING"]').waitFor({timeout:12000});
  assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"COMPLETED");
  assert.equal(await page.locator("#meeting-progress-count").isVisible(),false,"completion without counts must not invent 7/7");
 
@@ -211,6 +213,9 @@ async function smoke(){
   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor({timeout:12000});
   await identityPage.locator("#meeting-progress-open-record").click();
   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor({timeout:12000});
+  await identityPage.locator('#meeting-session-summary[data-state="LINKED_FIXTURE"]').waitFor({timeout:12000});
+  assert.match(await identityPage.locator("#meeting-session-summary").textContent(),/실제 AI 실행 아님/);
+
   assert.equal(await identityPage.locator("#ai-meeting-summary").evaluate(node=>node===document.activeElement),true);
   assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
   assert.equal(await identityPage.locator("#ai-meeting-clear-selection").isVisible(),true);
@@ -228,12 +233,14 @@ async function smoke(){
    await identityPage.locator('#ai-meeting-status[data-connection="disconnected"]').waitFor({timeout:12000});
    assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
    assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/선택한 실행과 다른 회의 기록/);
+   await identityPage.locator('#meeting-session-summary[data-state="RECORD_PENDING"]').waitFor({timeout:12000});
    assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
    assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
    await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
    await identityPage.locator("#ai-meeting-refresh").click();
    await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
    assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
+   await identityPage.locator('#meeting-session-summary[data-state="LINKED_FIXTURE"]').waitFor({timeout:12000});
   }
   await identityPage.locator("#ai-meeting-clear-selection").click();
   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor({timeout:12000});
