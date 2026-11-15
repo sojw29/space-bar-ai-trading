@@ -35,6 +35,7 @@ const flush=()=>new Promise(setImmediate);
  now+=300001;timers[0]();assert.equal(detail.textContent,'');assert.equal(status.attrs['data-state'],'unavailable');
  now=Date.now();snapshot.updated_at_utc=new Date(now).toISOString();
  code=404;await button.events.click();assert.match(status.textContent,/서버의 상태 파일 설정/);assert.equal(detail.textContent,'');
+ code=409;await button.events.click();assert.match(status.textContent,/선택한 실행과 다른 진행 기록/);assert.equal(detail.textContent,'');
  code=200;view.orders_enabled=true;await button.events.click();assert.equal(status.attrs['data-state'],'unavailable');
  view.orders_enabled=false;await button.events.click();assert.equal(status.attrs['data-state'],'READY_NO_MODEL_CALLS');
  snapshot.status='COMPLETED';snapshot.workflow_stage='SETUP';await button.events.click();assert.equal(status.attrs['data-state'],'unavailable');

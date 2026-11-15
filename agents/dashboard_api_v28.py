@@ -55,6 +55,7 @@ def snapshot(history_path):
 
 
 def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None, *, meeting_transcript_path=None, meeting_status_path=None, meeting_execution_id=None):
+    from ai_meeting_workflow_status import WorkflowExecutionMismatch
     configured_transcript = Path(meeting_transcript_path) if meeting_transcript_path is not None else None
     configured_status = Path(meeting_status_path) if meeting_status_path is not None else None
     if meeting_execution_id is not None:
@@ -178,6 +179,8 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         self.reply(200, {"version": "MEETING_WORKFLOW_STATUS_VIEW_1", "snapshot": value,
                                          "read_only": True, "orders_enabled": False,
                                          "process_liveness_verified": False})
+                    except WorkflowExecutionMismatch:
+                        self.reply(409, {"error": "workflow_execution_mismatch", "orders_enabled": False})
                     except (OSError, ValueError, TypeError, KeyError):
                         self.reply(503, {"error": "workflow_status_unavailable", "orders_enabled": False})
             elif path == "/api/v1/meeting/transcript":
@@ -262,8 +265,6 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         import re
                         if not isinstance(execution_id, str) or not re.fullmatch('[a-f0-9]{32}', execution_id):
                             raise ValueError("invalid_workflow_execution_id")
-                    if meeting_execution_id is not None and execution_id != meeting_execution_id:
-                        raise ValueError("different_workflow_execution")
                     expected_final = entries[-1]["verdict"]
                     if any(e["verdict"] == "INSUFFICIENT_DATA" for e in entries):
                         expected_final = "INSUFFICIENT_DATA"
@@ -271,6 +272,8 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         expected_final = "REVIEW_NEEDED"
                     if raw.get("final_verdict") != expected_final:
                         raise ValueError("invalid_final_verdict")
+                    if meeting_execution_id is not None and execution_id != meeting_execution_id:
+                        raise WorkflowExecutionMismatch("different_workflow_execution")
                     self.reply(200, {"version": "AI_MEETING_TRANSCRIPT_VIEW_1",
                                      "status": "COMPLETED", "call_count": 7,
                                      **({"workflow_execution_id": execution_id} if execution_id is not None else {}),
@@ -286,6 +289,9 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                                      "request_sha256": raw["request_sha256"],
                                      "final_verdict": raw.get("final_verdict"),
                                      "transcript": entries, "statement_refs": refs, "research_only": True,
+                                     "orders_enabled": False, "live_trading_approved": False})
+                except WorkflowExecutionMismatch:
+                    self.reply(409, {"error": "meeting_execution_mismatch", "research_only": True,
                                      "orders_enabled": False, "live_trading_approved": False})
                 except (OSError, ValueError, TypeError, KeyError):
                     self.reply(503, {"error": "meeting_transcript_unavailable_or_invalid",

@@ -12,6 +12,11 @@ PLAN = [(agent, 'ANALYSIS') for agent in ('ATLAS', 'QUANT', 'GUARDIAN')] + [(age
 FIELDS = {'version', 'event', 'workflow_stage', 'status', 'execution_id', 'updated_at_utc'}
 
 
+class WorkflowExecutionMismatch(ValueError):
+    """A valid-shaped snapshot belongs to another selected execution."""
+    pass
+
+
 def validate_status(value, *, now=None, expected_execution_id=None):
     now = now or datetime.now(timezone.utc)
     extended = isinstance(value, dict) and value.get('version') == 'MEETING_WORKFLOW_STATUS_2'
@@ -19,8 +24,6 @@ def validate_status(value, *, now=None, expected_execution_id=None):
         raise ValueError('INVALID_STATUS_FIELDS')
     if not isinstance(value['execution_id'], str) or not re.fullmatch('[a-f0-9]{32}', value['execution_id']):
         raise ValueError('INVALID_EXECUTION_ID')
-    if expected_execution_id is not None and value['execution_id'] != expected_execution_id:
-        raise ValueError('DIFFERENT_EXECUTION')
     if not isinstance(value['updated_at_utc'], str):
         raise ValueError('INVALID_STATUS_TIME')
     updated = datetime.fromisoformat(value['updated_at_utc'])
@@ -43,6 +46,8 @@ def validate_status(value, *, now=None, expected_execution_id=None):
             valid = (value['agent'], value['phase']) == PLAN[attempted-1]
     if not valid:
         raise ValueError('INCONSISTENT_STATUS')
+    if expected_execution_id is not None and value['execution_id'] != expected_execution_id:
+        raise WorkflowExecutionMismatch('DIFFERENT_EXECUTION')
     return dict(value)
 
 
