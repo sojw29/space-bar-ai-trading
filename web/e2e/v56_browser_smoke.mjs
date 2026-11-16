@@ -222,6 +222,20 @@ async function smoke(){
    assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
    if(count===0)assert.match(await identityPage.locator("#ai-meeting-agent-count").textContent(),/표시할 발언 없음/);
   }
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("STAGE 4");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("QUANT");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("ATLAS");
+  await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("PEER_REVIEW");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("a^$[literal]");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("");
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("ALL");
+  await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="COMPLETED";workflowStatus.workflow_stage="COMPLETED";
@@ -341,12 +355,15 @@ async function smoke(){
   }
   await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("QUANT");
   await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("PEER_REVIEW");
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("fixture");
   await context.setOffline(true);
   await identityPage.waitForFunction(()=>document.getElementById("meeting-progress-status").textContent.includes("브라우저 네트워크 연결 없음"));
   await identityPage.waitForFunction(()=>document.getElementById("ai-meeting-status").textContent.includes("브라우저 네트워크 연결 없음"));
   assert.equal(await identityPage.locator("#ai-meeting-agent-controls").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
   assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-search").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
