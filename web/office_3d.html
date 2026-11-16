@@ -2086,9 +2086,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const phaseFilter=document.getElementById("ai-meeting-phase-filter");
  const statementSearch=document.getElementById("ai-meeting-search");
  const resetView=document.getElementById("ai-meeting-view-reset");
- let renderedStatements=[];
+ let renderedStatements=[],validatedViewKey=null;
  function clearAgentView(){
-  renderedStatements=[];
+  renderedStatements=[];validatedViewKey=null;
   if(resetView)resetView.disabled=true;
   if(agentControls)agentControls.hidden=true;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=true;}
@@ -2199,9 +2199,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   status.textContent="회의 기록 미연결 · 브라우저 네트워크 연결 없음 · 재연결 후 다시 확인합니다";
   status.title="브라우저의 연결 보고이며 서버 중단 판정이 아닙니다.";setConnection("disconnected","request-failed");
  }
- async function loadMeeting(){
+ async function loadMeeting(preserveView=false){
   if(offline){showOffline();return;}
   if(loading)return;
+  const retainedView=preserveView===true&&validatedViewKey!==null?{
+   key:validatedViewKey,agent:agentFilter?.value,phase:phaseFilter?.value,
+   query:typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120):""
+  }:null;
   const readEpoch=networkEpoch;pendingSelectionReload=false;
   loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
   const controller=typeof AbortController==="function"?new AbortController():null;
@@ -2438,6 +2442,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   status.textContent=(live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님")+
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
   if(d.workflow_execution_id!==undefined)status.textContent+=" · 실행 ID: "+d.workflow_execution_id;
+  validatedViewKey=JSON.stringify(d);
+  if(retainedView?.key===validatedViewKey){
+   if(agentFilter)agentFilter.value=retainedView.agent;
+   if(phaseFilter)phaseFilter.value=retainedView.phase;
+   if(statementSearch)statementSearch.value=retainedView.query;
+   applyAgentView();
+  }
   verifiedRecordId=d.workflow_execution_id??null;
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
@@ -2448,7 +2459,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  await loadMeeting();
  // Poll completed research snapshots only; this never starts inference or orders.
  // Skip hidden tabs and overlapping requests; failed/stale responses fail closed.
- setInterval(()=>{if(!offline&&!document.hidden&&!loading)loadMeeting();},60000);
+ setInterval(()=>{if(!offline&&!document.hidden&&!loading)loadMeeting(true);},60000);
 })();
 </script>
 <script>

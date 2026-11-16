@@ -202,6 +202,13 @@ async function smoke(){
   const identityPage=await context.newPage();
   identityPage.on("pageerror",error=>errors.push(String(error)));
   await identityPage.setViewportSize(viewport);await serveThree(identityPage);
+  await identityPage.addInitScript(()=>{
+   const schedule=window.setInterval.bind(window);
+   window.setInterval=(fn,delay,...args)=>{
+    if(delay===60000&&typeof fn==="function"&&String(fn).includes("loadMeeting(true)"))window.__meetingTranscriptPoll=fn;
+    return schedule(fn,delay,...args);
+   };
+  });
   await identityPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await identityPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
   await identityPage.locator("#ai-meeting-shortcut").click();
@@ -239,6 +246,22 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-search").evaluate(node=>node===document.activeElement),true);
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("ATLAS");
+  await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("PEER_REVIEW");
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("stage 4");
+  await Promise.all([
+   identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===200),
+   identityPage.evaluate(()=>{if(typeof window.__meetingTranscriptPoll!=="function")throw Error("missing registered transcript timer");window.__meetingTranscriptPoll();})
+  ]);
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ATLAS");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"PEER_REVIEW");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"stage 4");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="COMPLETED";workflowStatus.workflow_stage="COMPLETED";
