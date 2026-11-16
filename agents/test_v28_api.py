@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
+for(const id of ['ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -293,6 +293,16 @@ setImmediate(async()=>{
   assert.equal(requested,'/api/v1/meeting/transcript');
   assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'validated');
   assert.match(elements['ai-meeting-shortcut-status'].textContent,/오프라인 테스트/);
+  const agentView=elements['ai-meeting-agent-filter'],allRows=elements['ai-meeting-rows'];
+  const fullDecision=elements['ai-meeting-decision'].textContent;
+  const beforeFilter=requestCount;
+  for(const [agent,expected] of [['ATLAS',2],['QUANT',2],['GUARDIAN',2],['COMMANDER',1],['ALL',7],['<script>',7]]){
+   agentView.value=agent;agentView.events.change();
+   assert.equal(allRows.children.filter(row=>!row.hidden).length,expected);
+   assert.equal(elements['ai-meeting-decision'].textContent,fullDecision,'filter must not recompute final summary');
+   assert.equal(requestCount,beforeFilter,'filter reads only already validated rows');
+  }
+  assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-controls'].hidden,false);
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
   assert.equal(elements['ai-meeting-panel'].open,true);
@@ -772,7 +782,9 @@ setImmediate(async()=>{
   assert.equal(requestCount,afterClear,'clearing an absent selection must not fetch');
   assert.equal(timeouts.size,0);
   // Network loss clears the entire transcript and pauses its read paths.
+  agentView.value='GUARDIAN';agentView.events.change();
   const beforeOffline=requestCount;windowEvents.offline();
+  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');
   assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-decision'].hidden,true);
   assert.equal(elements['ai-meeting-timeline'].hidden,true);assert.equal(elements['ai-meeting-refresh'].disabled,true);
   assert.match(elements['ai-meeting-status'].textContent,/브라우저 네트워크 연결 없음/);
