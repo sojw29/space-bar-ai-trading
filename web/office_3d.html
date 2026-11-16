@@ -2016,6 +2016,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <p id="ai-meeting-decision" role="note" style="white-space:pre-wrap;padding:10px;border-left:3px solid #547c9a;background:#152941" hidden></p>
 <p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
 <div id="ai-meeting-timeline" aria-label="회의 판단 타임라인" hidden></div>
+<div id="ai-meeting-agent-controls" hidden>
+<label for="ai-meeting-agent-filter">발언 보기</label>
+<select id="ai-meeting-agent-filter" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">
+<option value="ALL">전체 에이전트</option><option value="ATLAS">ATLAS</option><option value="QUANT">QUANT</option><option value="GUARDIAN">GUARDIAN</option><option value="COMMANDER">COMMANDER</option>
+</select>
+<p id="ai-meeting-agent-count" role="status" aria-live="polite"></p>
+</div>
 <div id="ai-meeting-rows"></div>
 </details>
 <script>
@@ -2068,6 +2075,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const shortcut=document.getElementById("ai-meeting-shortcut");
  const completedRecord=document.getElementById("meeting-progress-open-record");
  let selectedExecutionId=null,pendingSelectionReload=false,verifiedRecordId=null;
+ const agentControls=document.getElementById("ai-meeting-agent-controls"),agentFilter=document.getElementById("ai-meeting-agent-filter"),agentCount=document.getElementById("ai-meeting-agent-count");
+ let renderedStatements=[];
+ function clearAgentView(){
+  renderedStatements=[];
+  if(agentControls)agentControls.hidden=true;
+  if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=true;}
+  if(agentCount)agentCount.textContent="";
+ }
+ function applyAgentView(){
+  const requested=agentFilter?.value,agent=["ATLAS","QUANT","GUARDIAN","COMMANDER"].includes(requested)?requested:"ALL";
+  if(agentFilter)agentFilter.value=agent;
+  let count=0;
+  for(const entry of renderedStatements){entry.node.hidden=agent!=="ALL"&&entry.agent!==agent;if(!entry.node.hidden)count++;}
+  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체":agent)+" 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
+ }
+ agentFilter?.addEventListener("change",applyAgentView);
+ clearAgentView();
  const selectionLabel=document.getElementById("ai-meeting-selected-run"),clearSelection=document.getElementById("ai-meeting-clear-selection");
  function renderSelection(){
   if(selectionLabel){selectionLabel.hidden=selectedExecutionId===null;selectionLabel.textContent=selectedExecutionId===null?"":"선택한 회의 실행 ID: "+selectedExecutionId;}
@@ -2126,7 +2150,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let validSince=null,validUntil=null;
  function expire(){
   if(validUntil!==null&&(Date.now()<validSince||Date.now()>validUntil)){
-   rows.replaceChildren();clearDecision();clearLinked();clearTimeline();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
+   rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
    status.title="만료된 회의 기록은 표시되지 않습니다. 다시 확인 버튼으로 새 기록을 조회하세요.";
    setConnection("disconnected","expired");
    validSince=null;validUntil=null;
@@ -2142,7 +2166,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   window.addEventListener("online",()=>{offline=false;refreshButton.disabled=loading;if(!document.hidden){expire();if(loading)pendingSelectionReload=true;else loadMeeting();}});
  }
  function showOffline(){
-  rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
+  rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
   rows.setAttribute?.("aria-busy","false");refreshButton.disabled=true;
   status.textContent="회의 기록 미연결 · 브라우저 네트워크 연결 없음 · 재연결 후 다시 확인합니다";
   status.title="브라우저의 연결 보고이며 서버 중단 판정이 아닙니다.";setConnection("disconnected","request-failed");
@@ -2155,7 +2179,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const controller=typeof AbortController==="function"?new AbortController():null;
   activeController=controller;
   const timeout=controller&&typeof setTimeout==="function"?setTimeout(()=>controller.abort(),5000):null;
-  rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
+  rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
   status.textContent="회의 기록 확인 중…";status.title="회의 기록 API 응답을 기다리고 있습니다.";setConnection("loading","none");
  try{
   let response;
@@ -2344,6 +2368,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   clearLinked();
   rows.replaceChildren(...output);
+  renderedStatements=output.map((node,i)=>({node,agent:d.transcript[i].agent}));
+  if(agentControls)agentControls.hidden=false;
+  if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=false;}
+  applyAgentView();
   if(decision){
    const final=d.transcript[6];
    const reviewCount=d.transcript.filter(t=>t.verdict==="REVIEW_NEEDED").length;
@@ -2383,7 +2411,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   verifiedRecordId=d.workflow_execution_id??null;
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
- }catch(error){if(offline||readEpoch!==networkEpoch)return;rows.replaceChildren();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
+ }catch(error){if(offline||readEpoch!==networkEpoch)return;rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
  finally{if(timeout!==null)clearTimeout(timeout);if(activeController===controller)activeController=null;loading=false;refreshButton.disabled=offline;rows.setAttribute?.("aria-busy","false");if(pendingSelectionReload&&!offline&&!document.hidden){pendingSelectionReload=false;loadMeeting();}}
  }
  refreshButton.addEventListener("click",loadMeeting);
