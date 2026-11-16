@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
+for(const id of ['ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -303,6 +303,15 @@ setImmediate(async()=>{
    assert.equal(requestCount,beforeFilter,'filter reads only already validated rows');
   }
   assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-controls'].hidden,false);
+  const phaseView=elements['ai-meeting-phase-filter'];
+  for(const [agent,phase,expected] of [['ALL','ANALYSIS',3],['ALL','PEER_REVIEW',3],['ALL','CONCLUSION',1],['QUANT','PEER_REVIEW',1],['COMMANDER','ANALYSIS',0],['ALL','invalid',7]]){
+   agentView.value=agent;phaseView.value=phase;phaseView.events.change();
+   assert.equal(allRows.children.filter(row=>!row.hidden).length,expected);
+   assert.equal(elements['ai-meeting-decision'].textContent,fullDecision);assert.equal(requestCount,beforeFilter);
+   if(expected===0)assert.match(elements['ai-meeting-agent-count'].textContent,/표시할 발언 없음/);
+  }
+  assert.equal(phaseView.value,'ALL');
+
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
   assert.equal(elements['ai-meeting-panel'].open,true);
@@ -782,9 +791,9 @@ setImmediate(async()=>{
   assert.equal(requestCount,afterClear,'clearing an absent selection must not fetch');
   assert.equal(timeouts.size,0);
   // Network loss clears the entire transcript and pauses its read paths.
-  agentView.value='GUARDIAN';agentView.events.change();
+  agentView.value='GUARDIAN';agentView.events.change();phaseView.value='PEER_REVIEW';phaseView.events.change();
   const beforeOffline=requestCount;windowEvents.offline();
-  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');
+  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');assert.equal(phaseView.value,'ALL');assert.equal(phaseView.disabled,true);
   assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-decision'].hidden,true);
   assert.equal(elements['ai-meeting-timeline'].hidden,true);assert.equal(elements['ai-meeting-refresh'].disabled,true);
   assert.match(elements['ai-meeting-status'].textContent,/브라우저 네트워크 연결 없음/);
