@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
+for(const id of ['ai-meeting-view-reset','ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -320,6 +320,15 @@ setImmediate(async()=>{
   searchView.value='   ';searchView.events.input();assert.equal(allRows.children.filter(row=>!row.hidden).length,7);
   assert.equal(elements['ai-meeting-decision'].textContent,fullDecision);assert.equal(requestCount,beforeFilter);
 
+  const viewReset=elements['ai-meeting-view-reset'];
+  assert.equal(viewReset.disabled,false,'whitespace can be cleared even though it matches all rows');
+  viewReset.events.click();assert.equal(searchView.value,'');assert.equal(viewReset.disabled,true);assert.equal(searchView.focused,true);
+  const beforeEmptyReset=requestCount;viewReset.events.click();assert.equal(requestCount,beforeEmptyReset);
+  agentView.value='COMMANDER';phaseView.value='ANALYSIS';searchView.value='literal-no-match';searchView.events.input();
+  assert.equal(allRows.children.filter(row=>!row.hidden).length,0);viewReset.events.click();
+  assert.equal(agentView.value,'ALL');assert.equal(phaseView.value,'ALL');assert.equal(searchView.value,'');
+  assert.equal(allRows.children.filter(row=>!row.hidden).length,7);assert.equal(requestCount,beforeFilter);
+  assert.equal(elements['ai-meeting-decision'].textContent,fullDecision);
 
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
@@ -787,6 +796,9 @@ setImmediate(async()=>{
   assert.equal(elements['ai-meeting-rows'].children.length,7);
   assert.match(elements['ai-meeting-status'].textContent,/실행 ID: b{32}/);
   assert.match(elements['ai-meeting-selected-run'].textContent,/b{32}/);
+  const beforePinnedReset=requestCount;searchView.value='no-match';searchView.events.input();viewReset.events.click();
+  assert.match(elements['ai-meeting-selected-run'].textContent,/b{32}/);assert.equal(requestCount,beforePinnedReset);
+
   // Reset is an explicit read-only return to the server's default record.
   data.payload.workflow_execution_id='c'.repeat(32);
   await elements['ai-meeting-clear-selection'].events.click();
@@ -803,7 +815,7 @@ setImmediate(async()=>{
   searchView.value='test';searchView.events.input();
   agentView.value='GUARDIAN';agentView.events.change();phaseView.value='PEER_REVIEW';phaseView.events.change();
   const beforeOffline=requestCount;windowEvents.offline();
-  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');assert.equal(phaseView.value,'ALL');assert.equal(phaseView.disabled,true);assert.equal(searchView.value,'');assert.equal(searchView.disabled,true);
+  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(viewReset.disabled,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');assert.equal(phaseView.value,'ALL');assert.equal(phaseView.disabled,true);assert.equal(searchView.value,'');assert.equal(searchView.disabled,true);
   assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-decision'].hidden,true);
   assert.equal(elements['ai-meeting-timeline'].hidden,true);assert.equal(elements['ai-meeting-refresh'].disabled,true);
   assert.match(elements['ai-meeting-status'].textContent,/브라우저 네트워크 연결 없음/);
