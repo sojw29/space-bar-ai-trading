@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
+for(const id of ['ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -311,6 +311,15 @@ setImmediate(async()=>{
    if(expected===0)assert.match(elements['ai-meeting-agent-count'].textContent,/표시할 발언 없음/);
   }
   assert.equal(phaseView.value,'ALL');
+  const searchView=elements['ai-meeting-search'];
+  searchView.value=data.payload.transcript[0].summary.slice(0,30).toUpperCase();searchView.events.input();
+  assert.equal(allRows.children[0].hidden,false,'search is case-insensitive and matches summary text');
+  if(data.payload.transcript[0].concerns.length){searchView.value=data.payload.transcript[0].concerns[0].slice(0,30);searchView.events.input();assert.equal(allRows.children[0].hidden,false,'concerns are searchable');}
+  searchView.value='a^$[literal]';searchView.events.input();assert.equal(allRows.children.filter(row=>!row.hidden).length,0);
+  assert.match(elements['ai-meeting-agent-count'].textContent,/표시할 발언 없음/);
+  searchView.value='   ';searchView.events.input();assert.equal(allRows.children.filter(row=>!row.hidden).length,7);
+  assert.equal(elements['ai-meeting-decision'].textContent,fullDecision);assert.equal(requestCount,beforeFilter);
+
 
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
@@ -791,9 +800,10 @@ setImmediate(async()=>{
   assert.equal(requestCount,afterClear,'clearing an absent selection must not fetch');
   assert.equal(timeouts.size,0);
   // Network loss clears the entire transcript and pauses its read paths.
+  searchView.value='test';searchView.events.input();
   agentView.value='GUARDIAN';agentView.events.change();phaseView.value='PEER_REVIEW';phaseView.events.change();
   const beforeOffline=requestCount;windowEvents.offline();
-  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');assert.equal(phaseView.value,'ALL');assert.equal(phaseView.disabled,true);
+  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');assert.equal(phaseView.value,'ALL');assert.equal(phaseView.disabled,true);assert.equal(searchView.value,'');assert.equal(searchView.disabled,true);
   assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-decision'].hidden,true);
   assert.equal(elements['ai-meeting-timeline'].hidden,true);assert.equal(elements['ai-meeting-refresh'].disabled,true);
   assert.match(elements['ai-meeting-status'].textContent,/브라우저 네트워크 연결 없음/);
