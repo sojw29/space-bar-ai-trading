@@ -231,9 +231,12 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
   await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("a^$[literal]");
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
-  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("");
-  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("ALL");
-  await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("ALL");
+  await identityPage.getByRole("button",{name:"필터·검색 초기화",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-view-reset").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-search").evaluate(node=>node===document.activeElement),true);
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
@@ -364,6 +367,7 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"ALL");
   assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
   assert.equal(await identityPage.locator("#ai-meeting-search").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-view-reset").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
