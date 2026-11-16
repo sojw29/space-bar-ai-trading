@@ -335,7 +335,15 @@ setImmediate(async()=>{
   const beforePreservedPoll=requestCount;callbacks[1]();await new Promise(setImmediate);
   assert.equal(requestCount,beforePreservedPoll+1);assert.equal(agentView.value,'QUANT');assert.equal(phaseView.value,'PEER_REVIEW');assert.equal(searchView.value,'a^$[literal]');
   assert.equal(allRows.children.filter(row=>!row.hidden).length,0);assert.equal(elements['ai-meeting-decision'].textContent,fullDecision);
-  const originalModel=data.payload.model;data.payload.model='changed-record-model';callbacks[1]();await new Promise(setImmediate);
+  document.hidden=true;const beforeHiddenView=requestCount;
+  documentEvents.visibilitychange();windowEvents.pageshow({persisted:true});windowEvents.online();
+  assert.equal(requestCount,beforeHiddenView);
+  document.hidden=false;documentEvents.visibilitychange();await new Promise(setImmediate);
+  assert.equal(agentView.value,'QUANT');assert.equal(phaseView.value,'PEER_REVIEW');assert.equal(searchView.value,'a^$[literal]');
+  windowEvents.pageshow({persisted:true});await new Promise(setImmediate);
+  assert.equal(agentView.value,'QUANT');assert.equal(searchView.value,'a^$[literal]');
+  windowEvents.online();await new Promise(setImmediate);assert.equal(searchView.value,'a^$[literal]');
+  const originalModel=data.payload.model;data.payload.model='changed-record-model';windowEvents.pageshow({persisted:true});await new Promise(setImmediate);
   assert.equal(agentView.value,'ALL');assert.equal(phaseView.value,'ALL');assert.equal(searchView.value,'');
   data.payload.model=originalModel;await elements['ai-meeting-refresh'].events.click();
   searchView.value='retained-until-failure';searchView.events.input();failRequest=true;callbacks[1]();await new Promise(setImmediate);
