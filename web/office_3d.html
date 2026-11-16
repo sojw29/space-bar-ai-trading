@@ -2025,6 +2025,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <select id="ai-meeting-phase-filter" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">
 <option value="ALL">전체 단계</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
 </select></div>
+<div style="margin-top:8px"><label for="ai-meeting-search">발언·우려 검색</label>
+<input id="ai-meeting-search" type="search" maxlength="120" autocomplete="off" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" placeholder="검색어 입력" style="box-sizing:border-box;max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px"></div>
 <p id="ai-meeting-agent-count" role="status" aria-live="polite"></p>
 </div>
 <div id="ai-meeting-rows"></div>
@@ -2081,12 +2083,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let selectedExecutionId=null,pendingSelectionReload=false,verifiedRecordId=null;
  const agentControls=document.getElementById("ai-meeting-agent-controls"),agentFilter=document.getElementById("ai-meeting-agent-filter"),agentCount=document.getElementById("ai-meeting-agent-count");
  const phaseFilter=document.getElementById("ai-meeting-phase-filter");
+ const statementSearch=document.getElementById("ai-meeting-search");
  let renderedStatements=[];
  function clearAgentView(){
   renderedStatements=[];
   if(agentControls)agentControls.hidden=true;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=true;}
   if(phaseFilter){phaseFilter.value="ALL";phaseFilter.disabled=true;}
+  if(statementSearch){statementSearch.value="";statementSearch.disabled=true;}
   if(agentCount)agentCount.textContent="";
  }
  function applyAgentView(){
@@ -2095,12 +2099,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const phases={ALL:"전체 단계",ANALYSIS:"초기 분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"};
   const requestedPhase=phaseFilter?.value,phase=Object.hasOwn(phases,requestedPhase)?requestedPhase:"ALL";
   if(phaseFilter)phaseFilter.value=phase;
+  const query=typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120).trim().toLowerCase():"";
   let count=0;
-  for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase);if(!entry.node.hidden)count++;}
-  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
+  for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||(query!==""&&!entry.searchText.includes(query));if(!entry.node.hidden)count++;}
+  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+(query?" · 검색 적용":"")+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
  agentFilter?.addEventListener("change",applyAgentView);
  phaseFilter?.addEventListener("change",applyAgentView);
+ statementSearch?.addEventListener("input",applyAgentView);
  clearAgentView();
  const selectionLabel=document.getElementById("ai-meeting-selected-run"),clearSelection=document.getElementById("ai-meeting-clear-selection");
  function renderSelection(){
@@ -2378,10 +2384,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   clearLinked();
   rows.replaceChildren(...output);
-  renderedStatements=output.map((node,i)=>({node,agent:d.transcript[i].agent,phase:d.transcript[i].phase}));
+  renderedStatements=output.map((node,i)=>({node,agent:d.transcript[i].agent,phase:d.transcript[i].phase,searchText:[d.transcript[i].summary,...d.transcript[i].concerns].join("\n").toLowerCase()}));
   if(agentControls)agentControls.hidden=false;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=false;}
   if(phaseFilter){phaseFilter.value="ALL";phaseFilter.disabled=false;}
+  if(statementSearch){statementSearch.value="";statementSearch.disabled=false;}
   applyAgentView();
   if(decision){
    const final=d.transcript[6];
