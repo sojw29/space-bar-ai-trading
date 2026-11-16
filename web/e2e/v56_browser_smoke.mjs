@@ -258,6 +258,21 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"PEER_REVIEW");
   assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"stage 4");
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  for(const eventName of ["visibilitychange","pageshow","online"]){
+   await Promise.all([
+    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===200),
+    identityPage.evaluate(name=>{
+     if(name==="visibilitychange")document.dispatchEvent(new Event(name));
+     else window.dispatchEvent(name==="pageshow"?new PageTransitionEvent(name,{persisted:true}):new Event(name));
+    },eventName)
+   ]);
+   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+   assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ATLAS");
+   assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"PEER_REVIEW");
+   assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"stage 4");
+   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  }
+
   await identityPage.locator("#ai-meeting-refresh").click();
   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
   assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
