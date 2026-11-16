@@ -330,6 +330,18 @@ setImmediate(async()=>{
   assert.equal(allRows.children.filter(row=>!row.hidden).length,7);assert.equal(requestCount,beforeFilter);
   assert.equal(elements['ai-meeting-decision'].textContent,fullDecision);
 
+  // Polling preserves a view only after an identical record validates again.
+  agentView.value='QUANT';phaseView.value='PEER_REVIEW';searchView.value='a^$[literal]';searchView.events.input();
+  const beforePreservedPoll=requestCount;callbacks[1]();await new Promise(setImmediate);
+  assert.equal(requestCount,beforePreservedPoll+1);assert.equal(agentView.value,'QUANT');assert.equal(phaseView.value,'PEER_REVIEW');assert.equal(searchView.value,'a^$[literal]');
+  assert.equal(allRows.children.filter(row=>!row.hidden).length,0);assert.equal(elements['ai-meeting-decision'].textContent,fullDecision);
+  const originalModel=data.payload.model;data.payload.model='changed-record-model';callbacks[1]();await new Promise(setImmediate);
+  assert.equal(agentView.value,'ALL');assert.equal(phaseView.value,'ALL');assert.equal(searchView.value,'');
+  data.payload.model=originalModel;await elements['ai-meeting-refresh'].events.click();
+  searchView.value='retained-until-failure';searchView.events.input();failRequest=true;callbacks[1]();await new Promise(setImmediate);
+  assert.equal(searchView.value,'');assert.equal(elements['ai-meeting-agent-controls'].hidden,true);
+  failRequest=false;callbacks[1]();await new Promise(setImmediate);assert.equal(searchView.value,'');assert.equal(agentView.value,'ALL');
+  searchView.value='manual-reset';searchView.events.input();await elements['ai-meeting-refresh'].events.click();assert.equal(searchView.value,'');
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
   assert.equal(elements['ai-meeting-panel'].open,true);
