@@ -2185,13 +2185,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
  }
  setInterval(expire,60000);
- document.addEventListener("visibilitychange",()=>{if(!document.hidden){expire();if(!loading)loadMeeting();}});
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden){expire();if(!loading)loadMeeting(true);}});
  // Safari can restore a frozen page without a visibility transition.
- if(typeof window!=="undefined")window.addEventListener("pageshow",event=>{if(event.persisted&&!document.hidden){expire();if(!loading)loadMeeting();}});
+ if(typeof window!=="undefined")window.addEventListener("pageshow",event=>{if(event.persisted&&!document.hidden){expire();if(!loading)loadMeeting(true);}});
  // Recheck completed records when connectivity returns, without waiting for polling.
  if(typeof window!=="undefined"){
   window.addEventListener("offline",()=>{offline=true;networkEpoch++;pendingSelectionReload=false;activeController?.abort();showOffline();});
-  window.addEventListener("online",()=>{offline=false;refreshButton.disabled=loading;if(!document.hidden){expire();if(loading)pendingSelectionReload=true;else loadMeeting();}});
+  window.addEventListener("online",()=>{offline=false;refreshButton.disabled=loading;if(!document.hidden){expire();if(loading)pendingSelectionReload=true;else loadMeeting(true);}});
  }
  function showOffline(){
   rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
