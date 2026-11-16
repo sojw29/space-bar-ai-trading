@@ -2027,6 +2027,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 </select></div>
 <div style="margin-top:8px"><label for="ai-meeting-search">발언·우려 검색</label>
 <input id="ai-meeting-search" type="search" maxlength="120" autocomplete="off" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" placeholder="검색어 입력" style="box-sizing:border-box;max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px"></div>
+<button id="ai-meeting-view-reset" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="margin-top:8px;padding:7px" disabled>필터·검색 초기화</button>
 <p id="ai-meeting-agent-count" role="status" aria-live="polite"></p>
 </div>
 <div id="ai-meeting-rows"></div>
@@ -2084,9 +2085,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const agentControls=document.getElementById("ai-meeting-agent-controls"),agentFilter=document.getElementById("ai-meeting-agent-filter"),agentCount=document.getElementById("ai-meeting-agent-count");
  const phaseFilter=document.getElementById("ai-meeting-phase-filter");
  const statementSearch=document.getElementById("ai-meeting-search");
+ const resetView=document.getElementById("ai-meeting-view-reset");
  let renderedStatements=[];
  function clearAgentView(){
   renderedStatements=[];
+  if(resetView)resetView.disabled=true;
   if(agentControls)agentControls.hidden=true;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=true;}
   if(phaseFilter){phaseFilter.value="ALL";phaseFilter.disabled=true;}
@@ -2100,6 +2103,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const requestedPhase=phaseFilter?.value,phase=Object.hasOwn(phases,requestedPhase)?requestedPhase:"ALL";
   if(phaseFilter)phaseFilter.value=phase;
   const query=typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120).trim().toLowerCase():"";
+  if(resetView)resetView.disabled=renderedStatements.length===0||(agent==="ALL"&&phase==="ALL"&&!(statementSearch?.value));
   let count=0;
   for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||(query!==""&&!entry.searchText.includes(query));if(!entry.node.hidden)count++;}
   if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+(query?" · 검색 적용":"")+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
@@ -2107,6 +2111,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  agentFilter?.addEventListener("change",applyAgentView);
  phaseFilter?.addEventListener("change",applyAgentView);
  statementSearch?.addEventListener("input",applyAgentView);
+ resetView?.addEventListener("click",()=>{
+  if(resetView.disabled||renderedStatements.length===0)return;
+  if(agentFilter)agentFilter.value="ALL";
+  if(phaseFilter)phaseFilter.value="ALL";
+  if(statementSearch)statementSearch.value="";
+  applyAgentView();
+  statementSearch?.focus?.({preventScroll:true});
+ });
  clearAgentView();
  const selectionLabel=document.getElementById("ai-meeting-selected-run"),clearSelection=document.getElementById("ai-meeting-clear-selection");
  function renderSelection(){
