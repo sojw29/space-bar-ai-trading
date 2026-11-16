@@ -207,6 +207,14 @@ async function smoke(){
   await identityPage.locator("#ai-meeting-shortcut").click();
   await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
+  const fullMeetingDecision=await identityPage.locator("#ai-meeting-decision").textContent();
+  for(const [agent,count] of [["ATLAS",2],["QUANT",2],["GUARDIAN",2],["COMMANDER",1],["ALL",7]]){
+   await identityPage.getByLabel("발언 보기",{exact:true}).selectOption(agent);
+   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),count);
+   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
+   assert.match(await identityPage.locator("#ai-meeting-agent-count").textContent(),/전체 회의 기준/);
+  }
+
   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="COMPLETED";workflowStatus.workflow_stage="COMPLETED";
@@ -324,9 +332,12 @@ async function smoke(){
    assert.equal(await identityPage.locator("#meeting-progress-retry").isVisible(),false);
    assert.equal(await identityPage.locator("#meeting-progress-retry").textContent(),"");
   }
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("QUANT");
   await context.setOffline(true);
   await identityPage.waitForFunction(()=>document.getElementById("meeting-progress-status").textContent.includes("브라우저 네트워크 연결 없음"));
   await identityPage.waitForFunction(()=>document.getElementById("ai-meeting-status").textContent.includes("브라우저 네트워크 연결 없음"));
+  assert.equal(await identityPage.locator("#ai-meeting-agent-controls").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
