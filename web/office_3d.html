@@ -2029,6 +2029,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <input id="ai-meeting-search" type="search" maxlength="120" autocomplete="off" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" placeholder="검색어 입력" style="box-sizing:border-box;max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px"></div>
 <button id="ai-meeting-view-reset" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="margin-top:8px;padding:7px" disabled>필터·검색 초기화</button>
 <p id="ai-meeting-agent-count" role="status" aria-live="polite"></p>
+<p class="notice">검색·선택에 초점이 있는 동안 정기 자동 조회를 잠시 멈춥니다. 수동 다시 확인과 기록 만료 검사는 계속 동작합니다.</p>
 </div>
 <div id="ai-meeting-rows"></div>
 </details>
@@ -2459,7 +2460,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  await loadMeeting();
  // Poll completed research snapshots only; this never starts inference or orders.
  // Skip hidden tabs and overlapping requests; failed/stale responses fail closed.
- setInterval(()=>{if(!offline&&!document.hidden&&!loading)loadMeeting(true);},60000);
+ setInterval(()=>{
+  const active=document.activeElement,editing=active&&[agentFilter,phaseFilter,statementSearch].includes(active);
+  if(!offline&&!document.hidden&&!loading&&!editing)loadMeeting(true);
+ },60000);
 })();
 </script>
 <script>
