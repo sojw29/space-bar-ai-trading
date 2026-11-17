@@ -2025,6 +2025,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <select id="ai-meeting-phase-filter" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">
 <option value="ALL">전체 단계</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
 </select></div>
+<div style="margin-top:8px"><label for="ai-meeting-verdict-filter">검토 상태</label>
+<select id="ai-meeting-verdict-filter" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">
+<option value="ALL">전체 검토 상태</option><option value="OBSERVATION_ONLY">관측 요약</option><option value="REVIEW_NEEDED">추가 검토 필요</option><option value="INSUFFICIENT_DATA">자료 부족</option>
+</select></div>
 <div style="margin-top:8px"><label for="ai-meeting-search">발언·우려 검색</label>
 <input id="ai-meeting-search" type="search" maxlength="120" autocomplete="off" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" placeholder="검색어 입력" style="box-sizing:border-box;max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px"></div>
 <button id="ai-meeting-view-reset" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="margin-top:8px;padding:7px" disabled>필터·검색 초기화</button>
@@ -2085,6 +2089,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let selectedExecutionId=null,pendingSelectionReload=false,verifiedRecordId=null;
  const agentControls=document.getElementById("ai-meeting-agent-controls"),agentFilter=document.getElementById("ai-meeting-agent-filter"),agentCount=document.getElementById("ai-meeting-agent-count");
  const phaseFilter=document.getElementById("ai-meeting-phase-filter");
+ const verdictFilter=document.getElementById("ai-meeting-verdict-filter");
  const statementSearch=document.getElementById("ai-meeting-search");
  const resetView=document.getElementById("ai-meeting-view-reset");
  let renderedStatements=[],validatedViewKey=null;
@@ -2094,6 +2099,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(agentControls)agentControls.hidden=true;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=true;}
   if(phaseFilter){phaseFilter.value="ALL";phaseFilter.disabled=true;}
+  if(verdictFilter){verdictFilter.value="ALL";verdictFilter.disabled=true;}
   if(statementSearch){statementSearch.value="";statementSearch.disabled=true;}
   if(agentCount)agentCount.textContent="";
  }
@@ -2103,19 +2109,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const phases={ALL:"전체 단계",ANALYSIS:"초기 분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"};
   const requestedPhase=phaseFilter?.value,phase=Object.hasOwn(phases,requestedPhase)?requestedPhase:"ALL";
   if(phaseFilter)phaseFilter.value=phase;
+  const states={ALL:"전체 검토 상태",OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
+  const requestedVerdict=verdictFilter?.value,verdict=Object.hasOwn(states,requestedVerdict)?requestedVerdict:"ALL";
+  if(verdictFilter)verdictFilter.value=verdict;
   const query=typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120).trim().toLowerCase():"";
-  if(resetView)resetView.disabled=renderedStatements.length===0||(agent==="ALL"&&phase==="ALL"&&!(statementSearch?.value));
+  if(resetView)resetView.disabled=renderedStatements.length===0||(agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&!(statementSearch?.value));
   let count=0;
-  for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||(query!==""&&!entry.searchText.includes(query));if(!entry.node.hidden)count++;}
-  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+(query?" · 검색 적용":"")+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
+  for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||(verdict!=="ALL"&&entry.verdict!==verdict)||(query!==""&&!entry.searchText.includes(query));if(!entry.node.hidden)count++;}
+  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+(query?" · 검색 적용":"")+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
  agentFilter?.addEventListener("change",applyAgentView);
  phaseFilter?.addEventListener("change",applyAgentView);
+ verdictFilter?.addEventListener("change",applyAgentView);
  statementSearch?.addEventListener("input",applyAgentView);
  resetView?.addEventListener("click",()=>{
   if(resetView.disabled||renderedStatements.length===0)return;
   if(agentFilter)agentFilter.value="ALL";
   if(phaseFilter)phaseFilter.value="ALL";
+  if(verdictFilter)verdictFilter.value="ALL";
   if(statementSearch)statementSearch.value="";
   applyAgentView();
   statementSearch?.focus?.({preventScroll:true});
@@ -2204,7 +2215,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(offline){showOffline();return;}
   if(loading)return;
   const retainedView=preserveView===true&&validatedViewKey!==null?{
-   key:validatedViewKey,agent:agentFilter?.value,phase:phaseFilter?.value,
+   key:validatedViewKey,agent:agentFilter?.value,phase:phaseFilter?.value,verdict:verdictFilter?.value,
    query:typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120):""
   }:null;
   const readEpoch=networkEpoch;pendingSelectionReload=false;
@@ -2401,10 +2412,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   clearLinked();
   rows.replaceChildren(...output);
-  renderedStatements=output.map((node,i)=>({node,agent:d.transcript[i].agent,phase:d.transcript[i].phase,searchText:[d.transcript[i].summary,...d.transcript[i].concerns].join("\n").toLowerCase()}));
+  renderedStatements=output.map((node,i)=>({node,agent:d.transcript[i].agent,phase:d.transcript[i].phase,verdict:d.transcript[i].verdict,searchText:[d.transcript[i].summary,...d.transcript[i].concerns].join("\n").toLowerCase()}));
   if(agentControls)agentControls.hidden=false;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=false;}
   if(phaseFilter){phaseFilter.value="ALL";phaseFilter.disabled=false;}
+  if(verdictFilter){verdictFilter.value="ALL";verdictFilter.disabled=false;}
   if(statementSearch){statementSearch.value="";statementSearch.disabled=false;}
   applyAgentView();
   if(decision){
@@ -2447,6 +2459,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(retainedView?.key===validatedViewKey){
    if(agentFilter)agentFilter.value=retainedView.agent;
    if(phaseFilter)phaseFilter.value=retainedView.phase;
+   if(verdictFilter)verdictFilter.value=retainedView.verdict;
    if(statementSearch)statementSearch.value=retainedView.query;
    applyAgentView();
   }
@@ -2461,7 +2474,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  // Poll completed research snapshots only; this never starts inference or orders.
  // Skip hidden tabs and overlapping requests; failed/stale responses fail closed.
  setInterval(()=>{
-  const active=document.activeElement,editing=active&&[agentFilter,phaseFilter,statementSearch].includes(active);
+  const active=document.activeElement,editing=active&&[agentFilter,phaseFilter,verdictFilter,statementSearch].includes(active);
   if(!offline&&!document.hidden&&!loading&&!editing)loadMeeting(true);
  },60000);
 })();
