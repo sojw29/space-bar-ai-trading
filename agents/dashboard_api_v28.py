@@ -79,7 +79,8 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                 self.end_headers()
                 self.wfile.write(content)
             elif path == "/health":
-                self.reply(200, {"status": "ok", "mode": "local-paper-only",
+                self.reply(200, {"service": "space-bar-local-research-api",
+                                 "status": "ok", "mode": "local-paper-only",
                                  "orders_enabled": False})
             elif path == "/api/v1/research/scorecard":
                 # Local static snapshot only; never computes/optimizes or trades.

@@ -50,6 +50,8 @@ class LocalApiTests(unittest.TestCase):
     def test_health_and_events(self):
         status, health = self.get("/health")
         self.assertEqual(status, 200)
+        self.assertEqual(health["service"], "space-bar-local-research-api")
+        self.assertEqual(health["mode"], "local-paper-only")
         self.assertFalse(health["orders_enabled"])
         status, payload = self.get("/api/v1/agents")
         self.assertEqual(status, 200)
