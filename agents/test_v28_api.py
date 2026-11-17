@@ -350,6 +350,18 @@ setImmediate(async()=>{
   assert.equal(searchView.value,'');assert.equal(elements['ai-meeting-agent-controls'].hidden,true);
   failRequest=false;callbacks[1]();await new Promise(setImmediate);assert.equal(searchView.value,'');assert.equal(agentView.value,'ALL');
   searchView.value='manual-reset';searchView.events.input();await elements['ai-meeting-refresh'].events.click();assert.equal(searchView.value,'');
+  // Scheduled reads cannot hide focused search/select controls while editing.
+  for(const control of [agentView,phaseView,searchView]){
+   document.activeElement=control;const beforeEditingPoll=requestCount;callbacks[1]();
+   assert.equal(requestCount,beforeEditingPoll);assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated');
+  }
+  const beforeEditingManual=requestCount;await elements['ai-meeting-refresh'].events.click();
+  assert.equal(requestCount,beforeEditingManual+1,'manual refresh still works while a control has focus');
+  const beforeExpiry=now;now+=9*3600000;callbacks[0]();
+  assert.equal(elements['ai-meeting-rows'].children.length,0,'focus must not suppress expiration');
+  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);
+  now=beforeExpiry;document.activeElement=null;await elements['ai-meeting-refresh'].events.click();
+  const beforeUnfocusedPoll=requestCount;callbacks[1]();await new Promise(setImmediate);assert.equal(requestCount,beforeUnfocusedPoll+1);
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
   assert.equal(elements['ai-meeting-panel'].open,true);

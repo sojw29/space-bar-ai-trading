@@ -249,6 +249,14 @@ async function smoke(){
   await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("ATLAS");
   await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("PEER_REVIEW");
   await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("stage 4");
+  const editingPoll=await identityPage.evaluate(()=>{
+   const original=window.fetch;let reads=0;
+   window.fetch=(...args)=>{if(String(args[0]).endsWith("/api/v1/meeting/transcript"))reads++;return original(...args)};
+   try{window.__meetingTranscriptPoll();return {reads,focused:document.activeElement===document.getElementById("ai-meeting-search")};}
+   finally{window.fetch=original;}
+  });
+  assert.deepEqual(editingPoll,{reads:0,focused:true});
+  await identityPage.locator("#ai-meeting-summary").focus();
   await Promise.all([
    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===200),
    identityPage.evaluate(()=>{if(typeof window.__meetingTranscriptPoll!=="function")throw Error("missing registered transcript timer");window.__meetingTranscriptPoll();})
