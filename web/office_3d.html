@@ -2127,12 +2127,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||(verdict!=="ALL"&&entry.verdict!==verdict)||(query!==""&&!entry.searchText.includes(query));if(!entry.node.hidden)count++;}
   if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+(query?" · 검색 적용":"")+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
- agentFilter?.addEventListener("change",applyAgentView);
- phaseFilter?.addEventListener("change",applyAgentView);
- verdictFilter?.addEventListener("change",applyAgentView);
- statementSearch?.addEventListener("input",applyAgentView);
+ agentFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
+ phaseFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
+ verdictFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
+ statementSearch?.addEventListener("input",()=>{if(canUseRecord())applyAgentView();});
  resetView?.addEventListener("click",()=>{
-  if(resetView.disabled||renderedStatements.length===0)return;
+  if(!canUseRecord()||resetView.disabled||renderedStatements.length===0)return;
   if(agentFilter)agentFilter.value="ALL";
   if(phaseFilter)phaseFilter.value="ALL";
   if(verdictFilter)verdictFilter.value="ALL";
@@ -2141,7 +2141,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   statementSearch?.focus?.({preventScroll:true});
  });
  function showReviewStatements(verdict){
-  if(!renderedStatements.length||!verdictFilter)return;
+  if(!canUseRecord()||!renderedStatements.length||!verdictFilter)return;
   if(agentFilter)agentFilter.value="ALL";
   if(phaseFilter)phaseFilter.value="ALL";
   if(statementSearch)statementSearch.value="";
@@ -2219,6 +2219,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    sourceAge.title="원본 생성 UTC: "+new Date(validSince).toISOString()+" · 화면 유효 기한 UTC: "+new Date(validUntil).toISOString();
    sourceAge.hidden=false;
   }
+ }
+ // User actions must recheck freshness even between periodic expiry checks.
+ function canUseRecord(){
+  if(loading||offline)return false;
+  expire();
+  return validSince!==null&&validUntil!==null;
  }
  setInterval(expire,60000);
  document.addEventListener("visibilitychange",()=>{if(!document.hidden){expire();if(!loading)loadMeeting(true);}});
@@ -2331,6 +2337,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     item.setAttribute?.("role","button");
     item.setAttribute?.("aria-label","발언 "+statementId+" 연결 기록 확인");
     const showLinked=()=>{
+     if(!canUseRecord())return;
      const source=i>=3&&i<6?d.transcript[i-3]:null;
      const sourceId=i>=3&&i<6?(refs?refs[i].references[0]:"M"+String(i-2).padStart(2,"0")):null;
      linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\n"+t.summary+
@@ -2384,7 +2391,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     line.setAttribute?.("role","button");
     line.setAttribute?.("aria-label",initial.agent+" 초기 분석 및 상호 검토 상세 보기");
     const showDetails=()=>{
-     if(!linked)return;
+     if(!canUseRecord()||!linked)return;
      markSelected(line);
      const initialSet=new Set(initial.concerns);
      const reviewSet=new Set(review.concerns);
@@ -2420,7 +2427,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    conclusion.setAttribute?.("role","button");
    conclusion.setAttribute?.("aria-label","COMMANDER 최종 결론 상세 보기");
    const showConclusion=()=>{
-    if(!linked)return;
+    if(!canUseRecord()||!linked)return;
     markSelected(conclusion);
     const final=d.transcript[6];
     linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+final.summary+
