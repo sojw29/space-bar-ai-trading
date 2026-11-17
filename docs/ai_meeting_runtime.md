@@ -281,7 +281,16 @@ seven ordered statements, and a consistent final verdict. A successful
 HTTP response does **not** mean any trade was authorized.
 
 The runtime accepts any caller-selected destination, but the local API
-reads **only** `reports/ai_meeting/latest.json` under the repository root.
+reads `reports/ai_meeting/latest.json` under the repository root by default.
+To display a runtime output stored elsewhere, explicitly select that same file:
+
+```sh
+python agents/dashboard_api_v28.py --meeting-transcript path/to/completed-meeting.json
+```
+
+This option reads a local file only; it does not invoke a provider or synchronize
+remote output. Missing or invalid selected files return HTTP 503 without falling
+back to the default report. The same transcript validation applies.
 Writing `web/ai_meeting.json` or publishing to GitHub Pages does not
 populate this local API. Launch the dashboard from the repository root
 so other relative paths resolve as intended. A completed report generated
@@ -293,3 +302,311 @@ The UI distinguishes `LIVE_PROVIDER` from `OFFLINE_FIXTURE`; a fixture
 is not evidence of real model inference. Neither view is live trading.
 Actual browser rendering and an end-to-end paid-provider run still require
 separate, explicitly authorized verification.
+
+
+### Check local setup before a paid meeting
+
+```sh
+python agents/ai_meeting_setup.py path/to/fresh_v236_bundle.json --model YOUR_SUPPORTED_MODEL
+```
+
+This reads a bounded existing bundle and validates its freshness/contracts plus
+local model-name and OPENAI_API_KEY presence. It performs no network requests,
+model calls, output publication or orders and never prints the key or source
+contents. LOCAL_SETUP_VALID means local checks only: credential validity, model
+access, billing and supported model behavior remain unverified. BLOCKED returns
+exit status 1 with a sanitized code. Source data can expire after this check;
+the runtime still validates it again when explicitly invoked.
+
+
+### Prepare the runtime input from an existing brief
+
+```sh
+python agents/ai_meeting_prepare.py path/to/commander_brief.json path/to/meeting_bundle.json
+python agents/ai_meeting_setup.py path/to/meeting_bundle.json --model YOUR_SUPPORTED_MODEL
+```
+
+Preparation combines the existing source validation, handoff, consistency review,
+V236 adapter and dry-run transport checks. No credentials or model calls are
+needed to prepare the bundle. It checks freshness at each stage and immediately
+before atomic publication, preserves an existing output on validation failure,
+and rejects source/output aliases. The bundle is an unexecuted request, not a
+completed meeting transcript; never select it as the dashboard transcript.
+After local setup succeeds, the separate runtime command with explicit
+`--enable-live` is still required to run a paid meeting. Preparation never invokes
+that command automatically. A blocked preparation does not make an older output
+current; check the exit status and let the runtime revalidate before inference.
+
+
+### Combined local workflow (check-only by default)
+
+```sh
+python agents/ai_meeting_workflow.py path/to/commander_brief.json reports/ai_meeting/latest.json --model YOUR_SUPPORTED_MODEL
+```
+
+The command prepares a temporary bundle and checks local configuration. By default
+it returns READY_NO_MODEL_CALLS, removes the temporary bundle, leaves the transcript
+destination untouched, and does not call a model. An API key must be configured
+locally for the setup check; local readiness does not verify that key or model.
+
+Only adding `--enable-live` explicitly authorizes up to seven paid research calls
+through the existing runtime. Successful completion atomically publishes the
+transcript at the specified destination. Failed preparation, setup or inference
+does not replace an existing transcript. A failure after inference begins reports
+an unknown call count rather than claiming zero usage; no automatic retry occurs.
+The dashboard must be running and reading this destination to display the result.
+This workflow does not start/deploy a server, synchronize remote files, or enable
+orders. The paid path has been tested with fixture responses only, not a live API.
+
+
+For a script or remote command runner, add `--json` to the combined workflow.
+Standard output then contains exactly one final JSON result. Notices and progress
+remain on standard error; they are not part of the JSON. Exit code 0 means either
+READY_NO_MODEL_CALLS or COMPLETED, so always inspect `status` rather than treating
+exit code 0 as proof of model execution. BLOCKED returns exit code 1. This output
+mode does not change authorization: default execution still makes no model calls.
+
+
+Add `--events` to emit MEETING_WORKFLOW_EVENT_1 stage events on standard error.
+Each event contains only version, event, workflow_stage and status. STAGE_STARTED
+marks entry to INPUT, PREPARATION, SETUP and (only with explicit live execution)
+CONFIGURATION, INFERENCE and PUBLICATION. WORKFLOW_FINISHED is terminal and uses
+the final result's stage/status. Default check-only readiness stops at SETUP;
+it is never shown as a completed model meeting. Existing runtime per-agent
+progress remains separate. Pair `--events --json` to keep the final result alone
+on stdout. Stderr can also contain notices, so consumers should filter events by
+version. These are local process events; this does not add a dashboard API or
+persist progress across process restarts.
+
+
+Add `--status-file path/to/workflow_status.json` to atomically persist the latest
+stage snapshot, even without `--events`. Each invocation has a new execution ID;
+the file contains only allowlisted stage/status metadata and update time, not
+prompts, keys, model output or input paths. Use a distinct status path for each
+concurrent run. It cannot alias the source or completed transcript (including
+hardlinks/symlinks). Status writes may create their parent directory.
+
+`ai_meeting_workflow_status.read_status` enforces a 4 KiB limit, exact fields,
+consistent stage/status combinations, optional expected execution ID and an
+inclusive five-minute freshness window. Old/future snapshots are rejected;
+RUNNING is a recorded stage, not proof that its process is still alive. Default
+mode finishes as READY_NO_MODEL_CALLS at SETUP. A status recording failure exits
+nonzero; if execution already began its call count is unknown and the caller
+must inspect the transcript separately. Snapshot storage does not yet add a
+status API or 3D progress panel. No automatic meeting restart is performed.
+
+
+### Show recorded workflow progress in the 3D room
+
+Use the same status path in the two local commands:
+
+```sh
+python agents/ai_meeting_workflow.py path/to/commander_brief.json reports/ai_meeting/latest.json --model YOUR_SUPPORTED_MODEL --status-file reports/ai_meeting/workflow_status.json --json
+python agents/dashboard_api_v28.py --meeting-status reports/ai_meeting/workflow_status.json
+```
+
+The first command remains check-only unless --enable-live is explicitly added.
+The second command enables GET /api/v1/meeting/workflow-status and the 3D room's
+recorded-progress panel. Without a configured status path the API returns 404;
+missing, malformed or stale snapshots return 503 with a fixed sanitized error.
+POST is rejected. Reading status never runs a meeting or submits an order.
+
+The panel checks the snapshot again, polls visible tabs every five seconds,
+prevents overlapping fetches, clears old details during reload/failure, and
+expires records after five minutes or backward clock movement. Local readiness
+is labeled model-call-free; RUNNING is a recorded stage, not verified process
+liveness. A completed status does not verify the transcript or grant trade
+approval. The transcript panel remains separate. Neither command deploys the
+server or synchronizes files between machines.
+
+
+During inference, the workflow also emits MEETING_WORKFLOW_EVENT_2 MODEL_PROGRESS
+records projected from runtime callbacks. Status files use the corresponding
+MEETING_WORKFLOW_STATUS_2 shape with agent, phase, attempted_calls and
+validated_responses. Only the fixed seven-step role/phase sequence and sequential
+counts are accepted. These counts describe response attempts/validation, not
+billing, process liveness or proof of real provider inference. Stage/terminal
+snapshots keep the existing version-1 format; readers support both versions.
+The API and 3D panel now display the recorded agent, analysis/review/conclusion
+phase, and validated response count out of seven. Invalid roles, impossible
+counts and stale data clear the display. No model text or credentials are stored
+in progress snapshots.
+
+
+To follow one particular workflow execution, optionally launch the dashboard with
+`--meeting-status path/to/status.json --meeting-execution-id EXECUTION_ID`.
+The ID must be the 32-character lowercase hexadecimal execution_id from that
+run's status file. A valid record replaced by another run returns a fixed HTTP
+409 mismatch error, and the progress panel clears it. Without
+the pin, the dashboard continues showing the latest valid record in its selected
+file. Restart/reconfigure the server to follow another pinned run. This pins
+progress only; the completed transcript remains separately validated and selected.
+Invalid IDs or an ID without --meeting-status are rejected at startup.
+
+
+The workflow CLI's --status-file observer now validates ordering within its
+current process/run before writing. It requires INPUT first, consecutive
+preparation/setup/configuration/inference stages, and sequential response counts.
+PUBLICATION/COMPLETED require all seven responses to have been validated. Terminal
+records cannot restart; stage/count rollback, skipped response events and backward
+clock movement are rejected without replacing the prior snapshot. In-memory order
+state advances only after a successful atomic write. This is a per-run recorder,
+not a cross-process lock or restart recovery mechanism; use separate status files
+for concurrent runs and optional server execution-ID pinning when needed. The
+stateless snapshot reader still validates each saved record independently.
+
+
+Every parsed workflow CLI invocation now includes its generated `execution_id`
+in the final JSON result, on readiness and failure paths as well as completion.
+With --status-file, this is the same ID written to its progress snapshots; use it
+for the dashboard's --meeting-execution-id option. Without --status-file it still
+identifies the command invocation but does not imply any progress file exists.
+Repeated invocations receive different IDs. The field identifies an execution,
+not proof of model inference, successful publication or verified API access.
+
+
+The combined workflow now stamps completed transcripts with its optional
+workflow_execution_id (the CLI always supplies its generated ID). The local
+transcript API validates/projects that field and displays it in the meeting
+record. When --meeting-execution-id is configured on the dashboard, both the
+progress snapshot and completed transcript must match. A missing or different
+transcript ID returns a fixed HTTP 409 mismatch error; malformed IDs return 503. This supersedes the earlier
+progress-only pinning behavior. Unpinned dashboards still accept older valid
+transcripts without the optional field. Publication validation also accepts only
+a well-formed optional ID. Identity correlates local artifacts; it is not a
+signature, verified inference claim or trade authorization.
+
+
+### Launch a recorded meeting session with one folder option
+
+```sh
+python agents/dashboard_api_v28.py --meeting-session reports/ai_meeting
+```
+
+This selects `latest.json` and `workflow_status.json` in that folder, validates
+the recent status snapshot at startup and pins both progress and transcript APIs
+to its execution ID. It replaces the three explicit meeting-path/ID options;
+combining either style is rejected. No meeting is started, no credentials are
+read, and no files are modified by selecting the session.
+
+The status must satisfy the existing five-minute freshness window. Missing,
+invalid or stale status stops startup with a sanitized CLI error instead of
+choosing some other run. To prepare a recent check-only status, use the combined
+workflow with `--status-file reports/ai_meeting/workflow_status.json` and the
+transcript destination `reports/ai_meeting/latest.json`. That default workflow
+check does not create a new transcript; the progress panel can show readiness
+while an absent or differently identified transcript remains unavailable.
+The server keeps the chosen ID for its lifetime; restart it to follow a new run.
+Manual path/ID options remain available. This is a local launcher convenience,
+not deployment, remote synchronization or paid execution.
+
+
+### Use one session folder for preparation and display
+
+```sh
+python agents/ai_meeting_workflow.py path/to/commander_brief.json --meeting-session reports/ai_meeting --model YOUR_SUPPORTED_MODEL --json
+python agents/dashboard_api_v28.py --meeting-session reports/ai_meeting
+```
+
+The workflow folder option selects `latest.json` as the transcript destination
+and `workflow_status.json` as the ordered progress file. An explicit destination
+or --status-file cannot be combined with this option. Existing explicit-path
+commands remain supported. The default still performs local checks only: it
+writes a readiness snapshot but preserves any existing transcript, and a
+mismatched old transcript will not display under the new run's ID. Only the
+separate explicit --enable-live switch runs paid model inference and publishes a
+new completed transcript. A preparation failure records BLOCKED without replacing
+the prior transcript. The two commands do not deploy or synchronize anything.
+
+
+Execution mismatch now has a distinct HTTP 409 response: workflow status uses
+`workflow_execution_mismatch`, and completed transcripts use
+`meeting_execution_mismatch`. Error bodies contain fixed codes and disabled-order
+flags, not paths, expected/actual IDs, source text or provider responses. Other
+invalid/missing/stale records remain 503, and an unconfigured status source remains
+404. Both 3D panels show Korean execution-mismatch guidance and clear old content;
+restoring matching records permits a normal refresh. No automatic meeting run or
+server reconfiguration is triggered by an error.
+
+
+The 3D recorded-progress panel now highlights the currently recorded workflow
+stage in a compact step list. It does not mark earlier stages as independently
+verified. A native accessible progress bar shows validated_responses out of seven
+only for validated version-2 MODEL_PROGRESS snapshots. Check-only readiness and
+version-1 completion records hide the numeric bar, because those snapshots do
+not carry response counts. Reload, expiry, invalid data and execution mismatch
+clear the highlighted steps and reset/hide the bar. This remains recorded status,
+not live process verification, real-provider proof or trade authorization.
+
+
+A fresh COMPLETED progress snapshot now enables “이 실행의 회의 기록 확인”.
+The button opens/focuses the transcript panel and performs a read-only refresh,
+requiring the clicked execution ID to match the returned transcript even on an
+unpinned dashboard. Missing/different transcript identity clears the viewer.
+If another query is already running, a selection change queues one follow-up
+refresh and rejects the old response. Readiness, running, failed, stale or
+unavailable progress disables the button and removes its saved target ID. A
+completed status only enables checking the transcript; it does not prove the
+transcript exists or authorize inference, retries or trading.
+
+
+The transcript panel now keeps the explicitly selected workflow ID visible even
+when fetching fails. “화면 선택 해제” removes only the viewer's local identity
+filter and refreshes the default record provided by the server. It hides/clears
+the selection banner and keeps focus in the transcript panel. It does not change
+a server execution-ID pin or bypass API validation. Selection changes and resets
+share the single queued-reload guard during an in-flight request; neither starts
+inference or orders. Reloading the page also resets the viewer's local selection.
+
+
+The sidebar now summarizes the relationship between the two independently
+validated views without making extra API calls. Readiness remains model-call-free;
+a running/blocked progress record is not a completed result. A completed progress
+record needs a validated transcript with the same execution ID before the summary
+labels them linked. Missing result/identity, differing IDs and unavailable progress
+remain separate states. Linked offline fixtures explicitly say no real AI
+execution. Provider linkage describes stored API-completion metadata, not current
+liveness, billing verification or trade authorization. Reload/error/expiry events
+remove the prior linked state. The detailed panels and server execution pin remain
+unchanged; the summary consumes allowlisted identity/state/provenance metadata
+only, not model text or credentials.
+
+완료 기록 버튼은 클릭 직전에도 진행 기록의 5분 유효 시간과 시계 역행을 확인한다. 백그라운드 탭의 타이머가 지연돼도 만료된 버튼으로 실행 ID를 선택하거나 결과를 요청하지 않으며, 진행 상태를 새로 조회해 검증하면 다시 사용할 수 있다.
+
+진행 상태도 표시 중인 탭의 Safari 복원(`pageshow.persisted`)과 네트워크 재연결(`online`)에서 만료 여부를 확인하고 즉시 재조회한다. 숨겨진 탭에서는 복원·재연결로 조회하지 않으며, 이미 진행 중인 요청은 중복 실행하지 않는다. 이 조회는 상태 파일만 읽고 모델이나 주문을 실행하지 않는다.
+
+진행 상태 조회 중 복원·재연결이 겹치면 추가 재조회를 한 건으로 모은다. 이전 응답은 표시하지 않고 요청 종료 후 다시 조회하며, 그 사이 탭이 숨겨졌다면 추가 요청 없이 다음 복귀 시 재확인한다.
+
+진행 상태 조회 오류는 접근 거부(401/403), 요청 과다(429), 응답 지연(502/504), 상태 파일 미연결·만료(503), 기타 서버 오류와 네트워크 연결 실패를 구분해 안내한다. 오류 응답 본문은 표시하지 않고 완료 버튼과 실행 ID를 지우며, 다시 조회해 검증에 성공하면 복구한다. 요청 과다 안내는 서버 제한이 해제됐다는 의미가 아니다.
+
+진행 상태 자동 조회는 연속 실패 시 10·20·40·60초로 대기 시간을 늘리며 이후 60초를 유지한다. 5초 주기 타이머가 대기 종료를 확인하므로 실제 재조회는 표시된 최소 대기보다 최대 한 주기 늦을 수 있다. 오류 안내의 도움말에 대기 시간을 표시하며, 수동 확인과 화면 복귀·재연결 조회는 즉시 가능하다. 정상 검증 응답을 받으면 실패 횟수를 초기화하고 기존 5초 조회로 복귀한다. 서버의 Retry-After를 해석하는 기능은 포함하지 않는다.
+
+자동 재조회 오류 안내는 모바일에서도 볼 수 있도록 별도 문단에 표시하고, 수동 확인 버튼과 aria-describedby로 연결한다. 최소 조회 간격과 즉시 수동 확인 방법을 표시하며 카운트다운이나 서버 복구 예측을 뜻하지 않는다. 새 조회·만료 초기화·정상 복구 시 이전 안내를 지우고 숨긴다.
+
+진행 상태 패널은 브라우저의 초기 오프라인 보고와 offline 이벤트에서 완료 표시·실행 ID·재조회 안내를 지우고 자동·수동 진행 조회를 중지한다. 이는 브라우저 연결 보고이며 서버 중단 판정이 아니다. 이전 연결에서 시작한 응답은 재연결 후에도 표시하지 않으며, 표시 중인 탭은 online 이벤트에서 새로 조회한다. 숨겨진 탭은 화면 복귀까지 기다린다. 다른 데이터 패널의 조회 정책은 변경하지 않는다.
+
+회의 결과 뷰어도 브라우저 오프라인 보고 시 발언·최종 요약·타임라인을 지우고 결과 재조회를 중지한다. 단절 전 응답은 연결 세대가 바뀌면 무효화하고, 재연결 후 선택한 실행 ID 필터를 유지한 채 새로 검증한다. 숨겨진 탭은 복귀 시 조회하며 실제 서버 상태를 추정하지 않는다.
+
+브라우저 offline 이벤트에서는 진행 상태·회의 결과의 활성 AbortController도 즉시 취소한다. 대기 중인 헤더·본문 수신과 5초 타임아웃이 정리되며, 취소된 요청은 서버 오류나 재시도 실패 횟수로 계산하지 않는다. 이전 연결 응답의 무효화 검증은 취소 지원 여부와 별도로 유지한다.
+
+검증된 회의 결과에서는 발언 보기 선택 상자로 ATLAS·QUANT·GUARDIAN·COMMANDER의 발언만 표시할 수 있다. 표시 개수를 함께 안내하며 최종 요약·판단 타임라인은 전체 회의를 기준으로 유지한다. 필터는 이미 받은 발언을 숨기거나 표시할 뿐 네트워크 요청·회의 실행·판정 재계산을 하지 않는다. 조회 중·만료·오프라인·오류에서는 필터를 전체로 초기화하고 숨긴다.
+
+발언 단계 선택은 전체·초기 분석·상호 검토·최종 결론을 지원하며 에이전트 선택과 교집합으로 적용한다. 해당 조합에 발언이 없으면 0개와 빈 결과 안내를 표시한다. 이는 자료 부족 판정이 아니며 최종 요약·전체 타임라인은 변경하지 않는다. 수동 조회·기록 변경·오류·오프라인에서는 두 선택을 모두 전체로 초기화한다.
+
+발언·우려 검색은 검증된 summary와 concerns만 대상으로 대소문자를 구분하지 않는 부분 문자열 검색을 수행한다. 앞뒤 공백을 제거하고 입력은 120자로 제한하며 정규식이나 HTML로 해석하지 않는다. 에이전트·단계와 교집합으로 적용하고 빈 검색은 전체 범위로 복귀한다. 검색어는 전송·저장하지 않으며 조회 중에는 지우고 입력을 비활성화하며 수동 조회·기록 변경·오류·오프라인에서는 복원하지 않는다. 전체 최종 요약과 타임라인은 검색 결과에 의해 재계산하지 않는다.
+
+필터·검색 초기화 버튼은 에이전트·단계·검색어만 한 번에 전체 범위로 돌리고 검색 입력으로 초점을 옮긴다. 선택한 회의 실행 ID와 전체 요약은 유지하며 서버 조회는 발생하지 않는다. 모든 입력이 기본값이면 비활성화되고, 공백 검색어도 한 번에 지울 수 있다. 데이터가 지워지면 초기화 버튼도 비활성화한다.
+
+60초 자동 재조회와 화면 복귀·브라우저 캐시 복원·재연결 조회에서는 현재 필터·검색어를 메모리에 잠시 보관하고, 새 응답이 전체 검증을 통과한 뒤 검증된 결과 전체의 JSON 표현이 이전 결과와 동일할 때만 복원한다. 실행 ID를 포함한 메타데이터나 발언 내용이 바뀌면 전체 보기로 초기화한다. 로딩 중에는 이전 내용을 표시하지 않으며 실패·오프라인·수동 조회 후에는 조건을 되살리지 않는다. 검색어는 서버나 저장소에 기록하지 않는다.
+
+화면 복귀 보존도 검증된 기록이 남아 있는 경우에만 적용한다. 오프라인에서 기록과 조건을 지웠다면 재연결해도 복원하지 않는다. 숨겨진 탭의 복원·재연결 이벤트는 조회하지 않고 실제 화면 복귀를 기다린다. 수동 다시 확인과 다른 회의 실행 선택은 계속 초기화한다.
+
+에이전트·단계 선택이나 검색 입력에 초점이 있을 때는 60초 정기 조회를 건너뛰어 입력이 숨겨지거나 모바일 키보드가 닫히는 일을 피한다. 초점을 옮기면 다음 정기 조회부터 재개하며 수동 다시 확인은 즉시 가능하다. 별도 만료 검사와 화면 복귀·재연결 검증은 계속 동작하므로 초점 유지가 기록의 유효 시간을 늘리지 않는다.
+
+검토 상태 선택은 전체·관측 요약·추가 검토 필요·자료 부족을 지원하며 검증된 각 발언의 verdict를 기준으로만 필터링한다. 에이전트·단계·검색과 교집합으로 적용하고 전체 최종 판정을 다시 계산하지 않는다. 초기화·오프라인·오류·동일 기록 재검증의 조건 보존과 입력 중 정기 조회 대기에도 포함한다. 빈 필터 결과가 전체 회의에 위험이나 자료 부족이 없다는 뜻은 아니다.
+
+전체 회의 검토 상태별 발언 수 요약은 검증된 전체 transcript를 기준으로 총 발언·관측 요약·추가 검토 필요·자료 부족 개수를 표시한다. 필터·검색으로 표시 발언이 0개가 되어도 전체 개수를 유지하므로 숨겨진 검토 필요 의견을 놓치지 않게 한다. 이는 발언 수이며 다수결·합의율·새 최종 판정이 아니다. 새 조회·오류·만료·오프라인에서는 다른 결과와 함께 지우고 숨긴다.
+
+전체 회의 요약 옆의 추가 검토·자료 부족 발언 보기 버튼은 에이전트·단계·검색어를 해제하고 해당 검토 상태만 선택한다. 기존 조건에 가려졌던 발언도 바로 확인할 수 있고 최종 요약·실행 ID는 바꾸지 않는다. 해당 상태가 0개면 버튼을 비활성화하며 결과가 지워지면 두 버튼을 숨기고 비활성화한다. 서버 조회나 판정 재계산은 발생하지 않는다.
+
+회의 원본 생성 시각(source_generated_at_utc), 그 시각부터의 경과 분수, 기존 화면 기록 유효 기한을 결과에 표시한다. 시각은 브라우저 현지 형식이며 도움말에는 UTC를 함께 제공한다. 별도 만료 검사에서 분 단위 표시도 갱신하므로 입력 중 정기 조회가 쉬어도 추가 요청 없이 시간이 반영된다. 이는 회의 원본의 생성 시각이며 개별 캔들·뉴스 시각이나 현재 시장 분석 시각을 뜻하지 않는다. 조회 중·오류·만료·오프라인에서는 결과와 함께 제거한다. 기존 8시간 유효 정책은 변경하지 않는다.

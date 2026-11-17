@@ -63,6 +63,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 #stage[data-render-ready="false"]{background:#111e31}
 @media(max-width:800px){main{grid-template-columns:1fr}#stage{min-height:410px;height:58vh}aside{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+#meeting-progress-stages:not([hidden]){display:flex}
 </style>
 </head>
 <body>
@@ -84,8 +85,23 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <div class="metric"><small>LAST LOCAL API CHECK</small><strong id="ops-check">실행 전</strong></div>
 <p class="notice" id="ops-disclosure">이 상태는 현재 브라우저와 localhost 연구 API를 확인한 결과이며 실제 거래소 계좌의 연결 상태나 실거래 가능 여부를 뜻하지 않습니다.</p>
 </section>
+<section class="panel" id="meeting-progress-panel">
+<h2>회의 실행 진행 상태</h2>
+<p id="meeting-session-summary" role="status" aria-live="polite">회의 연결 상태 확인 중…</p>
+<p id="meeting-progress-status" role="status" aria-live="polite">진행 기록 확인 중…</p>
+<ol id="meeting-progress-stages" aria-label="기록된 회의 실행 단계" style="flex-wrap:wrap;gap:6px;list-style:none;padding:0" hidden></ol>
+<progress id="meeting-progress-count" max="7" value="0" aria-label="기록된 검증 응답 수" style="width:100%;accent-color:#80c8e8" hidden></progress>
+<p id="meeting-progress-detail" style="white-space:pre-wrap"></p>
+<p id="meeting-progress-retry" class="notice" role="status" aria-live="polite" hidden></p>
+<button id="meeting-progress-refresh" type="button" aria-describedby="meeting-progress-retry">진행 기록 다시 확인</button>
+<button id="meeting-progress-open-record" type="button" aria-controls="ai-meeting-panel" disabled>이 실행의 회의 기록 확인</button>
+<p class="notice">파일에 기록된 단계입니다. 프로세스 생존·상시 실행·거래 승인을 뜻하지 않습니다.</p>
+</section>
 <section class="panel"><h2>선택 에이전트 · 연구 정보</h2>
 <div class="metric"><small>AGENT</small><strong id="selected-name">COMMANDER</strong></div>
+<button id="ai-meeting-shortcut" type="button" aria-controls="ai-meeting-panel">모델 회의 기록 보기</button>
+<p id="ai-meeting-shortcut-status" role="status" aria-live="polite">모델 회의 기록 연결 확인 중…</p>
+<p class="notice">저장된 모델 회의 기록으로 이동합니다. 회의를 새로 실행하지 않습니다.</p>
 <div class="metric"><small>ROLE</small><strong id="selected-role">합의 판단</strong></div>
 <div class="metric"><small>결정 (주문 신호 아님)</small><strong id="selected-decision" class="WAIT">WAIT</strong></div>
 <div class="metric"><small>분석 근거</small><strong id="selected-reason">데이터 확인 대기</strong></div>
@@ -1990,45 +2006,286 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 })();
 </script>
 <details id="ai-meeting-panel" style="position:relative;z-index:1006;margin:18px auto;max-width:1000px;background:#101c30;color:#e8f4ff;padding:16px;border:1px solid #426482;border-radius:12px">
-<summary>별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
+<summary id="ai-meeting-summary">별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
 <button id="ai-meeting-refresh" type="button" style="padding:6px 12px;margin:8px 0;background:#25435e;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">회의 기록 다시 확인</button>
-<p id="ai-meeting-status" role="status">회의 결과 연결 확인 중…</p>
+<p id="ai-meeting-status" role="status" aria-live="polite">회의 결과 연결 확인 중…</p>
+<p id="ai-meeting-source-age" class="notice" role="note" hidden></p>
+<p id="ai-meeting-selected-run" role="status" aria-live="polite" hidden></p>
+<button id="ai-meeting-clear-selection" type="button" title="서버가 제공하는 기본 기록을 다시 확인합니다" hidden>화면 선택 해제</button>
+<p id="ai-meeting-connection-label" style="font-size:12px;color:#a9c5d9">연결 상태: 확인 중</p>
 <p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
+<p id="ai-meeting-decision" role="note" style="white-space:pre-wrap;padding:10px;border-left:3px solid #547c9a;background:#152941" hidden></p>
+<p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
+<div id="ai-meeting-timeline" aria-label="회의 판단 타임라인" hidden></div>
+<p id="ai-meeting-verdict-counts" role="note" aria-label="전체 회의 검토 상태별 발언 수" style="padding:8px;background:#152941" hidden></p>
+<div id="ai-meeting-review-shortcuts" hidden>
+<button id="ai-meeting-show-review" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-verdict-counts ai-meeting-agent-count" style="padding:7px;margin:4px 0" disabled>추가 검토 발언 보기</button>
+<button id="ai-meeting-show-missing" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-verdict-counts ai-meeting-agent-count" style="padding:7px;margin:4px 0" disabled>자료 부족 발언 보기</button>
+</div>
+<div id="ai-meeting-agent-controls" hidden>
+<label for="ai-meeting-agent-filter">발언 보기</label>
+<select id="ai-meeting-agent-filter" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">
+<option value="ALL">전체 에이전트</option><option value="ATLAS">ATLAS</option><option value="QUANT">QUANT</option><option value="GUARDIAN">GUARDIAN</option><option value="COMMANDER">COMMANDER</option>
+</select>
+<div style="margin-top:8px"><label for="ai-meeting-phase-filter">발언 단계</label>
+<select id="ai-meeting-phase-filter" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">
+<option value="ALL">전체 단계</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
+</select></div>
+<div style="margin-top:8px"><label for="ai-meeting-verdict-filter">검토 상태</label>
+<select id="ai-meeting-verdict-filter" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">
+<option value="ALL">전체 검토 상태</option><option value="OBSERVATION_ONLY">관측 요약</option><option value="REVIEW_NEEDED">추가 검토 필요</option><option value="INSUFFICIENT_DATA">자료 부족</option>
+</select></div>
+<div style="margin-top:8px"><label for="ai-meeting-search">발언·우려 검색</label>
+<input id="ai-meeting-search" type="search" maxlength="120" autocomplete="off" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" placeholder="검색어 입력" style="box-sizing:border-box;max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px"></div>
+<button id="ai-meeting-view-reset" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="margin-top:8px;padding:7px" disabled>필터·검색 초기화</button>
+<p id="ai-meeting-agent-count" role="status" aria-live="polite"></p>
+<p class="notice">검색·선택에 초점이 있는 동안 정기 자동 조회를 잠시 멈춥니다. 수동 다시 확인과 기록 만료 검사는 계속 동작합니다.</p>
+</div>
 <div id="ai-meeting-rows"></div>
 </details>
+<script>
+/* Recorded progress and transcript correlation summary. */
+(()=>{
+ const node=document.getElementById("meeting-session-summary");if(!node)return;
+ let progress={state:"UNAVAILABLE",execution_id:null},record={state:"disconnected",execution_id:null,provenance:null};
+ const id=value=>typeof value==="string"&&/^[a-f0-9]{32}$/.test(value);
+ function render(){
+  let state="UNAVAILABLE",message="진행 기록 미연결 · 회의 결과는 별도 확인";
+  if(progress.state==="LOADING"){state="CHECKING";message="회의 연결 상태 확인 중…";}
+  else if(progress.state==="READY_NO_MODEL_CALLS"){state="READY_ONLY";message="준비 점검 완료 · 실제 모델 호출 없음";}
+  else if(progress.state==="RUNNING"){state="IN_PROGRESS";message="회의 진행 단계 기록 · 완료 결과 대기";}
+  else if(progress.state==="BLOCKED"){state="BLOCKED";message="회의 실행 중단 기록 · 결과 연결 확인 필요";}
+  else if(progress.state==="COMPLETED"){
+   if(record.state==="loading"){state="RECORD_LOADING";message="완료 상태 기록 · 회의 결과 조회 중";}
+   else if(record.state!=="validated"){state="RECORD_PENDING";message="완료 상태 기록 · 회의 결과 확인 필요";}
+   else if(!id(record.execution_id)){state="RECORD_ID_MISSING";message="회의 결과의 실행 ID 확인 필요";}
+   else if(record.execution_id!==progress.execution_id){state="MISMATCH";message="진행 상태와 회의 결과의 실행 ID가 다릅니다";}
+   else if(record.provenance==="OFFLINE_FIXTURE"){state="LINKED_FIXTURE";message="동일 실행의 오프라인 회의 기록 연결 · 실제 AI 실행 아님";}
+   else{state="LINKED_PROVIDER";message="동일 실행의 모델 API 완료 기록 연결";}
+  }
+  node.setAttribute("data-state",state);if(node.textContent!==message)node.textContent=message;
+ }
+ document.addEventListener("spacebar:workflow-view",event=>{
+  const d=event.detail,known=["UNAVAILABLE","LOADING","READY_NO_MODEL_CALLS","RUNNING","BLOCKED","COMPLETED"];
+  const valid=d&&typeof d==="object"&&!Array.isArray(d)&&Object.keys(d).sort().join(",")==="execution_id,state"&&known.includes(d.state)&&
+   (["UNAVAILABLE","LOADING"].includes(d.state)?d.execution_id===null:id(d.execution_id));
+  progress=valid?{...d}:{state:"UNAVAILABLE",execution_id:null};render();
+ });
+ document.addEventListener("spacebar:transcript-view",event=>{
+  const d=event.detail;
+  const valid=d&&typeof d==="object"&&!Array.isArray(d)&&Object.keys(d).sort().join(",")==="execution_id,provenance,state"&&
+   (d.state==="validated"?((d.execution_id===null||id(d.execution_id))&&["LIVE_PROVIDER","OFFLINE_FIXTURE"].includes(d.provenance)):
+    (["loading","disconnected"].includes(d.state)&&d.execution_id===null&&d.provenance===null));
+  record=valid?{...d}:{state:"disconnected",execution_id:null,provenance:null};render();
+ });
+ render();
+})();
+</script>
 <script>
 /* Completed model meeting snapshots only. Model text is never HTML or executable code. */
 (async function(){
  const status=document.getElementById("ai-meeting-status"),rows=document.getElementById("ai-meeting-rows");
  const refreshButton=document.getElementById("ai-meeting-refresh");
+ const connectionLabel=document.getElementById("ai-meeting-connection-label");
+ const decision=document.getElementById("ai-meeting-decision");
+ const sourceAge=document.getElementById("ai-meeting-source-age");
+ const verdictCounts=document.getElementById("ai-meeting-verdict-counts");
+ const reviewShortcuts=document.getElementById("ai-meeting-review-shortcuts"),showReview=document.getElementById("ai-meeting-show-review"),showMissing=document.getElementById("ai-meeting-show-missing");
+ const linked=document.getElementById("ai-meeting-linked");
+ const timeline=document.getElementById("ai-meeting-timeline");
+ const shortcut=document.getElementById("ai-meeting-shortcut");
+ const completedRecord=document.getElementById("meeting-progress-open-record");
+ let selectedExecutionId=null,pendingSelectionReload=false,verifiedRecordId=null;
+ const agentControls=document.getElementById("ai-meeting-agent-controls"),agentFilter=document.getElementById("ai-meeting-agent-filter"),agentCount=document.getElementById("ai-meeting-agent-count");
+ const phaseFilter=document.getElementById("ai-meeting-phase-filter");
+ const verdictFilter=document.getElementById("ai-meeting-verdict-filter");
+ const statementSearch=document.getElementById("ai-meeting-search");
+ const resetView=document.getElementById("ai-meeting-view-reset");
+ let renderedStatements=[],validatedViewKey=null;
+ function clearAgentView(){
+  renderedStatements=[];validatedViewKey=null;
+  if(resetView)resetView.disabled=true;
+  if(agentControls)agentControls.hidden=true;
+  if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=true;}
+  if(phaseFilter){phaseFilter.value="ALL";phaseFilter.disabled=true;}
+  if(verdictFilter){verdictFilter.value="ALL";verdictFilter.disabled=true;}
+  if(statementSearch){statementSearch.value="";statementSearch.disabled=true;}
+  if(agentCount)agentCount.textContent="";
+ }
+ function applyAgentView(){
+  const requested=agentFilter?.value,agent=["ATLAS","QUANT","GUARDIAN","COMMANDER"].includes(requested)?requested:"ALL";
+  if(agentFilter)agentFilter.value=agent;
+  const phases={ALL:"전체 단계",ANALYSIS:"초기 분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"};
+  const requestedPhase=phaseFilter?.value,phase=Object.hasOwn(phases,requestedPhase)?requestedPhase:"ALL";
+  if(phaseFilter)phaseFilter.value=phase;
+  const states={ALL:"전체 검토 상태",OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
+  const requestedVerdict=verdictFilter?.value,verdict=Object.hasOwn(states,requestedVerdict)?requestedVerdict:"ALL";
+  if(verdictFilter)verdictFilter.value=verdict;
+  const query=typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120).trim().toLowerCase():"";
+  if(resetView)resetView.disabled=renderedStatements.length===0||(agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&!(statementSearch?.value));
+  let count=0;
+  for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||(verdict!=="ALL"&&entry.verdict!==verdict)||(query!==""&&!entry.searchText.includes(query));if(!entry.node.hidden)count++;}
+  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+(query?" · 검색 적용":"")+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
+ }
+ agentFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
+ phaseFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
+ verdictFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
+ statementSearch?.addEventListener("input",()=>{if(canUseRecord())applyAgentView();});
+ resetView?.addEventListener("click",()=>{
+  if(!canUseRecord()||resetView.disabled||renderedStatements.length===0)return;
+  if(agentFilter)agentFilter.value="ALL";
+  if(phaseFilter)phaseFilter.value="ALL";
+  if(verdictFilter)verdictFilter.value="ALL";
+  if(statementSearch)statementSearch.value="";
+  applyAgentView();
+  statementSearch?.focus?.({preventScroll:true});
+ });
+ function showReviewStatements(verdict){
+  if(!canUseRecord()||!renderedStatements.length||!verdictFilter)return;
+  if(agentFilter)agentFilter.value="ALL";
+  if(phaseFilter)phaseFilter.value="ALL";
+  if(statementSearch)statementSearch.value="";
+  verdictFilter.value=verdict;applyAgentView();verdictFilter.focus?.({preventScroll:true});
+ }
+ showReview?.addEventListener("click",()=>{if(!showReview.disabled)showReviewStatements("REVIEW_NEEDED");});
+ showMissing?.addEventListener("click",()=>{if(!showMissing.disabled)showReviewStatements("INSUFFICIENT_DATA");});
+ clearAgentView();
+ const selectionLabel=document.getElementById("ai-meeting-selected-run"),clearSelection=document.getElementById("ai-meeting-clear-selection");
+ function renderSelection(){
+  if(selectionLabel){selectionLabel.hidden=selectedExecutionId===null;selectionLabel.textContent=selectedExecutionId===null?"":"선택한 회의 실행 ID: "+selectedExecutionId;}
+  if(clearSelection)clearSelection.hidden=selectedExecutionId===null;
+ }
+ function reloadSelection(){
+  renderSelection();
+  if(loading){pendingSelectionReload=true;return;}
+  return loadMeeting();
+ }
+ clearSelection?.addEventListener("click",()=>{
+  if(selectedExecutionId===null)return;
+  selectedExecutionId=null;
+  document.getElementById("ai-meeting-summary")?.focus?.({preventScroll:true});
+  return reloadSelection();
+ });
+ renderSelection();
+ completedRecord?.addEventListener("click",()=>{
+  if(completedRecord.disabled)return;
+  const id=completedRecord.dataset?.executionId,panel=document.getElementById("ai-meeting-panel");
+  if(typeof id!=="string"||!/^[a-f0-9]{32}$/.test(id)||!panel)return;
+  selectedExecutionId=id;panel.open=true;
+  document.getElementById("ai-meeting-summary")?.focus?.({preventScroll:true});
+  panel.scrollIntoView?.({block:"start",behavior:"auto"});
+  return reloadSelection();
+ });
+ shortcut?.addEventListener("click",()=>{
+  const panel=document.getElementById("ai-meeting-panel");
+  if(!panel)return;
+  panel.open=true;
+  document.getElementById("ai-meeting-summary")?.focus?.({preventScroll:true});
+  panel.scrollIntoView?.({block:"start",behavior:"auto"});
+ });
+ function clearTimeline(){if(timeline){timeline.replaceChildren();timeline.hidden=true;}}
+ function clearLinked(){if(linked){linked.textContent="";linked.hidden=true;}}
+ function clearDecision(){if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;}
+ function setConnection(state,reason,provenance=""){
+  if(state!=="validated")verifiedRecordId=null;
+  if(typeof CustomEvent==="function")document.dispatchEvent(new CustomEvent("spacebar:transcript-view",{detail:{state,execution_id:verifiedRecordId,provenance:state==="validated"?provenance:null}}));
+  status.setAttribute?.("data-connection",state);status.setAttribute?.("data-reason",reason);
+  if(connectionLabel)connectionLabel.textContent=state==="validated"?"연결 상태: 검증된 완료 기록 · "+(provenance==="LIVE_PROVIDER"?"모델 API 실행 완료": "오프라인 테스트 · AI 실행 아님"):
+   state==="loading"?"연결 상태: 조회 중":
+   reason==="expired"?"연결 상태: 기록 만료 · 새로고침 필요":
+   "연결 상태: 요청 실패 · 다시 확인 가능";
+  const shortcutStatus=document.getElementById("ai-meeting-shortcut-status");
+  if(shortcutStatus){
+   shortcutStatus.textContent=connectionLabel?connectionLabel.textContent:status.textContent;
+   shortcutStatus.setAttribute?.("data-connection",state);
+   shortcutStatus.setAttribute?.("data-reason",reason);
+  }
+ }
  let loading=false;
+ let offline=typeof navigator!=="undefined"&&navigator.onLine===false,networkEpoch=0,activeController=null;
  const verdicts=["OBSERVATION_ONLY","REVIEW_NEEDED","INSUFFICIENT_DATA"];
  const labels={OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
  let validSince=null,validUntil=null;
  function expire(){
-  if(validUntil!==null&&(Date.now()<validSince||Date.now()>validUntil)){
-   rows.replaceChildren();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
+  const now=Date.now();
+  if(validUntil!==null&&(now<validSince||now>validUntil)){
+   rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
+   status.title="만료된 회의 기록은 표시되지 않습니다. 다시 확인 버튼으로 새 기록을 조회하세요.";
+   setConnection("disconnected","expired");
    validSince=null;validUntil=null;
+  }else if(validSince!==null&&sourceAge){
+   const text="회의 원본 생성: "+new Date(validSince).toLocaleString()+" · 원본 생성 후 약 "+Math.floor((now-validSince)/60000)+"분 · 화면 기록 유효 기한: "+new Date(validUntil).toLocaleString();
+   if(sourceAge.textContent!==text)sourceAge.textContent=text;
+   sourceAge.title="원본 생성 UTC: "+new Date(validSince).toISOString()+" · 화면 유효 기한 UTC: "+new Date(validUntil).toISOString();
+   sourceAge.hidden=false;
   }
  }
+ // User actions must recheck freshness even between periodic expiry checks.
+ function canUseRecord(){
+  if(loading||offline)return false;
+  expire();
+  return validSince!==null&&validUntil!==null;
+ }
  setInterval(expire,60000);
- document.addEventListener("visibilitychange",()=>{if(!document.hidden)expire()});
- async function loadMeeting(){
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden){expire();if(!loading)loadMeeting(true);}});
+ // Safari can restore a frozen page without a visibility transition.
+ if(typeof window!=="undefined")window.addEventListener("pageshow",event=>{if(event.persisted&&!document.hidden){expire();if(!loading)loadMeeting(true);}});
+ // Recheck completed records when connectivity returns, without waiting for polling.
+ if(typeof window!=="undefined"){
+  window.addEventListener("offline",()=>{offline=true;networkEpoch++;pendingSelectionReload=false;activeController?.abort();showOffline();});
+  window.addEventListener("online",()=>{offline=false;refreshButton.disabled=loading;if(!document.hidden){expire();if(loading)pendingSelectionReload=true;else loadMeeting(true);}});
+ }
+ function showOffline(){
+  rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
+  rows.setAttribute?.("aria-busy","false");refreshButton.disabled=true;
+  status.textContent="회의 기록 미연결 · 브라우저 네트워크 연결 없음 · 재연결 후 다시 확인합니다";
+  status.title="브라우저의 연결 보고이며 서버 중단 판정이 아닙니다.";setConnection("disconnected","request-failed");
+ }
+ async function loadMeeting(preserveView=false){
+  if(offline){showOffline();return;}
   if(loading)return;
-  loading=true;refreshButton.disabled=true;
-  rows.replaceChildren();validSince=null;validUntil=null;
-  status.textContent="회의 기록 확인 중…";
+  const retainedView=preserveView===true&&validatedViewKey!==null?{
+   key:validatedViewKey,agent:agentFilter?.value,phase:phaseFilter?.value,verdict:verdictFilter?.value,
+   query:typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120):""
+  }:null;
+  const readEpoch=networkEpoch;pendingSelectionReload=false;
+  loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
+  const controller=typeof AbortController==="function"?new AbortController():null;
+  activeController=controller;
+  const timeout=controller&&typeof setTimeout==="function"?setTimeout(()=>controller.abort(),5000):null;
+  rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;
+  status.textContent="회의 기록 확인 중…";status.title="회의 기록 API 응답을 기다리고 있습니다.";setConnection("loading","none");
  try{
-  const response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit"});
-  if(!response.ok)throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
-  const raw=await response.text();if(raw.length>65536)throw Error("회의 기록 크기 초과");
-  const d=JSON.parse(raw),live=d.execution_mode==="LIVE_PROVIDER";
+  let response;
+  try{response=await fetch("/api/v1/meeting/transcript",{cache:"no-store",credentials:"omit",...(controller?{signal:controller.signal}:{})});}
+  catch(error){if(error&&error.name==="AbortError")throw error;throw Error("회의 기록 서버에 연결하지 못했습니다 · 네트워크 연결을 확인해 주세요");}
+  if(offline||readEpoch!==networkEpoch)return;
+  if(!response.ok){
+   if(response.status===409)throw Error("선택한 실행과 다른 회의 기록 · 실행 ID와 세션 폴더를 확인해 주세요");
+   if(response.status===404)throw Error("회의 기록 API 경로를 찾을 수 없습니다 · 서버 버전을 확인해 주세요");
+   if(response.status===401||response.status===403)throw Error("회의 기록 접근이 거부되었습니다 · 서버 접근 설정을 확인해 주세요");
+   if(response.status===429)throw Error("회의 기록 조회 요청이 많습니다 · 잠시 후 다시 확인해 주세요");
+   if(response.status===502||response.status===504)throw Error("회의 기록 서버 응답 지연 · 잠시 후 다시 확인해 주세요");
+   throw Error("아직 완료된 모델 회의 결과가 연결되지 않았습니다");
+  }
+  let raw;
+  try{raw=await response.text();}
+  catch(error){if(error&&error.name==="AbortError")throw error;throw Error("회의 기록 수신이 중단되었습니다 · 다시 확인해 주세요");}
+  if(offline||readEpoch!==networkEpoch)return;
+  if(raw.length>65536)throw Error("회의 기록 크기 초과");
+  let d;
+  try{d=JSON.parse(raw);}catch(_){throw Error("회의 기록 JSON 형식 오류 · 다시 확인해 주세요");}
+  if(d===null||typeof d!=="object"||Array.isArray(d))throw Error("회의 기록 객체 형식 오류 · 다시 확인해 주세요");
+  const live=d.execution_mode==="LIVE_PROVIDER";
+  if(d.workflow_execution_id!==undefined&&(typeof d.workflow_execution_id!=="string"||!/^[a-f0-9]{32}$/.test(d.workflow_execution_id)))throw Error("회의 실행 ID 검증 실패");
+  if(selectedExecutionId!==null&&d.workflow_execution_id!==selectedExecutionId)throw Error("선택한 실행과 다른 회의 기록 · 실행 ID와 세션 폴더를 확인해 주세요");
   const marketLabel=d.market_source===undefined?"출처 미기록":d.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":d.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":null;
   if(marketLabel===null)throw Error("데이터 출처 검증 실패");
-  if(d.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||
+  if(d.version!=="AI_MEETING_TRANSCRIPT_VIEW_1"||d.status!=="COMPLETED"||
      !["LIVE_PROVIDER","OFFLINE_FIXTURE"].includes(d.execution_mode)||
      d.model_inference_performed!==live||d.ai_agents_running!==false||
-     d.research_only!==true||d.orders_enabled!==false||d.trade_authorization!=="DENIED"||
+     d.research_only!==true||d.orders_enabled!==false||
+     (d.live_trading_approved!==undefined&&d.live_trading_approved!==false)||d.trade_authorization!=="DENIED"||
      d.call_count!==7||!verdicts.includes(d.final_verdict)||
      typeof d.model!=="string"||!d.model.trim()||d.model.length>120||
      typeof d.request_sha256!=="string"||!/^[a-f0-9]{64}$/.test(d.request_sha256)||
@@ -2037,6 +2294,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(![source,started,finished].every(Number.isFinite)||source>started||started>finished||
      finished>Date.now()||Date.now()-source>8*3600000)throw Error("회의 원본 오래됨 또는 시각 오류");
   const output=[],order=["ATLAS","QUANT","GUARDIAN","ATLAS","QUANT","GUARDIAN","COMMANDER"];
+  const refs=d.statement_refs;
+  if(refs!==undefined){
+   if(!Array.isArray(refs)||refs.length!==7)throw Error("회의 참조 목록 검증 실패");
+   for(let i=0;i<7;i++){
+    const phase=i<3?"ANALYSIS":i<6?"PEER_REVIEW":"CONCLUSION";
+    const expectedRefs=i>=3&&i<6?["M"+String(i-2).padStart(2,"0")]:[];
+    const entry=refs[i];
+    if(!entry||typeof entry!=="object"||Array.isArray(entry)||
+       Object.keys(entry).sort().join(",")!=="agent,id,phase,references"||
+       entry.id!=="M"+String(i+1).padStart(2,"0")||
+       entry.agent!==order[i]||entry.phase!==phase||
+       !Array.isArray(entry.references)||entry.references.length!==expectedRefs.length||
+       entry.references.some((id,j)=>id!==expectedRefs[j]))throw Error("회의 발언 참조 검증 실패");
+   }
+  }
   for(let i=0;i<7;i++){
    const t=d.transcript[i],phase=i<3?"ANALYSIS":i<6?"PEER_REVIEW":"CONCLUSION";
    if(!t||t.agent!==order[i]||t.phase!==phase||!verdicts.includes(t.verdict)||
@@ -2044,23 +2316,320 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       !Array.isArray(t.concerns)||t.concerns.length>8||
       t.concerns.some(c=>typeof c!=="string"||!c.trim()||c.length>400))throw Error("회의 발언 검증 실패");
    const item=document.createElement("p");
-   item.textContent=t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
+   const statementId=refs?refs[i].id:"M"+String(i+1).padStart(2,"0");
+   item.textContent="["+statementId+"] "+t.agent+" · "+(i<3?"분석":i<6?"상호 검토":"결론")+" · "+labels[t.verdict]+"\n"+
     t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):"");
-   item.style.whiteSpace="pre-wrap";output.push(item);
+   item.style.whiteSpace="pre-wrap";
+   if(i>=3&&i<6){
+    const initial=d.transcript[i-3];
+    const initialId=refs?refs[i].references[0]:"M"+String(i-2).padStart(2,"0");
+    if(initial&&initial.agent===t.agent){
+     item.textContent+="\n참조 ["+initialId+"] 초기 판단: "+labels[initial.verdict]+
+      " → 상호 검토: "+labels[t.verdict]+
+      (initial.verdict===t.verdict?" (판단 유지)":" (판단 변경)");
+    }
+   }
+   item.setAttribute?.("data-phase",phase);
+   item.setAttribute?.("data-agent",t.agent);
+   item.setAttribute?.("data-statement-id",statementId);
+   if(linked){
+    item.tabIndex=0;
+    item.setAttribute?.("role","button");
+    item.setAttribute?.("aria-label","발언 "+statementId+" 연결 기록 확인");
+    const showLinked=()=>{
+     if(!canUseRecord())return;
+     const source=i>=3&&i<6?d.transcript[i-3]:null;
+     const sourceId=i>=3&&i<6?(refs?refs[i].references[0]:"M"+String(i-2).padStart(2,"0")):null;
+     linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\n"+t.summary+
+      (source?"\n연결 초기 발언 ["+sourceId+"] "+source.agent+" · "+labels[source.verdict]+"\n"+source.summary:
+       i<3?"\n초기 분석 발언입니다. 같은 에이전트의 상호 검토 단계에서 이 발언을 참조합니다.":"\n최종 결론 발언입니다.");
+     linked.hidden=false;
+    };
+    item.addEventListener?.("click",showLinked);
+    item.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showLinked();}});
+   }
+   item.style.padding="9px 12px";
+   item.style.margin="7px 0";
+   item.style.borderLeft=i===6?"3px solid #80c8a8":i<3?"3px solid #547c9a":"3px solid #b2a0d8";
+   item.style.background="#152941";
+   output.push(item);
   }
   const insufficient=d.transcript.some(t=>t.verdict==="INSUFFICIENT_DATA");
   const guardian=d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED");
   const expected=insufficient?"INSUFFICIENT_DATA":guardian?"REVIEW_NEEDED":d.transcript[6].verdict;
   if(d.final_verdict!==expected)throw Error("최종 검토 상태 불일치");
+  if(timeline){
+   const lines=[];
+   const selectable=[];
+   const markSelected=(element)=>{
+    for(const node of selectable){
+     const active=node===element;
+     node.setAttribute?.("aria-pressed",active?"true":"false");
+     node.style.background=active?"#284762":"#152941";
+     node.style.outline=active?"2px solid #80c8e8":"none";
+    }
+   };
+   const heading=document.createElement("p");
+   heading.textContent="회의 판단 타임라인 · 분석 → 상호 검토 → 결론";
+   heading.style.fontWeight="bold";
+   lines.push(heading);
+   for(let i=0;i<3;i++){
+    const initial=d.transcript[i],review=d.transcript[i+3];
+    const initialId=refs?refs[i].id:"M"+String(i+1).padStart(2,"0");
+    const reviewId=refs?refs[i+3].id:"M"+String(i+4).padStart(2,"0");
+    const line=document.createElement("p");
+    line.textContent=initial.agent+" ["+initialId+"] "+labels[initial.verdict]+
+     " → ["+reviewId+"] "+labels[review.verdict]+
+     (initial.verdict===review.verdict?" · 유지":" · 변경");
+    line.style.whiteSpace="pre-wrap";
+    line.style.padding="6px 9px";
+    line.style.borderLeft=initial.verdict===review.verdict?"3px solid #547c9a":"3px solid #c8a86c";
+    line.tabIndex=0;
+    line.style.cursor="pointer";
+    line.style.background="#152941";
+    line.setAttribute?.("aria-pressed","false");
+    line.setAttribute?.("role","button");
+    line.setAttribute?.("aria-label",initial.agent+" 초기 분석 및 상호 검토 상세 보기");
+    const showDetails=()=>{
+     if(!canUseRecord()||!linked)return;
+     markSelected(line);
+     const initialSet=new Set(initial.concerns);
+     const reviewSet=new Set(review.concerns);
+     const retained=review.concerns.filter(value=>initialSet.has(value));
+     const added=review.concerns.filter(value=>!initialSet.has(value));
+     const notRepeated=initial.concerns.filter(value=>!reviewSet.has(value));
+     const format=(values)=>values.length?values.join(" / "):"없음";
+     linked.textContent=initial.agent+" 판단 비교\n"+
+      "["+initialId+"] 초기 분석 · "+labels[initial.verdict]+"\n"+initial.summary+
+      (initial.concerns.length?"\n초기 우려: "+initial.concerns.join(" / "):"")+
+      "\n["+reviewId+"] 상호 검토 · "+labels[review.verdict]+"\n"+review.summary+
+      (review.concerns.length?"\n검토 우려: "+review.concerns.join(" / "):"")+
+      "\n판단 상태: "+(initial.verdict===review.verdict?"유지":"변경")+
+      "\n양쪽에서 언급: "+format(retained)+
+      "\n검토 단계에서 새로 언급: "+format(added)+
+      "\n검토 단계에서 재언급 없음: "+format(notRepeated)+
+      "\n※ 문구가 정확히 일치하는 경우만 동일 우려로 분류합니다. 재언급이 없다고 해결된 것은 아닙니다.";
+     linked.hidden=false;
+    };
+    line.addEventListener?.("click",showDetails);
+    line.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showDetails();}});
+    selectable.push(line);
+    lines.push(line);
+   }
+   const conclusion=document.createElement("p");
+   conclusion.textContent="COMMANDER ["+(refs?refs[6].id:"M07")+"] 최종 상태: "+labels[d.final_verdict];
+   conclusion.style.padding="7px 9px";
+   conclusion.style.borderLeft="3px solid #80c8a8";
+   conclusion.tabIndex=0;
+   conclusion.style.cursor="pointer";
+   conclusion.style.background="#152941";
+   conclusion.setAttribute?.("aria-pressed","false");
+   conclusion.setAttribute?.("role","button");
+   conclusion.setAttribute?.("aria-label","COMMANDER 최종 결론 상세 보기");
+   const showConclusion=()=>{
+    if(!canUseRecord()||!linked)return;
+    markSelected(conclusion);
+    const final=d.transcript[6];
+    linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+final.summary+
+     (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
+    linked.hidden=false;
+   };
+   conclusion.addEventListener?.("click",showConclusion);
+   conclusion.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showConclusion();}});
+   selectable.push(conclusion);
+   lines.push(conclusion);
+   timeline.replaceChildren(...lines);
+   timeline.hidden=false;
+  }
+  clearLinked();
   rows.replaceChildren(...output);
+  renderedStatements=output.map((node,i)=>({node,agent:d.transcript[i].agent,phase:d.transcript[i].phase,verdict:d.transcript[i].verdict,searchText:[d.transcript[i].summary,...d.transcript[i].concerns].join("\n").toLowerCase()}));
+  if(agentControls)agentControls.hidden=false;
+  if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=false;}
+  if(phaseFilter){phaseFilter.value="ALL";phaseFilter.disabled=false;}
+  if(verdictFilter){verdictFilter.value="ALL";verdictFilter.disabled=false;}
+  if(statementSearch){statementSearch.value="";statementSearch.disabled=false;}
+  applyAgentView();
+  if(decision){
+   const final=d.transcript[6];
+   const reviewCount=d.transcript.filter(t=>t.verdict==="REVIEW_NEEDED").length;
+   const missingCount=d.transcript.filter(t=>t.verdict==="INSUFFICIENT_DATA").length;
+   const changed=d.transcript.slice(0,3).filter((t,i)=>t.verdict!==d.transcript[i+3].verdict).map(t=>t.agent);
+   const transitions=d.transcript.slice(0,3).map((t,i)=>{
+    const review=d.transcript[i+3];
+    const fromId=refs?refs[i].id:"M"+String(i+1).padStart(2,"0");
+    const toId=refs?refs[i+3].id:"M"+String(i+4).padStart(2,"0");
+    return t.agent+" ["+fromId+" → "+toId+"] "+labels[t.verdict]+" → "+labels[review.verdict]+
+     (t.verdict===review.verdict?" (유지)":" (변경)");
+   });
+
+   const blockers=[];
+   const evidence=[];
+   if(missingCount){
+    blockers.push("자료 부족 발언 "+missingCount+"건");
+    d.transcript.forEach((t,i)=>{if(t.verdict==="INSUFFICIENT_DATA")evidence.push("[M"+String(i+1).padStart(2,"0")+"] "+t.agent+" · 자료 부족");});
+   }
+   if(d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")){
+    blockers.push("GUARDIAN 추가 검토 요청");
+    d.transcript.forEach((t,i)=>{if(t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")evidence.push("[M"+String(i+1).padStart(2,"0")+"] GUARDIAN · 추가 검토");});
+   }
+   decision.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+
+    final.summary+"\n검토 필요 발언: "+reviewCount+"건 · 자료 부족 발언: "+missingCount+"건"+
+    "\n판단 변경: "+(changed.length?changed.join(", "):"없음")+
+    "\n에이전트별 판단 흐름:\n"+transitions.join("\n")+
+    "\n최종 상태 결정에 적용된 보수적 조건: "+(blockers.length?blockers.join(" / "):"없음")+
+    "\n판정 규칙 근거 위치: "+(evidence.length?evidence.join(" / "):"해당 없음")+
+    "\n근거 표시는 발언 단계와 판정 상태의 연결이며 인과관계 추론이 아닙니다." +
+    (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
+   decision.hidden=false;
+  }
+  const counts={OBSERVATION_ONLY:0,REVIEW_NEEDED:0,INSUFFICIENT_DATA:0};
+  for(const statement of d.transcript)counts[statement.verdict]++;
+  if(verdictCounts){
+   verdictCounts.textContent="전체 회의 발언 기준 · 총 "+d.transcript.length+"개 · 관측 요약 "+counts.OBSERVATION_ONLY+"개 · 추가 검토 필요 "+counts.REVIEW_NEEDED+"개 · 자료 부족 "+counts.INSUFFICIENT_DATA+"개";
+   verdictCounts.hidden=false;
+  }
+  if(reviewShortcuts)reviewShortcuts.hidden=false;
+  if(showReview)showReview.disabled=counts.REVIEW_NEEDED===0;
+  if(showMissing)showMissing.disabled=counts.INSUFFICIENT_DATA===0;
   status.textContent=(live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님")+
    " · "+marketLabel+" · "+d.model+" · 최종 상태: "+labels[d.final_verdict]+" · "+new Date(finished).toLocaleString();
+  if(d.workflow_execution_id!==undefined)status.textContent+=" · 실행 ID: "+d.workflow_execution_id;
+  validatedViewKey=JSON.stringify(d);
+  if(retainedView?.key===validatedViewKey){
+   if(agentFilter)agentFilter.value=retainedView.agent;
+   if(phaseFilter)phaseFilter.value=retainedView.phase;
+   if(verdictFilter)verdictFilter.value=retainedView.verdict;
+   if(statementSearch)statementSearch.value=retainedView.query;
+   applyAgentView();
+  }
+  verifiedRecordId=d.workflow_execution_id??null;
+  status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   validSince=source;validUntil=source+8*3600000;expire();
- }catch(error){rows.replaceChildren();status.textContent="회의 미연결: "+error.message;}
- finally{loading=false;refreshButton.disabled=false;}
+ }catch(error){if(offline||readEpoch!==networkEpoch)return;rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
+ finally{if(timeout!==null)clearTimeout(timeout);if(activeController===controller)activeController=null;loading=false;refreshButton.disabled=offline;rows.setAttribute?.("aria-busy","false");if(pendingSelectionReload&&!offline&&!document.hidden){pendingSelectionReload=false;loadMeeting();}}
  }
  refreshButton.addEventListener("click",loadMeeting);
  await loadMeeting();
+ // Poll completed research snapshots only; this never starts inference or orders.
+ // Skip hidden tabs and overlapping requests; failed/stale responses fail closed.
+ setInterval(()=>{
+  const active=document.activeElement,editing=active&&[agentFilter,phaseFilter,verdictFilter,statementSearch].includes(active);
+  if(!offline&&!document.hidden&&!loading&&!editing)loadMeeting(true);
+ },60000);
 })();
 </script>
+<script>
+/* Read-only persisted workflow progress. */
+(()=>{
+ const status=document.getElementById("meeting-progress-status"),detail=document.getElementById("meeting-progress-detail"),button=document.getElementById("meeting-progress-refresh");
+ const recordButton=document.getElementById("meeting-progress-open-record");
+ const retryNote=document.getElementById("meeting-progress-retry");
+ const steps=document.getElementById("meeting-progress-stages"),countBar=document.getElementById("meeting-progress-count");
+ const stages={INPUT:"입력 확인",PREPARATION:"회의 입력 준비",SETUP:"로컬 설정 점검",CONFIGURATION:"실행 설정",INFERENCE:"모델 응답 수집",PUBLICATION:"결과 저장",COMPLETED:"완료"};
+ const labels={RUNNING:"기록된 진행 단계",READY_NO_MODEL_CALLS:"준비 점검 완료 · 모델 호출 없음",COMPLETED:"회의 실행 완료 기록",BLOCKED:"실행 중단 기록"};
+ let loading=false,observed=null,pendingResume=false,failures=0,failedAt=null,retryDelay=0;
+ let offline=typeof navigator!=="undefined"&&navigator.onLine===false,networkEpoch=0,activeController=null;
+ function emitView(state,executionId=null){if(typeof CustomEvent==="function")document.dispatchEvent(new CustomEvent("spacebar:workflow-view",{detail:{state,execution_id:executionId}}));}
+ function clear(message){
+  if(retryNote){retryNote.textContent="";retryNote.hidden=true;}
+  emitView("UNAVAILABLE");
+  if(recordButton){recordButton.disabled=true;delete recordButton.dataset.executionId;}
+  observed=null;detail.textContent="";status.textContent=message;status.setAttribute("data-state","unavailable");
+  if(steps){steps.replaceChildren();steps.hidden=true;}
+  if(countBar){countBar.hidden=true;countBar.value=0;countBar.setAttribute("aria-valuetext","검증된 응답 기록 없음");}
+ }
+ function renderOverview(v,extended){
+  if(steps){
+   const nodes=Object.entries(stages).map(([stage,label])=>{
+    const node=document.createElement("li"),current=stage===v.workflow_stage;
+    node.textContent=label;node.setAttribute("data-stage",stage);
+    node.style.cssText="padding:4px 7px;border-radius:5px;border:1px solid #426482;font-size:12px";
+    if(current){node.setAttribute("aria-current","step");node.style.background=v.status==="BLOCKED"?"#642c3b":"#284762";node.style.outline="2px solid #80c8e8";}
+    return node;
+   });
+   steps.replaceChildren(...nodes);steps.hidden=false;
+  }
+  if(countBar){
+   countBar.hidden=!extended;
+   if(extended){countBar.value=v.validated_responses;countBar.setAttribute("aria-valuetext",v.validated_responses+"/7 · 기록된 검증 응답");}
+  }
+ }
+ function expire(){if(observed!==null&&(Date.now()<observed||Date.now()-observed>300000))clear("진행 기록 만료 또는 시계 변경 · 다시 확인 필요");}
+ function showOffline(){clear("브라우저 네트워크 연결 없음 · 재연결 후 다시 확인합니다");status.title="브라우저가 오프라인 상태로 보고했습니다. 서버 상태를 확인한 결과는 아닙니다.";button.disabled=true;}
+ async function load(){
+  if(offline){showOffline();return;}
+  if(loading)return;
+  const readEpoch=networkEpoch;
+  loading=true;pendingResume=false;button.disabled=true;clear("진행 기록 확인 중…");status.title="";status.setAttribute("data-state","loading");emitView("LOADING");
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+  activeController=controller;
+  try{
+   let response;
+   try{response=await fetch("/api/v1/meeting/workflow-status",{cache:"no-store",credentials:"omit",signal:controller.signal});}
+   catch(error){if(error?.name==="AbortError")throw error;throw Error("진행 기록 서버에 연결하지 못했습니다 · 네트워크 연결을 확인해 주세요");}
+   if(pendingResume||readEpoch!==networkEpoch||offline)return;
+   if(response.status===409)throw Error("선택한 실행과 다른 진행 기록 · 실행 ID와 세션 폴더를 확인해 주세요");
+   if(!response.ok){
+    if(response.status===404)throw Error("진행 상태 미연결 · 서버의 상태 파일 설정 필요");
+    if(response.status===401||response.status===403)throw Error("진행 기록 접근이 거부되었습니다 · 서버 접근 설정을 확인해 주세요");
+    if(response.status===429)throw Error("진행 기록 조회 요청이 많습니다 · 잠시 후 다시 확인해 주세요");
+    if(response.status===502||response.status===504)throw Error("진행 기록 서버 응답 지연 · 잠시 후 다시 확인해 주세요");
+    if(response.status===503)throw Error("진행 기록 미연결 또는 만료 · 상태 파일을 확인해 주세요");
+    throw Error("진행 기록 서버 오류 · 잠시 후 다시 확인해 주세요");
+   }
+   const raw=await response.text();if(pendingResume||readEpoch!==networkEpoch||offline)return;
+   if(raw.length>8192)throw Error("진행 기록 크기 오류");
+   const d=JSON.parse(raw),v=d?.snapshot;
+   const extended=v?.version==="MEETING_WORKFLOW_STATUS_2";
+   const fields=extended?"agent,attempted_calls,event,execution_id,phase,status,updated_at_utc,validated_responses,version,workflow_stage":"event,execution_id,status,updated_at_utc,version,workflow_stage";
+
+   if(d?.version!=="MEETING_WORKFLOW_STATUS_VIEW_1"||d.read_only!==true||d.orders_enabled!==false||d.process_liveness_verified!==false||
+      !v||typeof v!=="object"||Array.isArray(v)||Object.keys(v).sort().join(",")!==fields||
+      !["MEETING_WORKFLOW_STATUS_1","MEETING_WORKFLOW_STATUS_2"].includes(v.version)||typeof v.execution_id!=="string"||!/^[a-f0-9]{32}$/.test(v.execution_id)||
+      !Object.hasOwn(stages,v.workflow_stage)||!Object.hasOwn(labels,v.status))throw Error("진행 기록 검증 실패");
+   const plan=[["ATLAS","ANALYSIS"],["QUANT","ANALYSIS"],["GUARDIAN","ANALYSIS"],["ATLAS","PEER_REVIEW"],["QUANT","PEER_REVIEW"],["GUARDIAN","PEER_REVIEW"],["COMMANDER","CONCLUSION"]];
+   const valid=extended?(v.status==="RUNNING"&&v.event==="MODEL_PROGRESS"&&v.workflow_stage==="INFERENCE"&&
+    Number.isInteger(v.attempted_calls)&&Number.isInteger(v.validated_responses)&&v.attempted_calls>=1&&v.attempted_calls<=7&&
+    v.validated_responses>=0&&v.validated_responses<=v.attempted_calls&&v.attempted_calls-v.validated_responses<=1&&
+    v.agent===plan[v.attempted_calls-1][0]&&v.phase===plan[v.attempted_calls-1][1]):
+    ((v.status==="RUNNING"&&v.event==="STAGE_STARTED"&&v.workflow_stage!=="COMPLETED")||
+    (v.event==="WORKFLOW_FINISHED"&&((v.status==="READY_NO_MODEL_CALLS"&&v.workflow_stage==="SETUP")||
+     (v.status==="COMPLETED"&&v.workflow_stage==="COMPLETED")||(v.status==="BLOCKED"&&v.workflow_stage!=="COMPLETED"))));
+   const updated=typeof v.updated_at_utc==="string"?Date.parse(v.updated_at_utc):NaN;
+   if(!valid||!Number.isFinite(updated)||Date.now()<updated||Date.now()-updated>300000)throw Error("진행 기록 만료 또는 형식 오류");
+   renderOverview(v,extended);
+   if(recordButton&&v.status==="COMPLETED"){recordButton.dataset.executionId=v.execution_id;recordButton.disabled=false;}
+   observed=updated;status.textContent=labels[v.status]+" · "+stages[v.workflow_stage];status.setAttribute("data-state",v.status);
+   detail.textContent="실행 ID: "+v.execution_id+"\n기록 시각: "+new Date(updated).toLocaleString();
+   if(extended)detail.textContent+="\n기록된 에이전트: "+v.agent+" · "+({ANALYSIS:"분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"})[v.phase]+
+    "\n응답 시도 기록: "+v.attempted_calls+"/7 · 검증된 응답: "+v.validated_responses+"/7 · 과금·실제 생존 확인 아님";
+
+   failures=0;failedAt=null;retryDelay=0;status.title="";
+   emitView(v.status,v.execution_id);
+  }catch(error){if(!pendingResume&&readEpoch===networkEpoch&&!offline){
+   failures=Math.min(failures+1,4);failedAt=Date.now();retryDelay=Math.min(10000*2**(failures-1),60000);
+   clear(error?.name==="AbortError"?"진행 기록 응답 시간 초과":error instanceof SyntaxError?"진행 기록 형식 오류":error?.message||"진행 기록 조회 실패");
+   status.title="자동 재조회 대기: "+retryDelay/1000+"초 · 다시 확인 버튼으로 즉시 조회할 수 있습니다.";
+   if(retryNote){retryNote.textContent="자동 재조회 간격: 최소 "+retryDelay/1000+"초 · 진행 기록 다시 확인 버튼으로 지금 조회할 수 있습니다.";retryNote.hidden=false;}
+  }}
+  finally{clearTimeout(timer);if(activeController===controller)activeController=null;loading=false;button.disabled=offline;const retry=pendingResume;pendingResume=false;if(retry&&!document.hidden&&!offline)load();}
+ }
+ // Capture runs before the transcript viewer opens a selected completion record.
+ recordButton?.addEventListener("click",expire,true);
+ button.addEventListener("click",load);
+ document.addEventListener("visibilitychange",()=>{expire();if(!document.hidden)resume();});
+ function resume(){if(offline){showOffline();return;}if(!document.hidden){expire();if(loading){pendingResume=true;return;}load();}}
+ if(typeof window!=="undefined"){
+  window.addEventListener("pageshow",event=>{if(event.persisted)resume();});
+  window.addEventListener("offline",()=>{offline=true;networkEpoch++;pendingResume=false;activeController?.abort();showOffline();});
+  window.addEventListener("online",()=>{offline=false;button.disabled=loading;resume();});
+ }
+ setInterval(expire,1000);setInterval(()=>{
+  const now=Date.now();
+  if(!offline&&!document.hidden&&(failedAt===null||now<failedAt||now-failedAt>=retryDelay))load();
+ },5000);load();
+})();
+</script>
+
 </body></html>

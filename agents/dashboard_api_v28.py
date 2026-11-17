@@ -54,7 +54,14 @@ def snapshot(history_path):
     }
 
 
-def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None):
+def make_handler(history_path, live_store=None, paper_monitor=None, paper_journal=None, *, meeting_transcript_path=None, meeting_status_path=None, meeting_execution_id=None):
+    from ai_meeting_workflow_status import WorkflowExecutionMismatch
+    configured_transcript = Path(meeting_transcript_path) if meeting_transcript_path is not None else None
+    configured_status = Path(meeting_status_path) if meeting_status_path is not None else None
+    if meeting_execution_id is not None:
+        import re
+        if configured_status is None or not isinstance(meeting_execution_id, str) or not re.fullmatch('[a-f0-9]{32}', meeting_execution_id):
+            raise ValueError('INVALID_WORKFLOW_EXECUTION_SELECTION')
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
@@ -95,6 +102,19 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                 except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
                     self.reply(503, {"error": "offline_scorecard_invalid",
                                      "orders_enabled": False})
+            elif path == "/api/v1/testnet/staging/status":
+                # Read-only capability snapshot. No ledger is opened and no
+                # intent is created, staged, or dispatched by this endpoint.
+                self.reply(200, {
+                    "version": "TESTNET_STAGING_STATUS_1",
+                    "status": "NOT_CONNECTED",
+                    "reason": "OFFLINE_STAGING_NOT_ATTACHED_TO_DASHBOARD",
+                    "staging_enabled": False,
+                    "orders_enabled": False,
+                    "network_enabled": False,
+                    "live_trading_approved": False,
+                    "research_only": True,
+                })
             elif path == "/api/v1/market":
                 try:
                     if live_store is not None:
@@ -113,7 +133,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                                      "orders_enabled": False})
             elif path == "/api/v1/replay/audit":
                 try:
-                    from agents.offline_replay_audit_v151 import audit_history
+                    from offline_replay_audit_v151 import audit_history
                     import re
                     match = re.fullmatch(r"(BTC|ETH|SOL)_(1|5|15)m[.]csv", history_path.name)
                     if match is None:
@@ -149,9 +169,23 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     self.reply(200, {"state": "HISTORICAL", "ready": False, "orders_enabled": False})
                 else:
                     self.reply(200, live_store.status())
+            elif path == "/api/v1/meeting/workflow-status":
+                if configured_status is None:
+                    self.reply(404, {"error": "workflow_status_not_configured", "orders_enabled": False})
+                else:
+                    try:
+                        from ai_meeting_workflow_status import read_status
+                        value = read_status(configured_status, expected_execution_id=meeting_execution_id)
+                        self.reply(200, {"version": "MEETING_WORKFLOW_STATUS_VIEW_1", "snapshot": value,
+                                         "read_only": True, "orders_enabled": False,
+                                         "process_liveness_verified": False})
+                    except WorkflowExecutionMismatch:
+                        self.reply(409, {"error": "workflow_execution_mismatch", "orders_enabled": False})
+                    except (OSError, ValueError, TypeError, KeyError):
+                        self.reply(503, {"error": "workflow_status_unavailable", "orders_enabled": False})
             elif path == "/api/v1/meeting/transcript":
                 # Separate from the offline quality gate. Never starts inference.
-                transcript_path = MEETING_TRANSCRIPT_PATH
+                transcript_path = configured_transcript if configured_transcript is not None else MEETING_TRANSCRIPT_PATH
                 try:
                     if (not transcript_path.is_file() or
                             transcript_path.stat().st_size > 65536):
@@ -185,6 +219,23 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         statement = validate_statement({k: item.get(k) for k in
                                                         ("summary", "concerns", "verdict")})
                         entries.append({"agent": agent, "phase": phase, **statement})
+                    refs = raw.get("statement_refs")
+                    if refs is not None:
+                        if not isinstance(refs, list) or len(refs) != 7:
+                            raise ValueError("invalid_statement_refs")
+                        for i, (entry, (agent, phase)) in enumerate(zip(refs, expected)):
+                            expected_refs = ["M%02d" % (i-2)] if 3 <= i <= 5 else []
+                            if (not isinstance(entry, dict) or
+                                    entry.get("id") != "M%02d" % (i+1) or
+                                    entry.get("agent") != agent or
+                                    entry.get("phase") != phase or
+                                    entry.get("references") != expected_refs):
+                                raise ValueError("invalid_statement_ref")
+                    else:
+                        refs = [{"id": "M%02d" % (i+1), "agent": agent,
+                                 "phase": phase,
+                                 "references": ["M%02d" % (i-2)] if 3 <= i <= 5 else []}
+                                for i, (agent, phase) in enumerate(expected)]
                     from datetime import datetime, timezone
                     source_time = raw.get("source_generated_at_utc")
                     started_time = raw.get("started_at_utc")
@@ -209,6 +260,11 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                             len(raw["request_sha256"]) != 64 or
                             any(c not in "0123456789abcdef" for c in raw["request_sha256"])):
                         raise ValueError("invalid_metadata")
+                    execution_id = raw.get("workflow_execution_id")
+                    if "workflow_execution_id" in raw:
+                        import re
+                        if not isinstance(execution_id, str) or not re.fullmatch('[a-f0-9]{32}', execution_id):
+                            raise ValueError("invalid_workflow_execution_id")
                     expected_final = entries[-1]["verdict"]
                     if any(e["verdict"] == "INSUFFICIENT_DATA" for e in entries):
                         expected_final = "INSUFFICIENT_DATA"
@@ -216,8 +272,11 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         expected_final = "REVIEW_NEEDED"
                     if raw.get("final_verdict") != expected_final:
                         raise ValueError("invalid_final_verdict")
+                    if meeting_execution_id is not None and execution_id != meeting_execution_id:
+                        raise WorkflowExecutionMismatch("different_workflow_execution")
                     self.reply(200, {"version": "AI_MEETING_TRANSCRIPT_VIEW_1",
                                      "status": "COMPLETED", "call_count": 7,
+                                     **({"workflow_execution_id": execution_id} if execution_id is not None else {}),
                                      "ai_agents_running": False,
                                      "trade_authorization": "DENIED",
                                      "execution_mode": raw["execution_mode"],
@@ -229,7 +288,10 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                                      "model": raw["model"],
                                      "request_sha256": raw["request_sha256"],
                                      "final_verdict": raw.get("final_verdict"),
-                                     "transcript": entries, "research_only": True,
+                                     "transcript": entries, "statement_refs": refs, "research_only": True,
+                                     "orders_enabled": False, "live_trading_approved": False})
+                except WorkflowExecutionMismatch:
+                    self.reply(409, {"error": "meeting_execution_mismatch", "research_only": True,
                                      "orders_enabled": False, "live_trading_approved": False})
                 except (OSError, ValueError, TypeError, KeyError):
                     self.reply(503, {"error": "meeting_transcript_unavailable_or_invalid",
@@ -290,10 +352,30 @@ def main():
     parser = argparse.ArgumentParser(description="Local read-only SPACE BAR research API")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--history", type=Path, default=DEFAULT_HISTORY)
+    parser.add_argument("--meeting-transcript", type=Path, help="Completed meeting JSON to display; default: reports/ai_meeting/latest.json")
+    parser.add_argument("--meeting-status", type=Path, help="Optional local workflow status snapshot to display")
+    parser.add_argument("--meeting-execution-id", help="Optional 32-character lowercase hexadecimal workflow execution ID to pin")
+    parser.add_argument("--meeting-session", type=Path, help="Select latest.json, workflow_status.json and the recorded execution ID from one folder")
     args = parser.parse_args()
+    if args.meeting_session is not None:
+        if any(value is not None for value in (args.meeting_transcript, args.meeting_status, args.meeting_execution_id)):
+            parser.error('--meeting-session cannot be combined with explicit meeting file or execution-ID options')
+        try:
+            from ai_meeting_workflow_status import read_status
+            session = args.meeting_session.resolve()
+            args.meeting_status = session / 'workflow_status.json'
+            snapshot = read_status(args.meeting_status)
+            args.meeting_execution_id = snapshot['execution_id']
+            args.meeting_transcript = session / 'latest.json'
+        except (OSError, ValueError, TypeError, KeyError):
+            parser.error('Meeting session requires a valid recent workflow_status.json; check the session folder and run the workflow check again if needed')
+    if args.meeting_execution_id is not None:
+        import re
+        if args.meeting_status is None or not re.fullmatch('[a-f0-9]{32}', args.meeting_execution_id):
+            parser.error('--meeting-execution-id requires --meeting-status and a 32-character lowercase hexadecimal ID')
     if not 1024 <= args.port <= 65535:
         parser.error("Port must be between 1024 and 65535")
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.history))
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(args.history, meeting_transcript_path=args.meeting_transcript, meeting_status_path=args.meeting_status, meeting_execution_id=args.meeting_execution_id))
     print("Local paper-only API: http://127.0.0.1:%d/api/v1/agents" % args.port)
     try:
         server.serve_forever()

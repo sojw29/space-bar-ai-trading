@@ -205,7 +205,11 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
             "started_at_utc": started.isoformat(), "generated_at_utc": finished.isoformat(),
             "request_sha256": envelope["request_sha256"],
             "model": provider.model if live else "fixture",
-            "call_count": len(transcript), "final_verdict": final, "transcript": transcript})
+            "call_count": len(transcript), "final_verdict": final, "transcript": transcript,
+            "statement_refs": [{"id": "M%02d" % (i+1), "agent": t["agent"],
+                                "phase": t["phase"],
+                                "references": ["M%02d" % (i-2)] if 3 <= i <= 5 else []}
+                               for i, t in enumerate(transcript)]})
 
 
 def publish_report(report, destination):

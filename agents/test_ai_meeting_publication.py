@@ -24,6 +24,16 @@ def live_fixture():
 
 
 class PublicationTests(unittest.TestCase):
+    def test_optional_workflow_execution_identity_is_strict(self):
+        value = live_fixture()
+        value['workflow_execution_id'] = 'a'*32
+        validated = validate_public_report(value, now=NOW)
+        self.assertEqual(validated['workflow_execution_id'], 'a'*32)
+        for invalid in [None, '', 'A'*32, 'a'*31, ['a'*32]]:
+            value['workflow_execution_id'] = invalid
+            with self.assertRaises(MeetingError):
+                validate_public_report(value, now=NOW)
+
     def test_actual_manual_workflow_guard_blocks_unconfigured_or_unapproved_calls(self):
         root = Path(__file__).resolve().parent.parent
         workflow = (root/'.github/workflows/run_ai_meeting.yml').read_text()

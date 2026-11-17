@@ -2,7 +2,7 @@
  * No Binance network access, private API keys or trading actions.
  */
 import assert from "node:assert/strict";
-import {spawn} from "node:child_process";
+import {spawn,spawnSync} from "node:child_process";
 import {mkdtemp, writeFile, readFile, mkdir, rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import path from "node:path";
@@ -20,6 +20,7 @@ const base="http://127.0.0.1:"+port;
 const moduleURL="https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 const runDir=await mkdtemp(path.join(tmpdir(),"spacebar-v56-"));
 let server=null,browser=null;
+let apiStderr="";
 const errors=[];
 async function waitForApi(){
  const deadline=Date.now()+12000;
@@ -44,11 +45,34 @@ async function smoke(){
  }
  const csvPath=path.join(runDir,"BTC_5m.csv");
  await writeFile(csvPath,csv,"utf8");
+ const sessionDir=path.join(runDir,"meeting session");
+ const workflowStatusPath=path.join(sessionDir,"workflow_status.json");
+ const selectedTranscriptPath=path.join(sessionDir,"latest.json");
+ const briefPath=path.join(runDir,"commander brief.json");
+ const brief={version:"V229.0",report_type:"DETERMINISTIC_COMMANDER_RESEARCH_BRIEF",
+  research_only:true,orders_enabled:false,realtime:false,ai_agents_running:false,
+  trade_signals_available:false,backtest_verified:false,commander:{status:"COMPILED_NOT_AI"},
+  source_generated_at_utc:new Date(Date.now()-10*60000).toISOString(),
+  generated_at_utc:new Date(Date.now()-5*60000).toISOString(),market_source:"BYBIT_USDT_PERPETUAL_5M",
+  markets:["BTCUSDT","ETHUSDT","SOLUSDT"].map(symbol=>({symbol,trend_observation:"SMA50_ABOVE_SMA200",
+   volume_ratio_20:1.2,risk_status:"NO_TRADE_AUTHORIZATION",research_conclusion:"DESCRIPTIVE_ONLY"}))};
+ await writeFile(briefPath,JSON.stringify(brief),"utf8");
+ // This is the actual check-only CLI. A dummy key replaces inherited credentials.
+ const preparation=spawnSync(process.env.PYTHON||"python3",
+  ["agents/ai_meeting_workflow.py",briefPath,"--meeting-session",sessionDir,"--model","fixture-model","--json"],
+  {cwd:repo,encoding:"utf8",timeout:15000,env:{...process.env,OPENAI_API_KEY:"browser-fixture-key-not-real"}});
+ assert.equal(preparation.status,0,preparation.stderr);
+ assert.ok(!(preparation.stdout+preparation.stderr).includes("browser-fixture-key-not-real"));
+ const prepared=JSON.parse(preparation.stdout),executionId=prepared.execution_id;
+ assert.equal(prepared.status,"READY_NO_MODEL_CALLS");assert.equal(prepared.model_calls_performed,0);
+ assert.equal(prepared.provider_verified,false);assert.equal(prepared.orders_enabled,false);
+ const workflowStatus=JSON.parse(await readFile(workflowStatusPath,"utf8"));
+ assert.equal(workflowStatus.execution_id,executionId);assert.equal(workflowStatus.workflow_stage,"SETUP");
+ await assert.rejects(readFile(selectedTranscriptPath),{code:"ENOENT"});
  server=spawn(process.env.PYTHON||"python3",
-  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath],
-  {cwd:repo,stdio:["ignore","pipe","pipe"]});
- let stderr="";
- server.stderr.on("data",data=>{stderr+=String(data);});
+  ["-u","agents/dashboard_api_v28.py","--port",String(port),"--history",csvPath,"--meeting-session",sessionDir],
+  {cwd:repo,env:{...process.env,PYTHONPATH:[repo,process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)},stdio:["ignore","pipe","pipe"]});
+ server.stderr.on("data",data=>{apiStderr=(apiStderr+String(data)).slice(-8192);});
  await waitForApi();
  const market=await (await fetch(base+"/api/v1/market")).json();
  assert.equal(market.paper_only,true);
@@ -67,6 +91,10 @@ async function smoke(){
         "--disable-gpu-sandbox","--no-sandbox"]
  });
  const context=await browser.newContext({viewport:{width:1360,height:900},deviceScaleFactor:1.5});
+ // Capture all page crashes, including short-lived pages not covered by local handlers.
+ context.on("page",p=>{
+  p.on("crash",()=>errors.push("Chromium page crashed: "+p.url()));
+ });
  async function serveThree(page){
   await page.route(moduleURL,route=>route.fulfill({
    status:200,contentType:"text/javascript; charset=utf-8",body:bundledThree
@@ -77,6 +105,54 @@ async function smoke(){
  await serveThree(page);
  await page.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
  await page.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
+ // Use the real configured status file and actual API, with no route fixture.
+ const progressStatus=page.locator("#meeting-progress-status");
+ await page.locator('#meeting-progress-status[data-state="READY_NO_MODEL_CALLS"]').waitFor({timeout:12000});
+ assert.match(await progressStatus.textContent(),/모델 호출 없음/);
+ await page.locator('#meeting-session-summary[data-state="READY_ONLY"]').waitFor({timeout:12000});
+ assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"SETUP");
+ assert.equal(await page.locator("#meeting-progress-count").isVisible(),false);
+ assert.equal(await page.locator("#meeting-progress-open-record").isDisabled(),true);
+
+ assert.ok((await page.locator("#meeting-progress-detail").textContent()).includes(executionId));
+ workflowStatus.event="STAGE_STARTED";workflowStatus.workflow_stage="INFERENCE";workflowStatus.status="RUNNING";
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ await page.locator("#meeting-progress-refresh").click();
+ await page.locator('#meeting-progress-status[data-state="RUNNING"]').waitFor({timeout:12000});
+ assert.match(await progressStatus.textContent(),/기록된 진행 단계/);
+ assert.match(await progressStatus.textContent(),/모델 응답 수집/);
+ workflowStatus.version="MEETING_WORKFLOW_STATUS_2";workflowStatus.event="MODEL_PROGRESS";
+ Object.assign(workflowStatus,{agent:"QUANT",phase:"PEER_REVIEW",attempted_calls:5,validated_responses:4});
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ await page.locator("#meeting-progress-refresh").click();
+ await page.waitForFunction(()=>document.querySelector("#meeting-progress-detail")?.textContent?.includes("QUANT · 상호 검토"));
+ assert.match(await page.locator("#meeting-progress-detail").textContent(),/검증된 응답: 4\/7/);
+ assert.equal(await page.getByRole("progressbar",{name:"기록된 검증 응답 수"}).evaluate(node=>node.value),4);
+ assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"INFERENCE");
+
+ workflowStatus.updated_at_utc=new Date(Date.now()-6*60000).toISOString();
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ await page.locator("#meeting-progress-refresh").click();
+ await page.locator('#meeting-progress-status[data-state="unavailable"]').waitFor({timeout:12000});
+ assert.equal(await page.locator("#meeting-progress-detail").textContent(),"");
+ assert.equal(await page.locator("#meeting-progress-stages").isVisible(),false);
+ assert.equal(await page.locator("#meeting-progress-count").isVisible(),false);
+
+ workflowStatus.version="MEETING_WORKFLOW_STATUS_1";
+ for(const field of ["agent","phase","attempted_calls","validated_responses"])delete workflowStatus[field];
+ workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.event="WORKFLOW_FINISHED";
+ workflowStatus.workflow_stage="COMPLETED";workflowStatus.status="COMPLETED";
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+ await page.locator("#meeting-progress-refresh").click();
+ await page.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor({timeout:12000});
+ assert.match(await progressStatus.textContent(),/회의 실행 완료 기록/);
+ await page.locator('#meeting-session-summary[data-state="RECORD_PENDING"]').waitFor({timeout:12000});
+ assert.equal(await page.locator('#meeting-progress-stages li[aria-current="step"]').getAttribute("data-stage"),"COMPLETED");
+ assert.equal(await page.locator("#meeting-progress-count").isVisible(),false,"completion without counts must not invent 7/7");
+
+ // Restore the clearly labeled no-call fixture before other pages render.
+ workflowStatus.workflow_stage="SETUP";workflowStatus.status="READY_NO_MODEL_CALLS";
+ await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
  const canvas=page.locator("#stage canvas");
  await canvas.waitFor();
  assert.ok(await canvas.evaluate(el=>el.width>0&&el.height>0));
@@ -98,6 +174,8 @@ async function smoke(){
  assert.equal(await page.locator('[data-quality="high"]').getAttribute("aria-pressed"),"true");
  assert.match(await page.locator("#perf-state").textContent(),/렌더링 중/);
  await page.screenshot({path:path.join(output,"v56-working-3d.png"),fullPage:true});
+ // Release this software-rendered scene before the independent meeting scenarios.
+ await page.close();
 
  // Real Chromium DOM rendering of a safe offline seven-stage meeting,
  // including a narrow mobile viewport. No provider calls or trading.
@@ -113,10 +191,317 @@ async function smoke(){
   trade_authorization:"DENIED",call_count:7,model:"fixture",
   market_source:"BYBIT_USDT_PERPETUAL_5M",request_sha256:"a".repeat(64),
   source_generated_at_utc:source,started_at_utc:started,generated_at_utc:finished,
-  final_verdict:"OBSERVATION_ONLY",
+  final_verdict:"OBSERVATION_ONLY",workflow_execution_id:executionId,
   transcript:names.map((agent,i)=>({agent,phase:phases[i],
    summary:"Offline fixture stage "+(i+1),concerns:[],verdict:"OBSERVATION_ONLY"}))
  };
+ // Identity is enforced by the real server, not a mocked transcript route.
+ const storedTranscript={...transcript,version:"AI_MEETING_1"};
+ for(const viewport of [{width:1360,height:900},{width:390,height:844}]){
+  await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
+  const identityPage=await context.newPage();
+  identityPage.on("pageerror",error=>errors.push(String(error)));
+  await identityPage.setViewportSize(viewport);await serveThree(identityPage);
+  await identityPage.addInitScript(()=>{
+   const schedule=window.setInterval.bind(window);
+   window.setInterval=(fn,delay,...args)=>{
+    if(delay===60000&&typeof fn==="function"&&String(fn).includes("loadMeeting(true)"))window.__meetingTranscriptPoll=fn;
+    return schedule(fn,delay,...args);
+   };
+  });
+  await identityPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+  await identityPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
+  await identityPage.locator("#ai-meeting-shortcut").click();
+  await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),true);
+  assert.match(await identityPage.locator("#ai-meeting-source-age").textContent(),/회의 원본 생성: .*원본 생성 후 약 [0-9]+분.*화면 기록 유효 기한/);
+  assert.ok((await identityPage.locator("#ai-meeting-source-age").getAttribute("title")).includes(source));
+
+  const fullMeetingDecision=await identityPage.locator("#ai-meeting-decision").textContent();
+  for(const [agent,count] of [["ATLAS",2],["QUANT",2],["GUARDIAN",2],["COMMANDER",1],["ALL",7]]){
+   await identityPage.getByLabel("발언 보기",{exact:true}).selectOption(agent);
+   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),count);
+   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
+   assert.match(await identityPage.locator("#ai-meeting-agent-count").textContent(),/전체 회의 기준/);
+  }
+
+  for(const [agent,phase,count] of [["ALL","ANALYSIS",3],["ALL","PEER_REVIEW",3],["ALL","CONCLUSION",1],["QUANT","PEER_REVIEW",1],["COMMANDER","ANALYSIS",0],["ALL","ALL",7]]){
+   await identityPage.getByLabel("발언 보기",{exact:true}).selectOption(agent);
+   await identityPage.getByLabel("발언 단계",{exact:true}).selectOption(phase);
+   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),count);
+   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
+   if(count===0)assert.match(await identityPage.locator("#ai-meeting-agent-count").textContent(),/표시할 발언 없음/);
+  }
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("STAGE 4");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("QUANT");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("ATLAS");
+  await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("PEER_REVIEW");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("a^$[literal]");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
+  await identityPage.getByRole("button",{name:"필터·검색 초기화",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-view-reset").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-search").evaluate(node=>node===document.activeElement),true);
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),fullMeetingDecision);
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("ATLAS");
+  await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("PEER_REVIEW");
+  await identityPage.getByLabel("검토 상태",{exact:true}).selectOption("OBSERVATION_ONLY");
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("stage 4");
+  const editingPoll=await identityPage.evaluate(()=>{
+   const original=window.fetch;let reads=0;
+   window.fetch=(...args)=>{if(String(args[0]).endsWith("/api/v1/meeting/transcript"))reads++;return original(...args)};
+   try{window.__meetingTranscriptPoll();return {reads,focused:document.activeElement===document.getElementById("ai-meeting-search")};}
+   finally{window.fetch=original;}
+  });
+  assert.deepEqual(editingPoll,{reads:0,focused:true});
+  await identityPage.locator("#ai-meeting-summary").focus();
+  await Promise.all([
+   identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===200),
+   identityPage.evaluate(()=>{if(typeof window.__meetingTranscriptPoll!=="function")throw Error("missing registered transcript timer");window.__meetingTranscriptPoll();})
+  ]);
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ATLAS");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"PEER_REVIEW");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"stage 4");
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"OBSERVATION_ONLY");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  for(const eventName of ["visibilitychange","pageshow","online"]){
+   await Promise.all([
+    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===200),
+    identityPage.evaluate(name=>{
+     if(name==="visibilitychange")document.dispatchEvent(new Event(name));
+     else window.dispatchEvent(name==="pageshow"?new PageTransitionEvent(name,{persisted:true}):new Event(name));
+    },eventName)
+   ]);
+   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+   assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ATLAS");
+   assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"PEER_REVIEW");
+   assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"stage 4");
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"OBSERVATION_ONLY");
+   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  }
+
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
+  const reviewFixture=JSON.parse(JSON.stringify(storedTranscript));
+  reviewFixture.transcript[2].verdict="REVIEW_NEEDED";reviewFixture.final_verdict="REVIEW_NEEDED";
+  await writeFile(selectedTranscriptPath,JSON.stringify(reviewFixture),"utf8");
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  const reviewDecision=await identityPage.locator("#ai-meeting-decision").textContent();
+  const wholeCounts=await identityPage.locator("#ai-meeting-verdict-counts").textContent();
+  assert.match(wholeCounts,/총 7개 · 관측 요약 6개 · 추가 검토 필요 1개 · 자료 부족 0개/);
+
+  await identityPage.getByLabel("검토 상태",{exact:true}).selectOption("REVIEW_NEEDED");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("QUANT");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),wholeCounts);
+  assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("hidden-by-search");
+  await identityPage.getByRole("button",{name:"추가 검토 발언 보기",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").evaluate(node=>node===document.activeElement),true);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
+
+  await identityPage.getByRole("button",{name:"필터·검색 초기화",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
+  reviewFixture.transcript[0].verdict="INSUFFICIENT_DATA";reviewFixture.final_verdict="INSUFFICIENT_DATA";
+  await writeFile(selectedTranscriptPath,JSON.stringify(reviewFixture),"utf8");
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("COMMANDER");
+  await identityPage.getByRole("button",{name:"자료 부족 발언 보기",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"INSUFFICIENT_DATA");
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
+  await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
+  assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+  workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="COMPLETED";workflowStatus.workflow_stage="COMPLETED";
+  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+  await identityPage.locator("#meeting-progress-refresh").click();
+  await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor({timeout:12000});
+  await identityPage.locator("#meeting-progress-open-record").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor({timeout:12000});
+  await identityPage.locator('#meeting-session-summary[data-state="LINKED_FIXTURE"]').waitFor({timeout:12000});
+  assert.match(await identityPage.locator("#meeting-session-summary").textContent(),/실제 AI 실행 아님/);
+
+  assert.equal(await identityPage.locator("#ai-meeting-summary").evaluate(node=>node===document.activeElement),true);
+  assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
+  assert.equal(await identityPage.locator("#ai-meeting-clear-selection").isVisible(),true);
+
+  assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
+
+  for(const invalid of ["c".repeat(32),null]){
+   const altered={...storedTranscript};
+   if(invalid===null)delete altered.workflow_execution_id;else altered.workflow_execution_id=invalid;
+   await writeFile(selectedTranscriptPath,JSON.stringify(altered),"utf8");
+   await Promise.all([
+    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===409),
+    identityPage.locator("#ai-meeting-refresh").click()
+   ]);
+   await identityPage.locator('#ai-meeting-status[data-connection="disconnected"]').waitFor({timeout:12000});
+   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
+   assert.match(await identityPage.locator("#ai-meeting-status").textContent(),/선택한 실행과 다른 회의 기록/);
+   await identityPage.locator('#meeting-session-summary[data-state="RECORD_PENDING"]').waitFor({timeout:12000});
+   assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
+   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").textContent(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-review-shortcuts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-review").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),"");
+   await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
+   await identityPage.locator("#ai-meeting-refresh").click();
+   await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
+   assert.ok((await identityPage.locator("#ai-meeting-status").textContent()).includes("실행 ID: "+executionId));
+   await identityPage.locator('#meeting-session-summary[data-state="LINKED_FIXTURE"]').waitFor({timeout:12000});
+  }
+  await identityPage.locator("#ai-meeting-clear-selection").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor({timeout:12000});
+  assert.equal(await identityPage.locator("#ai-meeting-selected-run").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-clear-selection").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-summary").evaluate(node=>node===document.activeElement),true);
+  // Clearing the viewer selection must not override the server's execution pin.
+  await writeFile(selectedTranscriptPath,JSON.stringify({...storedTranscript,workflow_execution_id:"c".repeat(32)}),"utf8");
+  await Promise.all([
+   identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===409),
+   identityPage.locator("#ai-meeting-refresh").click()
+  ]);
+  await identityPage.locator('#ai-meeting-status[data-connection="disconnected"]').waitFor({timeout:12000});
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
+  await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
+  // Simulate clicking before a throttled expiry timer wakes up (desktop and mobile).
+  await identityPage.locator("#meeting-progress-refresh").click();
+  await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+  const expiryClick=await (await identityPage.waitForFunction(()=>{
+   const button=document.getElementById("meeting-progress-open-record"),now=Date.now;
+   if(button.disabled||document.getElementById("meeting-progress-status").getAttribute("data-state")!=="COMPLETED")return false;
+   let transcriptRequests=0;const originalFetch=window.fetch;
+   window.fetch=(...args)=>{if(String(args[0]).includes("/api/v1/meeting/transcript"))transcriptRequests++;return originalFetch(...args)};
+   try{
+    Date.now=()=>now()+300001;
+    button.click();
+    return {disabled:button.disabled,id:button.dataset.executionId??null,requests:transcriptRequests,
+     state:document.getElementById("meeting-progress-status").getAttribute("data-state"),
+     summary:document.getElementById("meeting-session-summary").getAttribute("data-state"),
+     selected:!document.getElementById("ai-meeting-selected-run").hidden};
+   }finally{Date.now=now;window.fetch=originalFetch;}
+  })).jsonValue();
+  assert.deepEqual(expiryClick,{disabled:true,id:null,requests:0,state:"unavailable",summary:"UNAVAILABLE",selected:false});
+  for(const eventName of ["pageshow","online"]){
+   await Promise.all([
+    identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/workflow-status")&&response.status()===200),
+    identityPage.evaluate(name=>window.dispatchEvent(name==="pageshow"?new PageTransitionEvent("pageshow",{persisted:true}):new Event("online")),eventName)
+   ]);
+   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
+  }
+
+  // Reconnect while an older progress response is still pending; replay once.
+  let releaseProgress;
+  const heldProgress=new Promise(resolve=>{releaseProgress=resolve});
+  await identityPage.route("**/api/v1/meeting/workflow-status",async route=>{
+   await heldProgress;await route.fulfill({status:503,contentType:"application/json",body:'{"error":"obsolete response"}'});
+  },{times:1});
+  await Promise.all([
+   identityPage.waitForRequest(request=>request.url().endsWith("/api/v1/meeting/workflow-status")),
+   identityPage.locator("#meeting-progress-refresh").click()
+  ]);
+  await identityPage.evaluate(()=>{window.dispatchEvent(new Event("online"));window.dispatchEvent(new Event("online"));});
+  const recoveredProgress=identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/workflow-status")&&response.status()===200);
+  releaseProgress();await recoveredProgress;
+  await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+  assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
+  for(const [code,message] of [[403,/접근 설정/],[429,/조회 요청이 많습니다/],[502,/응답 지연/],[503,/상태 파일/]]){
+   await identityPage.route("**/api/v1/meeting/workflow-status",route=>route.fulfill({status:code,contentType:"text/plain",body:"private-server-detail"}));
+   await identityPage.locator("#meeting-progress-refresh").click();
+   await identityPage.locator('#meeting-progress-status[data-state="unavailable"]').waitFor();
+   assert.match(await identityPage.locator("#meeting-progress-status").textContent(),message);
+   // Polling can fail just before the manual click, so the streak need not be one.
+   // Exact retry boundaries are covered with a controlled clock in the progress script test.
+   assert.match(await identityPage.locator("#meeting-progress-status").getAttribute("title"),/^자동 재조회 대기: (10|20|40|60)초 ·/);
+   assert.equal(await identityPage.locator("#meeting-progress-retry").isVisible(),true);
+   assert.match(await identityPage.locator("#meeting-progress-retry").textContent(),/최소 (10|20|40|60)초/);
+   assert.equal(await identityPage.locator("#meeting-progress-refresh").getAttribute("aria-describedby"),"meeting-progress-retry");
+   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
+   assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
+   assert.equal(await identityPage.locator("#meeting-progress-detail").textContent(),"");
+   assert.ok(!(await identityPage.locator("#meeting-progress-status").textContent()).includes("private-server-detail"));
+   await identityPage.unroute("**/api/v1/meeting/workflow-status");
+   await identityPage.locator("#meeting-progress-refresh").click();
+   await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+   assert.equal(await identityPage.locator("#meeting-progress-status").getAttribute("title"),"");
+   assert.equal(await identityPage.locator("#meeting-progress-retry").isVisible(),false);
+   assert.equal(await identityPage.locator("#meeting-progress-retry").textContent(),"");
+  }
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("QUANT");
+  await identityPage.getByLabel("발언 단계",{exact:true}).selectOption("PEER_REVIEW");
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("fixture");
+  await context.setOffline(true);
+  await identityPage.waitForFunction(()=>document.getElementById("meeting-progress-status").textContent.includes("브라우저 네트워크 연결 없음"));
+  await identityPage.waitForFunction(()=>document.getElementById("ai-meeting-status").textContent.includes("브라우저 네트워크 연결 없음"));
+  assert.equal(await identityPage.locator("#ai-meeting-agent-controls").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-search").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-view-reset").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
+  assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").textContent(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-review-shortcuts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-review").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),"");
+
+  assert.equal(await identityPage.locator("#meeting-progress-refresh").isEnabled(),false);
+  assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
+  assert.equal(await identityPage.locator("#meeting-progress-open-record").getAttribute("data-execution-id"),null);
+  assert.equal(await identityPage.locator("#meeting-progress-retry").isVisible(),false);
+  assert.equal(await identityPage.locator("#meeting-session-summary").getAttribute("data-state"),"UNAVAILABLE");
+  await Promise.all([
+   identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/workflow-status")&&response.status()===200),
+   identityPage.waitForResponse(response=>response.url().endsWith("/api/v1/meeting/transcript")&&response.status()===200),
+   context.setOffline(false)
+  ]);
+  await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
+  assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),true);
+  assert.equal(await identityPage.locator("#meeting-progress-refresh").isEnabled(),true);
+  assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
+  workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
+  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
+  await identityPage.close();
+ }
+ await rm(selectedTranscriptPath);
  for(const viewport of [{width:1360,height:900},{width:390,height:844}]){
   const meetingPage=await context.newPage();
   meetingPage.on("pageerror",e=>errors.push(String(e)));
@@ -129,19 +514,63 @@ async function smoke(){
   });
   await meetingPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await meetingPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
-  await meetingPage.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
+  await meetingPage.locator('#meeting-progress-status[data-state="READY_NO_MODEL_CALLS"]').waitFor({timeout:12000});
+  assert.match(await meetingPage.locator("#meeting-progress-status").textContent(),/모델 호출 없음/);
+  await meetingPage.locator("#ai-meeting-shortcut").click();
+  assert.equal(await meetingPage.locator("#ai-meeting-panel").evaluate(el=>el.open),true);
+  assert.equal(await meetingPage.locator("#ai-meeting-summary").evaluate(el=>el===document.activeElement),true);
   await meetingPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
+  assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
   assert.equal(transcriptCalls,1);
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
+  // A validated historical transcript must fail closed if its source expires.
+  await meetingPage.evaluate(()=>{
+   window.__meetingRealNow=Date.now;
+   Date.now=()=>window.__meetingRealNow()+9*60*60*1000;
+   document.dispatchEvent(new Event("visibilitychange"));
+
+  });
+  // Await the foreground refresh with the clock still advanced.
+  await meetingPage.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="disconnected"&&
+   document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
+   "expired transcript must be cleared");
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+   "expired transcript must not remain validated");
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/회의 원본 오래됨 또는 시각 오류/);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
+  assert.equal(transcriptCalls,2,"foreground expiry must fetch exactly once");
+  await meetingPage.evaluate(()=>{Date.now=window.__meetingRealNow;delete window.__meetingRealNow});
+  // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
   // retaining old rows; a failed second reload must fail closed.
   await meetingPage.locator("#ai-meeting-refresh").click();
-  await meetingPage.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7);
-  assert.equal(transcriptCalls,2,"manual refresh must fetch exactly once");
+  await meetingPage.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7&&
+   document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="validated");
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"validated");
+  assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/,
+   "refresh after expiry must restore the verified offline provenance label");
+  assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/,
+   "refresh after expiry must restore the complete meeting conclusion");
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"none");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
+  assert.equal(transcriptCalls,3,"manual refresh must fetch exactly once");
+  // Exercise the actual handler used by Safari's back/forward cache restore.
+  await meetingPage.evaluate(()=>window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true})));
+  await meetingPage.waitForFunction(()=>
+   document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="validated"&&
+   document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
+  assert.equal(transcriptCalls,4,"cached page restoration must refresh exactly once");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
+
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
    transcriptCalls++;
@@ -152,10 +581,66 @@ async function smoke(){
   await meetingPage.waitForFunction(()=>
    document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
-  assert.equal(transcriptCalls,3);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
+  assert.equal(transcriptCalls,5);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
+  assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
+  assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
+  // Non-Error rejections must show a useful fallback, not "undefined".
+  await meetingPage.evaluate(()=>{window.fetch=()=>Promise.reject(null)});
+  await meetingPage.locator("#ai-meeting-refresh").click();
+  await meetingPage.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 기록 서버에 연결하지 못했습니다"));
+  assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
+  assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+  assert.doesNotMatch(await meetingPage.locator("#ai-meeting-status").textContent(),/undefined|null/);
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
   await meetingPage.close();
  }
+ // A slow transcript must time out and allow the user to retry safely.
+ const stalled=await context.newPage();
+ await serveThree(stalled);
+ let stallRequests=0;
+ await stalled.route("**/api/v1/meeting/transcript",async route=>{
+  stallRequests++;
+  if(stallRequests===1){
+   await new Promise(resolve=>setTimeout(resolve,6500));
+   try{await route.fulfill({status:503,body:"late response"});}catch(_){}
+   return;
+  }
+  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
+ });
+ await stalled.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
+ // Wait for a completed failed request, not the initial disconnected placeholder.
+ // Depending on routing timing, the delayed 503 may surface as a provider error
+ // rather than AbortError; both must fail closed and leave retry available.
+ await stalled.waitForFunction(()=>{
+  const s=document.querySelector("#ai-meeting-status");
+  const b=document.querySelector("#ai-meeting-refresh");
+  return s?.getAttribute("data-connection")==="disconnected"&&
+   s.textContent.includes("회의 미연결")&&b&&!b.disabled;
+ },null,{timeout:15000});
+ assert.equal(stallRequests,1,"timeout scenario must issue exactly one initial request");
+ assert.equal(await stalled.locator("#ai-meeting-refresh").isDisabled(),false);
+ assert.match(await stalled.locator("#ai-meeting-status").textContent(),/회의 미연결/);
+ assert.equal(await stalled.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+  "timed-out transcript must not be marked validated");
+ await stalled.locator("#ai-meeting-panel").evaluate(el=>{el.open=true});
+ await stalled.locator("#ai-meeting-refresh").click();
+ await stalled.waitForFunction(()=>document.querySelectorAll("#ai-meeting-rows p").length===7,null,{timeout:12000});
+ assert.equal(stallRequests,2);
+ assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"validated",
+  "successful retry must restore validated connection");
+ await stalled.waitForTimeout(1800);
+ assert.equal(await stalled.locator("#ai-meeting-rows p").count(),7,
+  "late response must not erase the successful retry");
+ assert.equal(await stalled.locator("#ai-meeting-status").getAttribute("data-connection"),"validated",
+  "late failure must not downgrade the successful retry");
+ assert.match(await stalled.locator("#ai-meeting-status").textContent(),/실제 AI 실행 아님/);
+ await stalled.close();
+
  // Malformed meeting data must not appear as a valid completed session.
  const badMeeting=await context.newPage();
  await serveThree(badMeeting);
@@ -166,7 +651,42 @@ async function smoke(){
  await badMeeting.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
  await badMeeting.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"),{timeout:12000});
  assert.equal(await badMeeting.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await badMeeting.locator("#ai-meeting-refresh").isDisabled(),false,
+  "invalid transcript must allow manual retry");
+ assert.equal(await badMeeting.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+  "unsafe transcript must not be marked validated");
  await badMeeting.close();
+
+ // Even a completed transcript must not display if approval flags contradict
+ // the read-only research contract, regardless of the HTTP 200 response.
+ const unsafeApproval=await context.newPage();
+ await serveThree(unsafeApproval);
+ await unsafeApproval.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+  status:200,contentType:"application/json",
+  body:JSON.stringify({...transcript,live_trading_approved:true})
+ }));
+ await unsafeApproval.goto(base+"/office3d",{waitUntil:"commit",timeout:45000});
+ await unsafeApproval.waitForFunction(()=>document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="disconnected"&&document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+ assert.equal(await unsafeApproval.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await unsafeApproval.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
+ await unsafeApproval.close();
+
+ // HTTP 200 with a non-completed meeting must never be displayed as a result.
+ const incompleteMeeting=await context.newPage();
+ await serveThree(incompleteMeeting);
+ await incompleteMeeting.route("**/api/v1/meeting/transcript",route=>route.fulfill({
+  status:200,contentType:"application/json",
+  body:JSON.stringify({...transcript,status:"RUNNING"})
+ }));
+ // CI may delay DOMContentLoaded under load; wait for the application result below.
+ await incompleteMeeting.goto(base+"/office3d",{waitUntil:"commit",timeout:45000});
+ await incompleteMeeting.waitForFunction(()=>
+  document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+ assert.equal(await incompleteMeeting.locator("#ai-meeting-rows p").count(),0,
+  "non-completed meeting must not render transcript rows");
+ assert.equal(await incompleteMeeting.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
+ assert.equal(await incompleteMeeting.locator("#ai-meeting-refresh").isDisabled(),false);
+ await incompleteMeeting.close();
 
  // A provider outage and hostile text must never be mistaken for a live
  // meeting or executed as HTML in the actual Chromium document.
@@ -180,6 +700,10 @@ async function smoke(){
  await unavailableMeeting.waitForFunction(()=>
   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
  assert.equal(await unavailableMeeting.locator("#ai-meeting-rows p").count(),0);
+ assert.equal(await unavailableMeeting.locator("#ai-meeting-refresh").isDisabled(),false,
+  "provider outage must leave retry available");
+ assert.equal(await unavailableMeeting.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
+  "provider outage must remain disconnected");
  await unavailableMeeting.close();
 
  const textMeeting=await context.newPage();
@@ -201,7 +725,11 @@ async function smoke(){
  for(const [reason,mutate] of [
   ["stale-source",d=>({...d,source_generated_at_utc:new Date(Date.now()-9*3600000).toISOString()})],
   ["future-finish",d=>({...d,generated_at_utc:new Date(Date.now()+600000).toISOString()})],
-  ["contradictory-verdict",d=>({...d,final_verdict:"REVIEW_NEEDED"})]
+  ["future-source",d=>({...d,source_generated_at_utc:new Date(Date.now()+600000).toISOString()})],
+  ["reversed-timeline",d=>({...d,started_at_utc:new Date(Date.now()+120000).toISOString()})],
+  ["contradictory-verdict",d=>({...d,final_verdict:"REVIEW_NEEDED"})],
+  ["missing-completed-status",d=>({...d,status:undefined})],
+  ["false-completed-status",d=>({...d,status:false})]
  ]){
   const invalid=await context.newPage();
   await serveThree(invalid);
@@ -209,8 +737,21 @@ async function smoke(){
    status:200,contentType:"application/json",body:JSON.stringify(mutate(transcript))
   }));
   await invalid.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
-  await invalid.waitForFunction(()=>
-   document.querySelector("#ai-meeting-status")?.textContent?.includes("회의 미연결"));
+  try{
+   await invalid.waitForFunction(()=>{
+    const value=document.querySelector("#ai-meeting-status")?.textContent||"";
+    return value.includes("회의 미연결")||value.includes("최종 상태:");
+   },null,{timeout:12000});
+  }catch(error){
+   const diagnostic=await invalid.evaluate(()=>({
+    status:document.querySelector("#ai-meeting-status")?.textContent||"missing",
+    readyState:document.readyState,
+    rows:document.querySelectorAll("#ai-meeting-rows p").length
+   }));
+   throw Error(reason+": meeting status never settled: "+JSON.stringify(diagnostic)+"; "+error.message);
+  }
+  const invalidStatus=await invalid.locator("#ai-meeting-status").textContent();
+  assert.match(invalidStatus,/회의 미연결/,reason+": unexpected status: "+invalidStatus);
   assert.equal(await invalid.locator("#ai-meeting-rows p").count(),0,reason);
   await invalid.close();
  }
@@ -268,7 +809,7 @@ try{
  await smoke();
 }catch(error){
  console.error("V56 browser smoke failed",error);
- if(server)console.error("API stderr (truncated):",String(server.stderr||"").slice(-2000));
+ if(server)console.error("API stderr (last 8192 chars):",apiStderr||"(no stderr captured)");
  process.exitCode=1;
 }finally{
  if(browser)await browser.close();
