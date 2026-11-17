@@ -368,7 +368,7 @@ def main():
             snapshot = read_status(args.meeting_status)
             args.meeting_execution_id = snapshot['execution_id']
             args.meeting_transcript = session / 'latest.json'
-        except (OSError, ValueError, TypeError, KeyError):
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError):
             parser.error('Meeting session requires a valid recent workflow_status.json; check the session folder and run the workflow check again if needed')
     if args.meeting_execution_id is not None:
         import re
