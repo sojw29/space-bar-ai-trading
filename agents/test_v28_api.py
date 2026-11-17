@@ -1285,6 +1285,20 @@ setImmediate(async()=>{
         # Resolving/serving a session must not alter its saved state.
         self.assertEqual(json.loads(status_file.read_text())['execution_id'], 'a'*32)
 
+    def test_cli_meeting_session_rejects_symlink_loop_without_traceback(self):
+        session = Path(self.temp.name)/'loop'
+        try:
+            session.symlink_to(session, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest('Symlinks unavailable')
+        command = [sys.executable, str(Path(v28.__file__).resolve()),
+                   '--meeting-session', str(session)]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 2)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assertIn('Meeting session requires a valid recent workflow_status.json', result.stderr)
+        self.assertTrue(session.is_symlink())
+
     def test_unknown_route(self):
         with self.assertRaises(HTTPError) as error:
             self.get("/api/v1/orders")
