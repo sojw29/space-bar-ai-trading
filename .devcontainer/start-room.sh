@@ -3,6 +3,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 meeting_args=()
+is_room_health() {
+  printf '%s' "$1" | python -c '
+import json, sys
+try:
+    raw = sys.stdin.buffer.read(4097)
+    if len(raw) > 4096:
+        raise ValueError("oversized health response")
+    data = json.loads(raw)
+    valid = (isinstance(data, dict)
+             and data.get("service") == "space-bar-local-research-api"
+             and data.get("status") == "ok"
+             and data.get("mode") == "local-paper-only"
+             and data.get("orders_enabled") is False)
+except (ValueError, UnicodeError):
+    valid = False
+sys.exit(0 if valid else 1)
+'
+}
 if (( $# )); then
   if [[ $# != 2 || $1 != --meeting-session || -z $2 ]]; then
     echo "Usage: bash .devcontainer/start-room.sh [--meeting-session SESSION_FOLDER]" >&2
@@ -10,7 +28,11 @@ if (( $# )); then
   fi
   meeting_args=(--meeting-session "$2")
 fi
-if curl --silent --fail --max-time 2 http://127.0.0.1:8765/health >/dev/null; then
+if health=$(curl --silent --fail --max-time 2 --max-filesize 4096 http://127.0.0.1:8765/health); then
+  if ! is_room_health "$health"; then
+    echo "Port 8765 returned an unrecognized or unsafe health response. Stop or inspect that server before starting SPACE BAR." >&2
+    exit 1
+  fi
   if (( ${#meeting_args[@]} )); then
     echo "Port 8765 already has a server. Stop it before selecting a meeting session; the existing session was not changed." >&2
     exit 1
@@ -26,7 +48,7 @@ fi
 nohup python -u agents/dashboard_api_v28.py --port 8765 > /tmp/space-bar-room.log 2>&1 < /dev/null &
 pid=$!
 sleep 2
-if ! kill -0 "$pid" 2>/dev/null || ! curl --silent --fail --max-time 2 http://127.0.0.1:8765/health >/dev/null; then
+if ! kill -0 "$pid" 2>/dev/null || ! health=$(curl --silent --fail --max-time 2 --max-filesize 4096 http://127.0.0.1:8765/health) || ! is_room_health "$health"; then
   echo "SPACE BAR failed to start. Check /tmp/space-bar-room.log" >&2
   cat /tmp/space-bar-room.log >&2 || true
   exit 1

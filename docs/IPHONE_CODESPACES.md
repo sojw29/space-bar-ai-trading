@@ -26,5 +26,11 @@ of selecting another session. A server already on port 8765 causes an error;
 the script never silently reuses it for a newly requested session. Quote folder
 paths containing spaces. Relative paths are resolved from the repository root.
 
+Startup also checks the health response's SPACE BAR service identifier, read-only
+mode and disabled-order flag. A successful HTTP response from another program is
+rejected. If an older dashboard lacks this identifier, stop it and start the
+updated server. This compatibility check does not authenticate the server or
+prove that a historical dataset or meeting record is available.
+
 Selecting a session only displays existing records; it does not start a meeting.
 See [meeting preparation and session commands](ai_meeting_runtime.md#use-one-session-folder-for-preparation-and-display).
