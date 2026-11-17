@@ -304,9 +304,28 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),wholeCounts);
+  assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("hidden-by-search");
+  await identityPage.getByRole("button",{name:"추가 검토 발언 보기",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").evaluate(node=>node===document.activeElement),true);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
+
   await identityPage.getByRole("button",{name:"필터·검색 초기화",exact:true}).click();
   assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"ALL");
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
+  reviewFixture.transcript[0].verdict="INSUFFICIENT_DATA";reviewFixture.final_verdict="INSUFFICIENT_DATA";
+  await writeFile(selectedTranscriptPath,JSON.stringify(reviewFixture),"utf8");
+  await identityPage.locator("#ai-meeting-refresh").click();
+  await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
+  await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("COMMANDER");
+  await identityPage.getByRole("button",{name:"자료 부족 발언 보기",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"INSUFFICIENT_DATA");
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"ALL");
   await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
   await identityPage.locator("#ai-meeting-refresh").click();
   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
@@ -342,6 +361,9 @@ async function smoke(){
    assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
    assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-review-shortcuts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-review").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),"");
    await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
    await identityPage.locator("#ai-meeting-refresh").click();
@@ -446,6 +468,9 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-review-shortcuts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-review").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),"");
 
   assert.equal(await identityPage.locator("#meeting-progress-refresh").isEnabled(),false);
