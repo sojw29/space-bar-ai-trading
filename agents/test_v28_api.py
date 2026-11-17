@@ -436,6 +436,37 @@ setImmediate(async()=>{
   assert.match(elements['ai-meeting-linked'].textContent,/COMMANDER 최종 결론/);
   assert.ok(elements['ai-meeting-linked'].textContent.includes('\n'),'conclusion must use real line breaks');
   assert.ok(!elements['ai-meeting-linked'].textContent.includes('\\n'),'conclusion must not show escaped newlines');
+  // Every interactive record view expires synchronously, without a timer tick.
+  const actionClock=now;
+  for(const clockChange of ['expired','rollback']){
+   for(const action of ['statement','timeline','conclusion','agent','phase','verdict','search','reset','review']){
+    data.payload.transcript[2].verdict='REVIEW_NEEDED';data.payload.final_verdict='REVIEW_NEEDED';
+    await elements['ai-meeting-refresh'].events.click();
+    agentView.value='ATLAS';agentView.events.change();
+    const statement=elements['ai-meeting-rows'].children[0];
+    const currentTimeline=elements['ai-meeting-timeline'];
+    const beforeActionReads=requestCount;
+    now=Date.parse(data.payload.source_generated_at_utc)+(clockChange==='expired'?8*3600000+1:-1);
+    const actions={
+     statement:()=>statement.events.keydown({key:'Enter',preventDefault(){}}),
+     timeline:()=>currentTimeline.children[1].events.click(),
+     conclusion:()=>currentTimeline.children[4].events.click(),
+     agent:()=>agentView.events.change(),phase:()=>phaseView.events.change(),
+     verdict:()=>elements['ai-meeting-verdict-filter'].events.change(),search:()=>searchView.events.input(),
+     reset:()=>elements['ai-meeting-view-reset'].events.click(),
+     review:()=>elements['ai-meeting-show-review'].events.click()
+    };
+    actions[action]();
+    assert.equal(elements['ai-meeting-rows'].children.length,0,clockChange+':'+action);
+    assert.equal(elements['ai-meeting-linked'].hidden,true,action);
+    assert.equal(elements['ai-meeting-decision'].hidden,true,action);
+    assert.equal(currentTimeline.children.length,0,action);
+    assert.equal(requestCount,beforeActionReads,'expiry action must not fetch');
+    now=actionClock;
+   }
+  }
+  data.payload=JSON.parse(JSON.stringify(cleanRecord));
+  await elements['ai-meeting-refresh'].events.click();
   assert.ok(callbacks.length>=2,'expiry and polling callbacks must exist');
   now=Date.parse(data.payload.source_generated_at_utc)+8*3600000+1000;
   callbacks[0]();
