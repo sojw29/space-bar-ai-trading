@@ -2,6 +2,8 @@ name: SPACE BAR AI Meeting Runtime
 on:
   push:
     paths:
+      - '.devcontainer/start-room.sh'
+      - 'tests/test_codespaces_meeting_launcher.py'
       - 'agents/ai_meeting_runtime.py'
       - 'agents/ohlcv_indicators_v225.py'
       - 'agents/market_source_provenance.py'
@@ -37,3 +39,5 @@ jobs:
           python-version: '3.11'
       - run: node --version
       - run: python -m unittest discover -s agents -p 'test_ai_meeting*.py' -v
+      - run: bash -n .devcontainer/start-room.sh
+      - run: python -m unittest discover -s tests -p 'test_codespaces_meeting_launcher.py' -v
