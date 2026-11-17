@@ -295,11 +295,15 @@ async function smoke(){
   await identityPage.locator("#ai-meeting-refresh").click();
   await identityPage.locator('#ai-meeting-status[data-connection="validated"]').waitFor();
   const reviewDecision=await identityPage.locator("#ai-meeting-decision").textContent();
+  const wholeCounts=await identityPage.locator("#ai-meeting-verdict-counts").textContent();
+  assert.match(wholeCounts,/총 7개 · 관측 요약 6개 · 추가 검토 필요 1개 · 자료 부족 0개/);
+
   await identityPage.getByLabel("검토 상태",{exact:true}).selectOption("REVIEW_NEEDED");
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
   await identityPage.getByLabel("발언 보기",{exact:true}).selectOption("QUANT");
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),wholeCounts);
   await identityPage.getByRole("button",{name:"필터·검색 초기화",exact:true}).click();
   assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"ALL");
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
@@ -337,6 +341,8 @@ async function smoke(){
    await identityPage.locator('#meeting-session-summary[data-state="RECORD_PENDING"]').waitFor({timeout:12000});
    assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
    assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),"");
    await writeFile(selectedTranscriptPath,JSON.stringify(storedTranscript),"utf8");
    await identityPage.locator("#ai-meeting-refresh").click();
    await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
@@ -439,6 +445,8 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),"");
 
   assert.equal(await identityPage.locator("#meeting-progress-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),false);
