@@ -214,6 +214,10 @@ async function smoke(){
   await identityPage.locator("#ai-meeting-shortcut").click();
   await identityPage.locator("#ai-meeting-rows p").first().waitFor({timeout:12000});
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),true);
+  assert.match(await identityPage.locator("#ai-meeting-source-age").textContent(),/회의 원본 생성: .*원본 생성 후 약 [0-9]+분.*화면 기록 유효 기한/);
+  assert.ok((await identityPage.locator("#ai-meeting-source-age").getAttribute("title")).includes(source));
+
   const fullMeetingDecision=await identityPage.locator("#ai-meeting-decision").textContent();
   for(const [agent,count] of [["ATLAS",2],["QUANT",2],["GUARDIAN",2],["COMMANDER",1],["ALL",7]]){
    await identityPage.getByLabel("발언 보기",{exact:true}).selectOption(agent);
@@ -361,6 +365,8 @@ async function smoke(){
    assert.ok((await identityPage.locator("#ai-meeting-selected-run").textContent()).includes(executionId));
    assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").textContent(),"");
   assert.equal(await identityPage.locator("#ai-meeting-review-shortcuts").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-review").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
@@ -468,6 +474,8 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-source-age").textContent(),"");
   assert.equal(await identityPage.locator("#ai-meeting-review-shortcuts").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-review").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
