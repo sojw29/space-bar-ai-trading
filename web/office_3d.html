@@ -2009,6 +2009,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <summary id="ai-meeting-summary">별도 모델 회의 기록 · 분석 → 상호 검토 → COMMANDER 결론</summary>
 <button id="ai-meeting-refresh" type="button" style="padding:6px 12px;margin:8px 0;background:#25435e;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px">회의 기록 다시 확인</button>
 <p id="ai-meeting-status" role="status" aria-live="polite">회의 결과 연결 확인 중…</p>
+<p id="ai-meeting-source-age" class="notice" role="note" hidden></p>
 <p id="ai-meeting-selected-run" role="status" aria-live="polite" hidden></p>
 <button id="ai-meeting-clear-selection" type="button" title="서버가 제공하는 기본 기록을 다시 확인합니다" hidden>화면 선택 해제</button>
 <p id="ai-meeting-connection-label" style="font-size:12px;color:#a9c5d9">연결 상태: 확인 중</p>
@@ -2087,6 +2088,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const refreshButton=document.getElementById("ai-meeting-refresh");
  const connectionLabel=document.getElementById("ai-meeting-connection-label");
  const decision=document.getElementById("ai-meeting-decision");
+ const sourceAge=document.getElementById("ai-meeting-source-age");
  const verdictCounts=document.getElementById("ai-meeting-verdict-counts");
  const reviewShortcuts=document.getElementById("ai-meeting-review-shortcuts"),showReview=document.getElementById("ai-meeting-show-review"),showMissing=document.getElementById("ai-meeting-show-missing");
  const linked=document.getElementById("ai-meeting-linked");
@@ -2183,7 +2185,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
  function clearTimeline(){if(timeline){timeline.replaceChildren();timeline.hidden=true;}}
  function clearLinked(){if(linked){linked.textContent="";linked.hidden=true;}}
- function clearDecision(){if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;}
+ function clearDecision(){if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;}
  function setConnection(state,reason,provenance=""){
   if(state!=="validated")verifiedRecordId=null;
   if(typeof CustomEvent==="function")document.dispatchEvent(new CustomEvent("spacebar:transcript-view",{detail:{state,execution_id:verifiedRecordId,provenance:state==="validated"?provenance:null}}));
@@ -2205,11 +2207,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const labels={OBSERVATION_ONLY:"관측 요약",REVIEW_NEEDED:"추가 검토 필요",INSUFFICIENT_DATA:"자료 부족"};
  let validSince=null,validUntil=null;
  function expire(){
-  if(validUntil!==null&&(Date.now()<validSince||Date.now()>validUntil)){
+  const now=Date.now();
+  if(validUntil!==null&&(now<validSince||now>validUntil)){
    rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();status.textContent="회의 원본 만료 또는 시계 변경 · 새로고침 필요";
    status.title="만료된 회의 기록은 표시되지 않습니다. 다시 확인 버튼으로 새 기록을 조회하세요.";
    setConnection("disconnected","expired");
    validSince=null;validUntil=null;
+  }else if(validSince!==null&&sourceAge){
+   const text="회의 원본 생성: "+new Date(validSince).toLocaleString()+" · 원본 생성 후 약 "+Math.floor((now-validSince)/60000)+"분 · 화면 기록 유효 기한: "+new Date(validUntil).toLocaleString();
+   if(sourceAge.textContent!==text)sourceAge.textContent=text;
+   sourceAge.title="원본 생성 UTC: "+new Date(validSince).toISOString()+" · 화면 유효 기한 UTC: "+new Date(validUntil).toISOString();
+   sourceAge.hidden=false;
   }
  }
  setInterval(expire,60000);

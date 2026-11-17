@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-review-shortcuts','ai-meeting-show-review','ai-meeting-show-missing','ai-meeting-verdict-counts','ai-meeting-verdict-filter','ai-meeting-view-reset','ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
+for(const id of ['ai-meeting-source-age','ai-meeting-review-shortcuts','ai-meeting-show-review','ai-meeting-show-missing','ai-meeting-verdict-counts','ai-meeting-verdict-filter','ai-meeting-view-reset','ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -291,6 +291,10 @@ if(holdResponse)return await new Promise(resolve=>{holdResponse=resolve});return
 setImmediate(async()=>{
  try{
   assert.equal(requested,'/api/v1/meeting/transcript');
+  const freshness=elements['ai-meeting-source-age'];assert.equal(freshness.hidden,false);
+  assert.match(freshness.textContent,/회의 원본 생성: .*원본 생성 후 약 [0-9]+분.*화면 기록 유효 기한/);
+  assert.ok(freshness.title.includes(new Date(data.payload.source_generated_at_utc).toISOString()));
+
   assert.equal(elements['ai-meeting-shortcut-status'].attrs['data-connection'],'validated');
   assert.match(elements['ai-meeting-shortcut-status'].textContent,/오프라인 테스트/);
   const agentView=elements['ai-meeting-agent-filter'],allRows=elements['ai-meeting-rows'];
@@ -359,7 +363,7 @@ setImmediate(async()=>{
   assert.equal(requestCount,beforeEditingManual+1,'manual refresh still works while a control has focus');
   const beforeExpiry=now;now+=9*3600000;callbacks[0]();
   assert.equal(elements['ai-meeting-rows'].children.length,0,'focus must not suppress expiration');
-  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);
+  assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(freshness.hidden,true);assert.equal(freshness.textContent,'');
   now=beforeExpiry;document.activeElement=null;await elements['ai-meeting-refresh'].events.click();
   const beforeUnfocusedPoll=requestCount;callbacks[1]();await new Promise(setImmediate);assert.equal(requestCount,beforeUnfocusedPoll+1);
   const verdictView=elements['ai-meeting-verdict-filter'],cleanRecord=JSON.parse(JSON.stringify(data.payload));
@@ -394,6 +398,11 @@ setImmediate(async()=>{
   callbacks[1]();await new Promise(setImmediate);assert.equal(verdictView.value,'INSUFFICIENT_DATA');
   verdictView.value='INVALID';verdictView.events.change();assert.equal(verdictView.value,'ALL');
   data.payload=cleanRecord;await elements['ai-meeting-refresh'].events.click();
+  const ageBefore=Number(freshness.textContent.match(/원본 생성 후 약 ([0-9]+)분/)[1]),clockBeforeAge=now,readsBeforeAge=requestCount;
+  document.activeElement=searchView;now+=60000;callbacks[0]();
+  assert.equal(Number(freshness.textContent.match(/원본 생성 후 약 ([0-9]+)분/)[1]),ageBefore+1);
+  assert.equal(requestCount,readsBeforeAge,'age refresh does not fetch while editing');
+  now=clockBeforeAge;document.activeElement=null;callbacks[0]();
   const beforeShortcut=requestCount;
   elements['ai-meeting-shortcut'].events.click();
   assert.equal(elements['ai-meeting-panel'].open,true);
@@ -878,7 +887,7 @@ setImmediate(async()=>{
   // Network loss clears the entire transcript and pauses its read paths.
   searchView.value='test';searchView.events.input();
   agentView.value='GUARDIAN';agentView.events.change();phaseView.value='PEER_REVIEW';phaseView.events.change();
-  const beforeOffline=requestCount;windowEvents.offline();assert.equal(countSummary.hidden,true);assert.equal(countSummary.textContent,'');assert.equal(elements['ai-meeting-review-shortcuts'].hidden,true);assert.equal(reviewButton.disabled,true);assert.equal(missingButton.disabled,true);
+  const beforeOffline=requestCount;windowEvents.offline();assert.equal(freshness.hidden,true);assert.equal(freshness.textContent,'');assert.equal(freshness.title,'');assert.equal(countSummary.hidden,true);assert.equal(countSummary.textContent,'');assert.equal(elements['ai-meeting-review-shortcuts'].hidden,true);assert.equal(reviewButton.disabled,true);assert.equal(missingButton.disabled,true);
   assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(viewReset.disabled,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');assert.equal(phaseView.value,'ALL');assert.equal(phaseView.disabled,true);assert.equal(searchView.value,'');assert.equal(searchView.disabled,true);assert.equal(verdictView.value,'ALL');assert.equal(verdictView.disabled,true);
   assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-decision'].hidden,true);
   assert.equal(elements['ai-meeting-timeline'].hidden,true);assert.equal(elements['ai-meeting-refresh'].disabled,true);
