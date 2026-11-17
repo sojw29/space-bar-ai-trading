@@ -249,7 +249,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-verdict-counts','ai-meeting-verdict-filter','ai-meeting-view-reset','ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
+for(const id of ['ai-meeting-review-shortcuts','ai-meeting-show-review','ai-meeting-show-missing','ai-meeting-verdict-counts','ai-meeting-verdict-filter','ai-meeting-view-reset','ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -369,15 +369,28 @@ setImmediate(async()=>{
   const countSummary=elements['ai-meeting-verdict-counts'];assert.equal(countSummary.hidden,false);
   assert.match(countSummary.textContent,/총 7개 · 관측 요약 6개 · 추가 검토 필요 1개 · 자료 부족 0개/);
   const allVerdictCounts=countSummary.textContent;
+  const reviewButton=elements['ai-meeting-show-review'],missingButton=elements['ai-meeting-show-missing'];
+  assert.equal(reviewButton.disabled,false);assert.equal(missingButton.disabled,true);
+
 
   verdictView.value='REVIEW_NEEDED';verdictView.events.change();
   assert.equal(allRows.children.filter(row=>!row.hidden).length,1);assert.equal(allRows.children[2].hidden,false);
   phaseView.value='PEER_REVIEW';phaseView.events.change();assert.equal(allRows.children.filter(row=>!row.hidden).length,0);
   assert.equal(elements['ai-meeting-decision'].textContent,riskSummary);assert.equal(requestCount,riskReads);assert.equal(countSummary.textContent,allVerdictCounts,'empty filtered rows do not remove the whole-meeting review count');
+  searchView.value='hidden-by-search';searchView.events.input();reviewButton.events.click();
+  assert.equal(agentView.value,'ALL');assert.equal(phaseView.value,'ALL');assert.equal(searchView.value,'');assert.equal(verdictView.value,'REVIEW_NEEDED');
+  assert.equal(allRows.children.filter(row=>!row.hidden).length,1);assert.equal(verdictView.focused,true);
+  assert.equal(requestCount,riskReads);assert.equal(elements['ai-meeting-decision'].textContent,riskSummary);
+
   viewReset.events.click();assert.equal(verdictView.value,'ALL');assert.equal(allRows.children.filter(row=>!row.hidden).length,7);
   data.payload.transcript[0].verdict='INSUFFICIENT_DATA';data.payload.final_verdict='INSUFFICIENT_DATA';
   await elements['ai-meeting-refresh'].events.click();verdictView.value='INSUFFICIENT_DATA';verdictView.events.change();
   assert.equal(allRows.children.filter(row=>!row.hidden).length,1);assert.equal(allRows.children[0].hidden,false);assert.match(countSummary.textContent,/관측 요약 5개 · 추가 검토 필요 1개 · 자료 부족 1개/);
+  agentView.value='COMMANDER';phaseView.value='CONCLUSION';searchView.value='hidden';searchView.events.input();
+  assert.equal(missingButton.disabled,false);const missingReads=requestCount;missingButton.events.click();
+  assert.equal(verdictView.value,'INSUFFICIENT_DATA');assert.equal(agentView.value,'ALL');assert.equal(phaseView.value,'ALL');assert.equal(searchView.value,'');
+  assert.equal(allRows.children.filter(row=>!row.hidden).length,1);assert.equal(requestCount,missingReads);
+
   callbacks[1]();await new Promise(setImmediate);assert.equal(verdictView.value,'INSUFFICIENT_DATA');
   verdictView.value='INVALID';verdictView.events.change();assert.equal(verdictView.value,'ALL');
   data.payload=cleanRecord;await elements['ai-meeting-refresh'].events.click();
@@ -865,7 +878,7 @@ setImmediate(async()=>{
   // Network loss clears the entire transcript and pauses its read paths.
   searchView.value='test';searchView.events.input();
   agentView.value='GUARDIAN';agentView.events.change();phaseView.value='PEER_REVIEW';phaseView.events.change();
-  const beforeOffline=requestCount;windowEvents.offline();assert.equal(countSummary.hidden,true);assert.equal(countSummary.textContent,'');
+  const beforeOffline=requestCount;windowEvents.offline();assert.equal(countSummary.hidden,true);assert.equal(countSummary.textContent,'');assert.equal(elements['ai-meeting-review-shortcuts'].hidden,true);assert.equal(reviewButton.disabled,true);assert.equal(missingButton.disabled,true);
   assert.equal(elements['ai-meeting-agent-controls'].hidden,true);assert.equal(viewReset.disabled,true);assert.equal(agentView.disabled,true);assert.equal(agentView.value,'ALL');assert.equal(elements['ai-meeting-agent-count'].textContent,'');assert.equal(phaseView.value,'ALL');assert.equal(phaseView.disabled,true);assert.equal(searchView.value,'');assert.equal(searchView.disabled,true);assert.equal(verdictView.value,'ALL');assert.equal(verdictView.disabled,true);
   assert.equal(elements['ai-meeting-rows'].children.length,0);assert.equal(elements['ai-meeting-decision'].hidden,true);
   assert.equal(elements['ai-meeting-timeline'].hidden,true);assert.equal(elements['ai-meeting-refresh'].disabled,true);
