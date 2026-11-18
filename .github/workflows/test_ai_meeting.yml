@@ -5,6 +5,7 @@ on:
       - '.devcontainer/start-room.sh'
       - 'tests/test_codespaces_meeting_launcher.py'
       - 'agents/ai_meeting_runtime.py'
+      - 'agents/ai_meeting_archive.py'
       - 'agents/ohlcv_indicators_v225.py'
       - 'agents/market_source_provenance.py'
       - 'agents/ai_meeting_publication.py'
