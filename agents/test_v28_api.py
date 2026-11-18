@@ -251,7 +251,7 @@ const makeElement=()=>({
  set innerHTML(_){throw Error('unsafe HTML')}
 });
 const elements={};
-for(const id of ['ai-meeting-source-age','ai-meeting-review-shortcuts','ai-meeting-show-review','ai-meeting-show-missing','ai-meeting-verdict-counts','ai-meeting-verdict-filter','ai-meeting-view-reset','ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
+for(const id of ['ai-meeting-show-conclusion','ai-meeting-source-age','ai-meeting-review-shortcuts','ai-meeting-show-review','ai-meeting-show-missing','ai-meeting-verdict-counts','ai-meeting-verdict-filter','ai-meeting-view-reset','ai-meeting-search','ai-meeting-phase-filter','ai-meeting-agent-controls','ai-meeting-agent-filter','ai-meeting-agent-count','ai-meeting-panel','ai-meeting-summary','ai-meeting-shortcut','ai-meeting-shortcut-status','meeting-progress-open-record','ai-meeting-selected-run','ai-meeting-clear-selection',
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
@@ -388,6 +388,15 @@ setImmediate(async()=>{
   assert.equal(allRows.children.filter(row=>!row.hidden).length,1);assert.equal(verdictView.focused,true);
   assert.equal(requestCount,riskReads);assert.equal(elements['ai-meeting-decision'].textContent,riskSummary);
 
+  const conclusionButton=elements['ai-meeting-show-conclusion'];
+  assert.equal(conclusionButton.disabled,false);
+  searchView.value='hidden-by-search';searchView.events.input();conclusionButton.events.click();
+  assert.equal(agentView.value,'COMMANDER');assert.equal(phaseView.value,'CONCLUSION');
+  assert.equal(verdictView.value,'ALL');assert.equal(searchView.value,'');
+  assert.equal(allRows.children.filter(row=>!row.hidden).length,1);assert.equal(allRows.children[6].hidden,false);
+  assert.equal(phaseView.focused,true);assert.equal(requestCount,riskReads);
+  assert.equal(elements['ai-meeting-decision'].textContent,riskSummary);assert.equal(countSummary.textContent,allVerdictCounts);
+
   viewReset.events.click();assert.equal(verdictView.value,'ALL');assert.equal(allRows.children.filter(row=>!row.hidden).length,7);
   data.payload.transcript[0].verdict='INSUFFICIENT_DATA';data.payload.final_verdict='INSUFFICIENT_DATA';
   await elements['ai-meeting-refresh'].events.click();verdictView.value='INSUFFICIENT_DATA';verdictView.events.change();
@@ -441,7 +450,7 @@ setImmediate(async()=>{
   // Every interactive record view expires synchronously, without a timer tick.
   const actionClock=now;
   for(const clockChange of ['expired','rollback']){
-   for(const action of ['statement','timeline','conclusion','agent','phase','verdict','search','reset','review']){
+   for(const action of ['statement','timeline','conclusion','agent','phase','verdict','search','reset','review','conclusionShortcut']){
     data.payload.transcript[2].verdict='REVIEW_NEEDED';data.payload.final_verdict='REVIEW_NEEDED';
     await elements['ai-meeting-refresh'].events.click();
     agentView.value='ATLAS';agentView.events.change();
@@ -456,12 +465,14 @@ setImmediate(async()=>{
      agent:()=>agentView.events.change(),phase:()=>phaseView.events.change(),
      verdict:()=>elements['ai-meeting-verdict-filter'].events.change(),search:()=>searchView.events.input(),
      reset:()=>elements['ai-meeting-view-reset'].events.click(),
-     review:()=>elements['ai-meeting-show-review'].events.click()
+     review:()=>elements['ai-meeting-show-review'].events.click(),
+     conclusionShortcut:()=>elements['ai-meeting-show-conclusion'].events.click()
     };
     actions[action]();
     assert.equal(elements['ai-meeting-rows'].children.length,0,clockChange+':'+action);
     assert.equal(elements['ai-meeting-linked'].hidden,true,action);
     assert.equal(elements['ai-meeting-decision'].hidden,true,action);
+    assert.equal(elements['ai-meeting-show-conclusion'].disabled,true,action);
     assert.equal(currentTimeline.children.length,0,action);
     assert.equal(requestCount,beforeActionReads,'expiry action must not fetch');
     now=actionClock;

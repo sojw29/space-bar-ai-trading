@@ -326,6 +326,17 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").evaluate(node=>node===document.activeElement),true);
   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
 
+  await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("hidden-by-search");
+  await identityPage.getByRole("button",{name:"COMMANDER 결론만 보기",exact:true}).click();
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),1);
+  assert.equal(await identityPage.locator("#ai-meeting-agent-filter").inputValue(),"COMMANDER");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").inputValue(),"CONCLUSION");
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"ALL");
+  assert.equal(await identityPage.locator("#ai-meeting-search").inputValue(),"");
+  assert.equal(await identityPage.locator("#ai-meeting-phase-filter").evaluate(node=>node===document.activeElement),true);
+  assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),wholeCounts);
+
   await identityPage.getByRole("button",{name:"필터·검색 초기화",exact:true}).click();
   assert.equal(await identityPage.locator("#ai-meeting-verdict-filter").inputValue(),"ALL");
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),7);
@@ -376,6 +387,7 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-source-age").textContent(),"");
   assert.equal(await identityPage.locator("#ai-meeting-review-shortcuts").isVisible(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-conclusion").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-review").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),"");
@@ -480,6 +492,7 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-view-reset").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-show-conclusion").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-source-age").isVisible(),false);
