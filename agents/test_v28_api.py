@@ -418,6 +418,7 @@ setImmediate(async()=>{
   const jsonButton=elements['ai-meeting-export-json'];assert.equal(jsonButton.disabled,false);
   jsonButton.events.click();assert.equal(downloads.length,2);assert.equal(requestCount,riskReads);
   const archiveText=await exportBlobs.get(downloads[1].href).text(),archive=JSON.parse(archiveText);
+  process.stdout.write(archiveText+'\n');
   assert.match(downloads[1].filename,/[.]json$/);assert.equal(archive.version,'SPACEBAR_MEETING_ARCHIVE_1');
   assert.equal(archive.orders_enabled,false);assert.equal(archive.trade_authorization,'DENIED');assert.equal(archive.process_liveness_verified,false);
   assert.equal(archive.record.workflow_execution_id,data.payload.workflow_execution_id??null);
@@ -1004,6 +1005,9 @@ setImmediate(async()=>{
                                 input=json.dumps({"script": script, "payload": payload}),
                                 text=True, capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
+        from ai_meeting_archive import validate_archive
+        exported_archive = validate_archive(json.loads(result.stdout))
+        self.assertEqual(len(exported_archive["record"]["transcript"]), 7)
 
     def test_office3d_served_over_http_with_mobile_and_meeting_contract(self):
         # Verify the real dashboard server delivers the 3D room rather than a

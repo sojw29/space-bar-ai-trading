@@ -18,7 +18,28 @@ Extra response fields are excluded. The archive preserves the validated display
 record; it is not a signed attestation that inference occurred. Its save time is
 not the source data time. It has a distinct archive version and cannot be used
 directly as a live meeting API response. This release adds export only, not
-archive import, automatic synchronization or meeting execution.
+browser archive import, automatic synchronization or meeting execution.
+
+## Offline inspection and comparison
+
+```sh
+python agents/ai_meeting_archive.py saved-meeting.json
+python agents/ai_meeting_archive.py earlier.json later.json
+```
+
+Both commands read local files only and print JSON to stdout. Inspection reports
+record metadata and verdict counts. Comparison reports left/right provenance,
+market-source compatibility, final verdict changes and separate verdict, summary
+and concern changes for each M01–M07 statement. Left and right follow argument
+order; changes do not imply an improvement in accuracy or profitability. Unknown
+market sources remain `UNKNOWN`, rather than being assumed equivalent.
+
+Historical archives do not expire for comparison. Structure, UTC time ordering,
+seven role/phase identities, counts, field allowlists and no-order flags must
+still match the archive schema. Duplicate JSON keys, oversized files (over
+256 KiB) and malformed records are rejected with a fixed CLI error. These checks
+verify format consistency, not authenticity or correctness of model statements.
+The commands do not print statement prose or modify input files.
 
 Downloads require a currently usable record. Loading, errors, offline state,
 expiry or clock rollback disable saving. Once downloaded, the file is a dated
