@@ -28,6 +28,49 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_all_verdict_transitions_have_conserved_counts_and_ids(self):
+        for old in ('OBSERVATION_ONLY', 'REVIEW_NEEDED', 'INSUFFICIENT_DATA'):
+            for new in ('OBSERVATION_ONLY', 'REVIEW_NEEDED', 'INSUFFICIENT_DATA'):
+                with self.subTest(old=old, new=new):
+                    left, right = archive(), archive()
+                    for value, verdict in ((left, old), (right, new)):
+                        value['record']['final_verdict'] = verdict
+                        for s in value['record']['transcript']:
+                            s['verdict'] = verdict
+                        value['record']['verdict_counts'] = {k: 7 if k == verdict else 0 for k in value['record']['verdict_counts']}
+                    result = compare_archives(left, right, now=NOW)
+                    transitions = result['verdict_transitions']
+                    self.assertEqual(len(transitions), 9)
+                    self.assertEqual(sum(t['count'] for t in transitions), 7)
+                    selected = next(t for t in transitions if (t['left_verdict'], t['right_verdict']) == (old, new))
+                    self.assertEqual(selected['count'], 7)
+                    self.assertEqual(selected['statement_ids'], [f'M{i:02}' for i in range(1, 8)])
+                    self.assertEqual(sum(result['verdict_count_delta'].values()), 0)
+                    self.assertEqual(result['verdict_count_delta'][new], 0 if old == new else 7)
+                    self.assertEqual(result['verdict_count_delta'][old], 0 if old == new else -7)
+
+    def test_mixed_transitions_distinguish_judgment_changes_from_prose(self):
+        left, right = archive(), archive()
+        left['record']['transcript'][0]['verdict'] = 'INSUFFICIENT_DATA'
+        left['record']['verdict_counts'].update(OBSERVATION_ONLY=6, INSUFFICIENT_DATA=1)
+        left['record']['final_verdict'] = 'INSUFFICIENT_DATA'
+        right['record']['transcript'][2]['verdict'] = 'REVIEW_NEEDED'
+        right['record']['verdict_counts'].update(OBSERVATION_ONLY=6, REVIEW_NEEDED=1)
+        right['record']['final_verdict'] = 'REVIEW_NEEDED'
+        result = compare_archives(left, right, now=NOW)
+        changed = [t for t in result['verdict_transitions'] if t['count'] and t['left_verdict'] != t['right_verdict']]
+        for verdict in left['record']['verdict_counts']:
+            self.assertEqual(sum(t['count'] for t in result['verdict_transitions'] if t['left_verdict'] == verdict), left['record']['verdict_counts'][verdict])
+            self.assertEqual(sum(t['count'] for t in result['verdict_transitions'] if t['right_verdict'] == verdict), right['record']['verdict_counts'][verdict])
+        self.assertEqual({i for t in changed for i in t['statement_ids']}, {'M01', 'M03'})
+        self.assertEqual(result['verdict_count_delta'], {'OBSERVATION_ONLY': 0, 'REVIEW_NEEDED': 1, 'INSUFFICIENT_DATA': -1})
+        self.assertIn('판단 전환표', render_report(left, right, now=NOW))
+        right = archive()
+        right['record']['transcript'][0]['summary'] = 'different prose'
+        report = render_report(archive(), right, now=NOW)
+        self.assertIn('판단 전환 없음', report)
+        self.assertNotIn('different prose', report)
+
     def test_changed_statement_summary_counts_overlapping_changes_once(self):
         left, right = archive(), archive()
         right['record']['transcript'][0].update(summary='changed', concerns=['new concern'])

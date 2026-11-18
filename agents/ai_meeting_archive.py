@@ -110,6 +110,12 @@ def compare_archives(left, right, *, now=None):
                   for x, y in zip(a['transcript'], b['transcript'])]
     change_keys = ('verdict_changed', 'summary_changed', 'concerns_changed')
     changed_ids = [s['id'] for s in statements if any(s[key] for key in change_keys)]
+    transitions = []
+    for old in VERDICTS:
+        for new in VERDICTS:
+            ids = [s['id'] for s in statements if (s['left_verdict'], s['right_verdict']) == (old, new)]
+            transitions.append({'left_verdict': old, 'right_verdict': new,
+                                'count': len(ids), 'statement_ids': ids})
     return {'version': 'MEETING_ARCHIVE_COMPARISON_1', 'research_only': True,
             'orders_enabled': False, 'left': describe(left), 'right': describe(right),
             'market_comparison': market,
@@ -119,6 +125,8 @@ def compare_archives(left, right, *, now=None):
             'model_changed': a['model'] != b['model'],
             'execution_mode_changed': a['execution_mode'] != b['execution_mode'],
             'final_verdict_changed': a['final_verdict'] != b['final_verdict'],
+            'verdict_transitions': transitions,
+            'verdict_count_delta': {key: b['verdict_counts'][key]-a['verdict_counts'][key] for key in VERDICTS},
             'change_summary': {'changed_statement_count': len(changed_ids),
                                'changed_statement_ids': changed_ids,
                                **{key: sum(s[key] for s in statements) for key in change_keys}},
@@ -142,6 +150,19 @@ def render_report(left, right=None, *, now=None):
     rows.extend([[verdict+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
     body = table(['항목', '왼쪽 기록', '오른쪽 기록'] if comparison else ['항목', '저장 기록'], rows)
     if comparison:
+        verdict_labels = {'OBSERVATION_ONLY': '관측 요약', 'REVIEW_NEEDED': '추가 검토 필요', 'INSUFFICIENT_DATA': '자료 부족'}
+        transitions = comparison['verdict_transitions']
+        body += '<h2>판단 전환표</h2><p>행은 왼쪽 기록의 판단, 열은 오른쪽 기록의 판단입니다. 같은 판단을 유지한 발언도 포함하며 총 7개입니다. 전환이나 건수 감소가 정확도·수익성 향상을 뜻하지 않습니다.</p>'+table(
+            ['왼쪽 → 오른쪽', *[verdict_labels[key] for key in VERDICTS]],
+            [[verdict_labels[old], *[next(t['count'] for t in transitions if t['left_verdict'] == old and t['right_verdict'] == new) for new in VERDICTS]] for old in VERDICTS])
+        body += table(['검토 상태', '발언 수 증감 (오른쪽 − 왼쪽)'],
+                      [[verdict_labels[key], comparison['verdict_count_delta'][key]] for key in VERDICTS])
+        switched = [t for t in transitions if t['count'] and t['left_verdict'] != t['right_verdict']]
+        if switched:
+            body += table(['판단 전환', '건수', '발언 ID'],
+                          [[verdict_labels[t['left_verdict']]+' → '+verdict_labels[t['right_verdict']], t['count'], ', '.join(t['statement_ids'])] for t in switched])
+        else:
+            body += '<p>판단 전환 없음 · 요약이나 우려 내용의 변경 여부는 별도 표에서 확인하세요.</p>'
         summary = comparison['change_summary']
         body += '<h2>변경된 발언 요약</h2>'+table(['항목', '건수'], [
             ['변경된 발언 (전체 7개)', summary['changed_statement_count']],

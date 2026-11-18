@@ -56,6 +56,13 @@ report shows a changed-statements summary before the existing complete seven-row
 table, and explicitly reports when no statements changed. This is a navigation
 aid, not an accuracy or quality score; original prose is still omitted.
 
+`verdict_transitions` contains all nine left/right verdict pairs, their counts
+and ordered statement IDs, including unchanged verdicts. Counts sum to seven.
+`verdict_count_delta` is right minus left for each verdict; its total is zero.
+The HTML transition table uses left verdicts as rows and right verdicts as
+columns, with a separate list of changed-verdict IDs. It does not rank transitions
+as improvements or treat fewer review/data-gap labels as verified better results.
+
 Historical archives do not expire for comparison. Structure, UTC time ordering,
 seven role/phase identities, counts, field allowlists and no-order flags must
 still match the archive schema. Duplicate JSON keys, oversized files (over
