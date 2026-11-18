@@ -48,6 +48,14 @@ is earlier. Input files are never automatically reordered. A later completion
 can use earlier source data, so the HTML report shows both time relations. These
 timestamps do not establish authenticity, synchronized clocks or data quality.
 
+`change_summary` lists changed statement IDs in M01–M07 order and counts distinct
+changed statements plus verdict/summary/concern changes. A statement changed in
+multiple ways counts once in `changed_statement_count` but in each applicable
+type count. Metadata-only changes do not invent statement changes. The HTML
+report shows a changed-statements summary before the existing complete seven-row
+table, and explicitly reports when no statements changed. This is a navigation
+aid, not an accuracy or quality score; original prose is still omitted.
+
 Historical archives do not expire for comparison. Structure, UTC time ordering,
 seven role/phase identities, counts, field allowlists and no-order flags must
 still match the archive schema. Duplicate JSON keys, oversized files (over

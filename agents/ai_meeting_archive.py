@@ -102,6 +102,14 @@ def compare_archives(left, right, *, now=None):
         delta = (timestamp(b[key])-timestamp(a[key])).total_seconds()
         return {'order': 'RIGHT_LATER' if delta > 0 else 'RIGHT_EARLIER' if delta < 0 else 'SAME_TIME',
                 'right_minus_left_seconds': delta}
+    statements = [{'id': x['id'], 'agent': x['agent'], 'phase': x['phase'],
+                   'left_verdict': x['verdict'], 'right_verdict': y['verdict'],
+                   'verdict_changed': x['verdict'] != y['verdict'],
+                   'summary_changed': x['summary'] != y['summary'],
+                   'concerns_changed': x['concerns'] != y['concerns']}
+                  for x, y in zip(a['transcript'], b['transcript'])]
+    change_keys = ('verdict_changed', 'summary_changed', 'concerns_changed')
+    changed_ids = [s['id'] for s in statements if any(s[key] for key in change_keys)]
     return {'version': 'MEETING_ARCHIVE_COMPARISON_1', 'research_only': True,
             'orders_enabled': False, 'left': describe(left), 'right': describe(right),
             'market_comparison': market,
@@ -111,12 +119,10 @@ def compare_archives(left, right, *, now=None):
             'model_changed': a['model'] != b['model'],
             'execution_mode_changed': a['execution_mode'] != b['execution_mode'],
             'final_verdict_changed': a['final_verdict'] != b['final_verdict'],
-            'statements': [{'id': x['id'], 'agent': x['agent'], 'phase': x['phase'],
-                'left_verdict': x['verdict'], 'right_verdict': y['verdict'],
-                'verdict_changed': x['verdict'] != y['verdict'],
-                'summary_changed': x['summary'] != y['summary'],
-                'concerns_changed': x['concerns'] != y['concerns']}
-                for x, y in zip(a['transcript'], b['transcript'])]}
+            'change_summary': {'changed_statement_count': len(changed_ids),
+                               'changed_statement_ids': changed_ids,
+                               **{key: sum(s[key] for s in statements) for key in change_keys}},
+            'statements': statements}
 
 
 def render_report(left, right=None, *, now=None):
@@ -136,6 +142,20 @@ def render_report(left, right=None, *, now=None):
     rows.extend([[verdict+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
     body = table(['항목', '왼쪽 기록', '오른쪽 기록'] if comparison else ['항목', '저장 기록'], rows)
     if comparison:
+        summary = comparison['change_summary']
+        body += '<h2>변경된 발언 요약</h2>'+table(['항목', '건수'], [
+            ['변경된 발언 (전체 7개)', summary['changed_statement_count']],
+            ['판단 변경', summary['verdict_changed']], ['요약 변경', summary['summary_changed']],
+            ['우려 변경', summary['concerns_changed']]])
+        body += '<p>변경 발언 수는 중복 없이 집계합니다. 유형별 건수는 한 발언이 여러 유형에 포함될 수 있습니다. 모델·출처·시간 변경은 발언 변경 건수와 별도로 표시됩니다.</p>'
+        changed = [s for s in comparison['statements'] if s['id'] in summary['changed_statement_ids']]
+        if changed:
+            body += table(['변경 ID', '역할', '단계', '변경 항목'], [
+                [s['id'], s['agent'], s['phase'], ' · '.join(label for key, label in
+                 [('verdict_changed', '판단'), ('summary_changed', '요약'), ('concerns_changed', '우려')] if s[key])]
+                for s in changed])
+        else:
+            body += '<p>변경된 발언 없음 · 메타데이터와 최종 상태 비교는 아래에 별도로 표시됩니다.</p>'
         order_labels = {'RIGHT_LATER': '오른쪽 기록이 나중', 'RIGHT_EARLIER': '오른쪽 기록이 먼저', 'SAME_TIME': '동일 시각'}
         body += '<h2>기록 시각 관계</h2><p>입력 순서를 유지하며 자동으로 재정렬하지 않습니다. 시간 차이는 오른쪽 − 왼쪽(초)입니다. 원본 데이터 시각과 회의 완료 시각을 따로 비교합니다.</p>'+table(
             ['비교 기준', '선후 관계', '오른쪽 − 왼쪽(초)'],
