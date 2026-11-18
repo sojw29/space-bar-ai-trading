@@ -327,6 +327,15 @@ async function smoke(){
   assert.ok(exportedMeeting.includes(executionId));
   assert.equal((exportedMeeting.match(/\n\[[1-7]\]/g)||[]).length,7);
   for(const statement of reviewFixture.transcript)assert.ok(exportedMeeting.includes(statement.summary));
+  const jsonDownload=identityPage.waitForEvent("download");
+  await identityPage.getByRole("button",{name:"전체 회의 JSON 저장",exact:true}).click();
+  const downloadedJson=await jsonDownload;
+  assert.match(downloadedJson.suggestedFilename(),/[.]json$/);
+  const archive=JSON.parse(await readFile(await downloadedJson.path(),"utf8"));
+  assert.equal(archive.version,"SPACEBAR_MEETING_ARCHIVE_1");assert.equal(archive.orders_enabled,false);
+  assert.equal(archive.record.workflow_execution_id,executionId);assert.equal(archive.record.transcript.length,7);
+  assert.equal(archive.record.verdict_counts.REVIEW_NEEDED,1);assert.equal(archive.record.execution_mode,"OFFLINE_FIXTURE");
+  for(let i=0;i<7;i++)assert.equal(archive.record.transcript[i].summary,reviewFixture.transcript[i].summary);
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),wholeCounts);
   assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
@@ -506,6 +515,7 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-export-text").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-export-json").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-conclusion").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);
