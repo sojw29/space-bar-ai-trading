@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from ai_meeting_archive import compare_archives, read_archive, validate_archive, PLAN, MAX_BYTES
+from ai_meeting_archive import compare_archives, read_archive, validate_archive, render_report, PLAN, MAX_BYTES
 
 NOW = datetime(2026, 11, 18, 12, tzinfo=timezone.utc)
 
@@ -28,6 +28,27 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_html_report_escapes_metadata_and_preserves_provenance_and_changes(self):
+        left, right = archive(), archive()
+        right['record']['model'] = '<script>alert("model")</script>'
+        right['record']['transcript'][0]['summary'] = 'changed private statement'
+        report = render_report(left, right, now=NOW)
+        self.assertIn('&lt;script&gt;', report)
+        self.assertNotIn('<script>', report)
+        self.assertIn('default-src', report)
+        self.assertIn('OFFLINE_FIXTURE', report)
+        self.assertIn('UNKNOWN', report)
+        self.assertIn('M07', report)
+        self.assertIn('변경', report)
+        self.assertNotIn('private statement', report)
+        self.assertNotIn('fetch(', report)
+        self.assertNotIn('src=', report)
+        self.assertIn('저장 기록', render_report(left, now=NOW))
+        invalid = archive()
+        invalid['orders_enabled'] = True
+        with self.assertRaises(ValueError):
+            render_report(invalid, right, now=NOW)
+
     def test_historical_record_and_null_metadata_are_supported(self):
         value = archive()
         self.assertEqual(validate_archive(value, now=NOW), value)
@@ -107,6 +128,13 @@ class MeetingArchiveTests(unittest.TestCase):
                 self.assertEqual(output['version'], version)
                 self.assertIs(output['orders_enabled'], False)
                 self.assertNotIn('private statement', result.stdout)
+            self.assertEqual((left.read_bytes(), right.read_bytes()), originals)
+            for inputs in ([left], [left, right]):
+                html_result = subprocess.run([*command, *map(str, inputs), '--format', 'html'],
+                                             cwd=folder, capture_output=True, text=True, timeout=5)
+                self.assertEqual(html_result.returncode, 0, html_result.stderr)
+                self.assertTrue(html_result.stdout.startswith('<!doctype html>'))
+                self.assertNotIn('private statement', html_result.stdout)
             self.assertEqual((left.read_bytes(), right.read_bytes()), originals)
             right.write_text('private broken record')
             failed = subprocess.run([*command, str(left), str(right)], cwd=folder,

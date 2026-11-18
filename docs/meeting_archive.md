@@ -25,9 +25,16 @@ browser archive import, automatic synchronization or meeting execution.
 ```sh
 python agents/ai_meeting_archive.py saved-meeting.json
 python agents/ai_meeting_archive.py earlier.json later.json
+python agents/ai_meeting_archive.py earlier.json later.json --format html
 ```
 
-Both commands read local files only and print JSON to stdout. Inspection reports
+All commands read local files only. The default prints JSON to stdout;
+`--format html` prints a standalone Korean report with metadata and change tables.
+It contains no JavaScript or remote assets, escapes archive text and works for
+one-record inspection or two-record comparison. Save the stdout HTML to a new
+report file (never redirect into an input archive), then open it in a browser.
+This CLI does not itself write a report file or add dashboard controls.
+Inspection reports
 record metadata and verdict counts. Comparison reports left/right provenance,
 market-source compatibility, final verdict changes and separate verdict, summary
 and concern changes for each M01–M07 statement. Left and right follow argument
