@@ -257,7 +257,7 @@ for(const id of ['ai-meeting-show-conclusion','ai-meeting-source-age','ai-meetin
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
-for(const id of ['ai-meeting-export-text','ai-meeting-export-status'])elements[id]=makeElement();
+for(const id of ['ai-meeting-export-text','ai-meeting-export-status','ai-meeting-export-json'])elements[id]=makeElement();
 let requested=null,failRequest=false,requestCount=0,holdResponse=null;
 const documentEvents={},windowEvents={};
 const panelEvents=[];
@@ -373,6 +373,7 @@ setImmediate(async()=>{
   now=beforeExpiry;document.activeElement=null;await elements['ai-meeting-refresh'].events.click();
   const beforeUnfocusedPoll=requestCount;callbacks[1]();await new Promise(setImmediate);assert.equal(requestCount,beforeUnfocusedPoll+1);
   const verdictView=elements['ai-meeting-verdict-filter'],cleanRecord=JSON.parse(JSON.stringify(data.payload));
+  data.payload.private_extra='must-not-export';data.payload.transcript[0].private_extra='must-not-export';
   data.payload.transcript[2].verdict='REVIEW_NEEDED';data.payload.final_verdict='REVIEW_NEEDED';
   await elements['ai-meeting-refresh'].events.click();assert.equal(allRows.children.length,7);
   const riskSummary=elements['ai-meeting-decision'].textContent,riskReads=requestCount;
@@ -414,6 +415,17 @@ setImmediate(async()=>{
   exportFailure=true;exportButton.events.click();assert.equal(downloads.length,1);
   assert.match(elements['ai-meeting-export-status'].textContent,/시작하지 못/);assert.ok(!elements['ai-meeting-export-status'].textContent.includes('private'));
   exportFailure=false;
+  const jsonButton=elements['ai-meeting-export-json'];assert.equal(jsonButton.disabled,false);
+  jsonButton.events.click();assert.equal(downloads.length,2);assert.equal(requestCount,riskReads);
+  const archiveText=await exportBlobs.get(downloads[1].href).text(),archive=JSON.parse(archiveText);
+  assert.match(downloads[1].filename,/[.]json$/);assert.equal(archive.version,'SPACEBAR_MEETING_ARCHIVE_1');
+  assert.equal(archive.orders_enabled,false);assert.equal(archive.trade_authorization,'DENIED');assert.equal(archive.process_liveness_verified,false);
+  assert.equal(archive.record.workflow_execution_id,data.payload.workflow_execution_id??null);
+  assert.equal(archive.record.transcript.length,7);assert.equal(archive.record.verdict_counts.REVIEW_NEEDED,1);
+  assert.equal(archive.record.execution_mode,'OFFLINE_FIXTURE');assert.equal(archive.record.model_inference_performed,false);
+  assert.ok(!archiveText.includes('must-not-export'));assert.ok(Number.isFinite(Date.parse(archive.archived_at_utc)));
+  for(let i=0;i<7;i++){assert.equal(archive.record.transcript[i].summary,data.payload.transcript[i].summary);assert.equal(archive.record.transcript[i].id,'M'+String(i+1).padStart(2,'0'));}
+  exportCleanup.shift()();assert.equal(exportBlobs.size,0);
 
   viewReset.events.click();assert.equal(verdictView.value,'ALL');assert.equal(allRows.children.filter(row=>!row.hidden).length,7);
   data.payload.transcript[0].verdict='INSUFFICIENT_DATA';data.payload.final_verdict='INSUFFICIENT_DATA';
@@ -468,7 +480,7 @@ setImmediate(async()=>{
   // Every interactive record view expires synchronously, without a timer tick.
   const actionClock=now;
   for(const clockChange of ['expired','rollback']){
-   for(const action of ['statement','timeline','conclusion','agent','phase','verdict','search','reset','review','conclusionShortcut','export']){
+   for(const action of ['statement','timeline','conclusion','agent','phase','verdict','search','reset','review','conclusionShortcut','export','exportJson']){
     data.payload.transcript[2].verdict='REVIEW_NEEDED';data.payload.final_verdict='REVIEW_NEEDED';
     await elements['ai-meeting-refresh'].events.click();
     agentView.value='ATLAS';agentView.events.change();
@@ -485,7 +497,8 @@ setImmediate(async()=>{
      reset:()=>elements['ai-meeting-view-reset'].events.click(),
      review:()=>elements['ai-meeting-show-review'].events.click(),
      conclusionShortcut:()=>elements['ai-meeting-show-conclusion'].events.click(),
-     export:()=>elements['ai-meeting-export-text'].events.click()
+     export:()=>elements['ai-meeting-export-text'].events.click(),
+     exportJson:()=>elements['ai-meeting-export-json'].events.click()
     };
     actions[action]();
     assert.equal(elements['ai-meeting-rows'].children.length,0,clockChange+':'+action);
@@ -493,6 +506,7 @@ setImmediate(async()=>{
     assert.equal(elements['ai-meeting-decision'].hidden,true,action);
     assert.equal(elements['ai-meeting-show-conclusion'].disabled,true,action);
     assert.equal(elements['ai-meeting-export-text'].disabled,true,action);
+    assert.equal(elements['ai-meeting-export-json'].disabled,true,action);
     assert.equal(elements['ai-meeting-export-status'].textContent,'',action);
     assert.equal(currentTimeline.children.length,0,action);
     assert.equal(requestCount,beforeActionReads,'expiry action must not fetch');

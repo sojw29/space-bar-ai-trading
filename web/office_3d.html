@@ -2021,6 +2021,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <p id="ai-meeting-verdict-counts" role="note" aria-label="전체 회의 검토 상태별 발언 수" style="padding:8px;background:#152941" hidden></p>
 <div id="ai-meeting-review-shortcuts" hidden>
 <button id="ai-meeting-export-text" type="button" style="padding:7px;margin:4px 0" disabled>전체 회의 TXT 저장</button>
+<button id="ai-meeting-export-json" type="button" style="padding:7px;margin:4px 0" disabled>전체 회의 JSON 저장</button>
 <p id="ai-meeting-export-status" role="status" aria-live="polite"></p>
 <button id="ai-meeting-show-conclusion" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-verdict-counts ai-meeting-agent-count" style="padding:7px;margin:4px 0" disabled>COMMANDER 결론만 보기</button>
 <button id="ai-meeting-show-review" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-verdict-counts ai-meeting-agent-count" style="padding:7px;margin:4px 0" disabled>추가 검토 발언 보기</button>
@@ -2097,18 +2098,25 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const reviewShortcuts=document.getElementById("ai-meeting-review-shortcuts"),showReview=document.getElementById("ai-meeting-show-review"),showMissing=document.getElementById("ai-meeting-show-missing");
  const showConclusion=document.getElementById("ai-meeting-show-conclusion");
  const exportText=document.getElementById("ai-meeting-export-text"),exportStatus=document.getElementById("ai-meeting-export-status");
+ const exportJson=document.getElementById("ai-meeting-export-json");
  let exportRecord=null;
- exportText?.addEventListener("click",()=>{
-  if(exportText.disabled||!canUseRecord()||exportRecord===null)return;
+ function downloadRecord(format){
+  const button=format==="JSON"?exportJson:exportText;
+  if(!button||button.disabled||!canUseRecord()||exportRecord===null)return;
   let url=null,anchor=null;
   try{
-   url=URL.createObjectURL(new Blob([exportRecord.text],{type:"text/plain;charset=utf-8"}));
-   anchor=document.createElement("a");anchor.href=url;anchor.download=exportRecord.filename;
+   const content=format==="JSON"?JSON.stringify({version:"SPACEBAR_MEETING_ARCHIVE_1",archived_at_utc:new Date().toISOString(),
+    research_only:true,orders_enabled:false,trade_authorization:"DENIED",process_liveness_verified:false,
+    record:exportRecord.record},null,2)+"\n":exportRecord.text;
+   url=URL.createObjectURL(new Blob([content],{type:format==="JSON"?"application/json;charset=utf-8":"text/plain;charset=utf-8"}));
+   anchor=document.createElement("a");anchor.href=url;anchor.download=format==="JSON"?exportRecord.filename.replace(/[.]txt$/,".json"):exportRecord.filename;
    document.body.appendChild(anchor);anchor.click();
-   if(exportStatus)exportStatus.textContent="전체 회의 TXT 저장을 요청했습니다 · 다운로드 완료 여부는 브라우저에서 확인해 주세요.";
-  }catch(_){if(exportStatus)exportStatus.textContent="TXT 저장을 시작하지 못했습니다 · 브라우저의 다운로드 지원과 설정을 확인해 주세요.";}
+   if(exportStatus)exportStatus.textContent="전체 회의 "+format+" 저장을 요청했습니다 · 다운로드 완료 여부는 브라우저에서 확인해 주세요.";
+  }catch(_){if(exportStatus)exportStatus.textContent=format+" 저장을 시작하지 못했습니다 · 브라우저의 다운로드 지원과 설정을 확인해 주세요.";}
   finally{anchor?.remove();if(url!==null)setTimeout(()=>URL.revokeObjectURL(url),1000);}
- });
+ }
+ exportText?.addEventListener("click",()=>downloadRecord("TXT"));
+ exportJson?.addEventListener("click",()=>downloadRecord("JSON"));
  const linked=document.getElementById("ai-meeting-linked");
  const timeline=document.getElementById("ai-meeting-timeline");
  const shortcut=document.getElementById("ai-meeting-shortcut");
@@ -2121,6 +2129,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const resetView=document.getElementById("ai-meeting-view-reset");
  let renderedStatements=[],validatedViewKey=null;
  function clearAgentView(){
+  if(exportJson)exportJson.disabled=true;
   renderedStatements=[];validatedViewKey=null;
   if(resetView)resetView.disabled=true;
   if(agentControls)agentControls.hidden=true;
@@ -2525,6 +2534,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "필터·검색과 무관한 전체 7개 발언",...d.transcript.map((t,i)=>"\n["+(i+1)+"] "+t.agent+" · "+t.phase+" · "+labels[t.verdict]+"\n"+t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):""))
   ].join("\n")+"\n"};
   if(exportText)exportText.disabled=false;
+  exportRecord.record={execution_mode:d.execution_mode,model_inference_performed:d.model_inference_performed,
+   workflow_execution_id:d.workflow_execution_id??null,market_source:d.market_source??null,model:d.model,
+   source_generated_at_utc:new Date(source).toISOString(),started_at_utc:new Date(started).toISOString(),generated_at_utc:new Date(finished).toISOString(),
+   final_verdict:d.final_verdict,verdict_counts:{...counts},
+   transcript:d.transcript.map((t,i)=>({id:"M"+String(i+1).padStart(2,"0"),agent:t.agent,phase:t.phase,verdict:t.verdict,summary:t.summary,concerns:[...t.concerns]}))};
+  if(exportJson)exportJson.disabled=false;
   if(showConclusion)showConclusion.disabled=false;
   if(showReview)showReview.disabled=counts.REVIEW_NEEDED===0;
   if(showMissing)showMissing.disabled=counts.INSUFFICIENT_DATA===0;
