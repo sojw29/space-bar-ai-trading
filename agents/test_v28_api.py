@@ -242,9 +242,11 @@ class LocalApiTests(unittest.TestCase):
         harness = r"""
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const data=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
+const downloads=[],exportBlobs=new Map(),exportCleanup=[];let exportFailure=false;
 const makeElement=()=>({
  children:[],disabled:false,hidden:false,style:{},attrs:{},events:{},dataset:{},
  focus(){this.focused=true},scrollIntoView(){this.scrolled=true},
+ click(){downloads.push({href:this.href,filename:this.download})},remove(){this.removed=true},
  addEventListener(name,fn){this.events[name]=fn},
  setAttribute(name,value){this.attrs[name]=value},
  replaceChildren(...items){this.children=items},
@@ -255,19 +257,21 @@ for(const id of ['ai-meeting-show-conclusion','ai-meeting-source-age','ai-meetin
  'ai-meeting-status','ai-meeting-rows','ai-meeting-refresh',
  'ai-meeting-timeline','ai-meeting-linked','ai-meeting-decision','ai-meeting-connection-label'])
  elements[id]=makeElement();
+for(const id of ['ai-meeting-export-text','ai-meeting-export-status'])elements[id]=makeElement();
 let requested=null,failRequest=false,requestCount=0,holdResponse=null;
 const documentEvents={},windowEvents={};
 const panelEvents=[];
 class ViewEvent{constructor(type,options){this.type=type;this.detail=options.detail}}
 const window={addEventListener:(name,fn)=>{windowEvents[name]=fn}};
 const document={dispatchEvent:event=>{panelEvents.push(event);return true},hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{documentEvents[name]=fn},
- createElement:makeElement};
+ createElement:makeElement,body:{appendChild(){}}};
 const callbacks=[],timeouts=new Map();
 let timeoutId=0,timeoutPhase=null,bodyFault=null,httpStatus=null,networkFault=false;
 let now=Date.now();
 class Clock extends Date{static now(){return now}}
-vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,CustomEvent:ViewEvent,
- setTimeout:(fn,ms)=>{assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
+vm.runInNewContext(data.script,{document,window,Date:Clock,AbortController,CustomEvent:ViewEvent,Blob,
+ URL:{createObjectURL:blob=>{if(exportFailure)throw Error('private browser error');const url='blob:fixture-'+exportBlobs.size;exportBlobs.set(url,blob);return url},revokeObjectURL:url=>exportBlobs.delete(url)},
+ setTimeout:(fn,ms)=>{if(ms===1000){exportCleanup.push(fn);return 0}assert.equal(ms,5000);const id=++timeoutId;timeouts.set(id,fn);return id},
  clearTimeout:id=>timeouts.delete(id),setInterval:fn=>callbacks.push(fn),
  fetch:async (url,options)=>{requested=url;requestCount++;
  if(networkFault)throw new TypeError("Failed to fetch internal-host.example:1234");
@@ -397,6 +401,20 @@ setImmediate(async()=>{
   assert.equal(phaseView.focused,true);assert.equal(requestCount,riskReads);
   assert.equal(elements['ai-meeting-decision'].textContent,riskSummary);assert.equal(countSummary.textContent,allVerdictCounts);
 
+  const exportButton=elements['ai-meeting-export-text'];assert.equal(exportButton.disabled,false);
+  exportButton.events.click();assert.equal(downloads.length,1);assert.equal(requestCount,riskReads);
+  const exported=await exportBlobs.get(downloads[0].href).text();
+  assert.match(downloads[0].filename,/^spacebar-meeting-.*[.]txt$/);
+  assert.match(exported,/오프라인 테스트 기록 · 실제 AI 실행 아님/);assert.match(exported,/거래 승인 없음/);
+  assert.match(exported,/추가 검토 필요 1개/);assert.match(exported,/전체 7개 발언/);
+  for(const statement of data.payload.transcript){assert.ok(exported.includes(statement.summary));for(const concern of statement.concerns)assert.ok(exported.includes(concern));}
+  assert.ok(exported.includes('실행 ID: '+(data.payload.workflow_execution_id??'미기록')));
+  assert.equal((exported.match(/\n\[[1-7]\]/g)||[]).length,7);
+  exportCleanup.shift()();assert.equal(exportBlobs.size,0);
+  exportFailure=true;exportButton.events.click();assert.equal(downloads.length,1);
+  assert.match(elements['ai-meeting-export-status'].textContent,/시작하지 못/);assert.ok(!elements['ai-meeting-export-status'].textContent.includes('private'));
+  exportFailure=false;
+
   viewReset.events.click();assert.equal(verdictView.value,'ALL');assert.equal(allRows.children.filter(row=>!row.hidden).length,7);
   data.payload.transcript[0].verdict='INSUFFICIENT_DATA';data.payload.final_verdict='INSUFFICIENT_DATA';
   await elements['ai-meeting-refresh'].events.click();verdictView.value='INSUFFICIENT_DATA';verdictView.events.change();
@@ -450,7 +468,7 @@ setImmediate(async()=>{
   // Every interactive record view expires synchronously, without a timer tick.
   const actionClock=now;
   for(const clockChange of ['expired','rollback']){
-   for(const action of ['statement','timeline','conclusion','agent','phase','verdict','search','reset','review','conclusionShortcut']){
+   for(const action of ['statement','timeline','conclusion','agent','phase','verdict','search','reset','review','conclusionShortcut','export']){
     data.payload.transcript[2].verdict='REVIEW_NEEDED';data.payload.final_verdict='REVIEW_NEEDED';
     await elements['ai-meeting-refresh'].events.click();
     agentView.value='ATLAS';agentView.events.change();
@@ -466,13 +484,16 @@ setImmediate(async()=>{
      verdict:()=>elements['ai-meeting-verdict-filter'].events.change(),search:()=>searchView.events.input(),
      reset:()=>elements['ai-meeting-view-reset'].events.click(),
      review:()=>elements['ai-meeting-show-review'].events.click(),
-     conclusionShortcut:()=>elements['ai-meeting-show-conclusion'].events.click()
+     conclusionShortcut:()=>elements['ai-meeting-show-conclusion'].events.click(),
+     export:()=>elements['ai-meeting-export-text'].events.click()
     };
     actions[action]();
     assert.equal(elements['ai-meeting-rows'].children.length,0,clockChange+':'+action);
     assert.equal(elements['ai-meeting-linked'].hidden,true,action);
     assert.equal(elements['ai-meeting-decision'].hidden,true,action);
     assert.equal(elements['ai-meeting-show-conclusion'].disabled,true,action);
+    assert.equal(elements['ai-meeting-export-text'].disabled,true,action);
+    assert.equal(elements['ai-meeting-export-status'].textContent,'',action);
     assert.equal(currentTimeline.children.length,0,action);
     assert.equal(requestCount,beforeActionReads,'expiry action must not fetch');
     now=actionClock;
