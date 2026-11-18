@@ -98,9 +98,17 @@ def compare_archives(left, right, *, now=None):
     a, b = left['record'], right['record']
     market = ('UNKNOWN' if a['market_source'] is None or b['market_source'] is None else
               'SAME' if a['market_source'] == b['market_source'] else 'DIFFERENT')
+    def relation(key):
+        delta = (timestamp(b[key])-timestamp(a[key])).total_seconds()
+        return {'order': 'RIGHT_LATER' if delta > 0 else 'RIGHT_EARLIER' if delta < 0 else 'SAME_TIME',
+                'right_minus_left_seconds': delta}
     return {'version': 'MEETING_ARCHIVE_COMPARISON_1', 'research_only': True,
             'orders_enabled': False, 'left': describe(left), 'right': describe(right),
             'market_comparison': market,
+            'time_relation': {'basis': 'RECORDED_UTC_TIMESTAMPS',
+                              'source': relation('source_generated_at_utc'),
+                              'completion': relation('generated_at_utc')},
+            'model_changed': a['model'] != b['model'],
             'execution_mode_changed': a['execution_mode'] != b['execution_mode'],
             'final_verdict_changed': a['final_verdict'] != b['final_verdict'],
             'statements': [{'id': x['id'], 'agent': x['agent'], 'phase': x['phase'],
@@ -128,8 +136,15 @@ def render_report(left, right=None, *, now=None):
     rows.extend([[verdict+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
     body = table(['항목', '왼쪽 기록', '오른쪽 기록'] if comparison else ['항목', '저장 기록'], rows)
     if comparison:
+        order_labels = {'RIGHT_LATER': '오른쪽 기록이 나중', 'RIGHT_EARLIER': '오른쪽 기록이 먼저', 'SAME_TIME': '동일 시각'}
+        body += '<h2>기록 시각 관계</h2><p>입력 순서를 유지하며 자동으로 재정렬하지 않습니다. 시간 차이는 오른쪽 − 왼쪽(초)입니다. 원본 데이터 시각과 회의 완료 시각을 따로 비교합니다.</p>'+table(
+            ['비교 기준', '선후 관계', '오른쪽 − 왼쪽(초)'],
+            [[label, order_labels[comparison['time_relation'][key]['order']],
+              comparison['time_relation'][key]['right_minus_left_seconds']]
+             for label, key in [('원본 데이터 생성', 'source'), ('회의 완료', 'completion')]])
         body += '<h2>변경 요약</h2>'+table(['항목', '결과'], [
             ['시장 출처 비교', comparison['market_comparison']],
+            ['모델 변경', '변경' if comparison['model_changed'] else '동일'],
             ['실행 모드 변경', '변경' if comparison['execution_mode_changed'] else '동일'],
             ['최종 상태 변경', '변경' if comparison['final_verdict_changed'] else '동일']])
         body += '<h2>발언별 변경 여부</h2>'+table(
