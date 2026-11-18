@@ -316,6 +316,19 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-decision").textContent(),reviewDecision);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),wholeCounts);
+
+  const meetingDownload=identityPage.waitForEvent("download");
+  await identityPage.getByRole("button",{name:"전체 회의 TXT 저장",exact:true}).click();
+  const downloaded=await meetingDownload;
+  assert.match(downloaded.suggestedFilename(),/^spacebar-meeting-.*[.]txt$/);
+  const exportedMeeting=await readFile(await downloaded.path(),"utf8");
+  assert.match(exportedMeeting,/오프라인 테스트 기록 · 실제 AI 실행 아님/);
+  assert.match(exportedMeeting,/추가 검토 필요 1개/);
+  assert.ok(exportedMeeting.includes(executionId));
+  assert.equal((exportedMeeting.match(/\n\[[1-7]\]/g)||[]).length,7);
+  for(const statement of reviewFixture.transcript)assert.ok(exportedMeeting.includes(statement.summary));
+  assert.equal(await identityPage.locator("#ai-meeting-rows p:visible").count(),0);
+  assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").textContent(),wholeCounts);
   assert.equal(await identityPage.locator("#ai-meeting-show-missing").isEnabled(),false);
   await identityPage.getByLabel("발언·우려 검색",{exact:true}).fill("hidden-by-search");
   await identityPage.getByRole("button",{name:"추가 검토 발언 보기",exact:true}).click();
@@ -492,6 +505,7 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-view-reset").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),false);
+  assert.equal(await identityPage.locator("#ai-meeting-export-text").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-show-conclusion").isEnabled(),false);
   assert.equal(await identityPage.locator("#ai-meeting-decision").isVisible(),false);
   assert.equal(await identityPage.locator("#ai-meeting-verdict-counts").isVisible(),false);

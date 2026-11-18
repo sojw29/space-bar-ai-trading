@@ -2020,6 +2020,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <div id="ai-meeting-timeline" aria-label="회의 판단 타임라인" hidden></div>
 <p id="ai-meeting-verdict-counts" role="note" aria-label="전체 회의 검토 상태별 발언 수" style="padding:8px;background:#152941" hidden></p>
 <div id="ai-meeting-review-shortcuts" hidden>
+<button id="ai-meeting-export-text" type="button" style="padding:7px;margin:4px 0" disabled>전체 회의 TXT 저장</button>
+<p id="ai-meeting-export-status" role="status" aria-live="polite"></p>
 <button id="ai-meeting-show-conclusion" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-verdict-counts ai-meeting-agent-count" style="padding:7px;margin:4px 0" disabled>COMMANDER 결론만 보기</button>
 <button id="ai-meeting-show-review" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-verdict-counts ai-meeting-agent-count" style="padding:7px;margin:4px 0" disabled>추가 검토 발언 보기</button>
 <button id="ai-meeting-show-missing" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-verdict-counts ai-meeting-agent-count" style="padding:7px;margin:4px 0" disabled>자료 부족 발언 보기</button>
@@ -2094,6 +2096,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const verdictCounts=document.getElementById("ai-meeting-verdict-counts");
  const reviewShortcuts=document.getElementById("ai-meeting-review-shortcuts"),showReview=document.getElementById("ai-meeting-show-review"),showMissing=document.getElementById("ai-meeting-show-missing");
  const showConclusion=document.getElementById("ai-meeting-show-conclusion");
+ const exportText=document.getElementById("ai-meeting-export-text"),exportStatus=document.getElementById("ai-meeting-export-status");
+ let exportRecord=null;
+ exportText?.addEventListener("click",()=>{
+  if(exportText.disabled||!canUseRecord()||exportRecord===null)return;
+  let url=null,anchor=null;
+  try{
+   url=URL.createObjectURL(new Blob([exportRecord.text],{type:"text/plain;charset=utf-8"}));
+   anchor=document.createElement("a");anchor.href=url;anchor.download=exportRecord.filename;
+   document.body.appendChild(anchor);anchor.click();
+   if(exportStatus)exportStatus.textContent="전체 회의 TXT 저장을 요청했습니다 · 다운로드 완료 여부는 브라우저에서 확인해 주세요.";
+  }catch(_){if(exportStatus)exportStatus.textContent="TXT 저장을 시작하지 못했습니다 · 브라우저의 다운로드 지원과 설정을 확인해 주세요.";}
+  finally{anchor?.remove();if(url!==null)setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ });
  const linked=document.getElementById("ai-meeting-linked");
  const timeline=document.getElementById("ai-meeting-timeline");
  const shortcut=document.getElementById("ai-meeting-shortcut");
@@ -2196,7 +2211,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
  function clearTimeline(){if(timeline){timeline.replaceChildren();timeline.hidden=true;}}
  function clearLinked(){if(linked){linked.textContent="";linked.hidden=true;}}
- function clearDecision(){if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;if(showConclusion)showConclusion.disabled=true;}
+ function clearDecision(){exportRecord=null;if(exportText)exportText.disabled=true;if(exportStatus)exportStatus.textContent="";if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;if(showConclusion)showConclusion.disabled=true;}
  function setConnection(state,reason,provenance=""){
   if(state!=="validated")verifiedRecordId=null;
   if(typeof CustomEvent==="function")document.dispatchEvent(new CustomEvent("spacebar:transcript-view",{detail:{state,execution_id:verifiedRecordId,provenance:state==="validated"?provenance:null}}));
@@ -2501,6 +2516,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    verdictCounts.hidden=false;
   }
   if(reviewShortcuts)reviewShortcuts.hidden=false;
+  exportRecord={filename:"spacebar-meeting-"+new Date(finished).toISOString().replace(/[:.]/g,"-")+".txt",text:[
+   "SPACE BAR · 전체 회의 완료 기록",live?"모델 API 실행 완료 기록":"오프라인 테스트 기록 · 실제 AI 실행 아님",
+   "연구용 기록 · 거래 승인 없음 · 프로세스 생존 또는 현재 실행 확인 아님",
+   "실행 ID: "+(d.workflow_execution_id??"미기록"),"데이터 출처: "+marketLabel,
+   "원본 생성 UTC: "+new Date(source).toISOString(),"회의 완료 UTC: "+new Date(finished).toISOString(),
+   "모델: "+d.model,"최종 상태: "+labels[d.final_verdict],verdictCounts?.textContent??"",
+   "필터·검색과 무관한 전체 7개 발언",...d.transcript.map((t,i)=>"\n["+(i+1)+"] "+t.agent+" · "+t.phase+" · "+labels[t.verdict]+"\n"+t.summary+(t.concerns.length?"\n우려: "+t.concerns.join(" / "):""))
+  ].join("\n")+"\n"};
+  if(exportText)exportText.disabled=false;
   if(showConclusion)showConclusion.disabled=false;
   if(showReview)showReview.disabled=counts.REVIEW_NEEDED===0;
   if(showMissing)showMissing.disabled=counts.INSUFFICIENT_DATA===0;
