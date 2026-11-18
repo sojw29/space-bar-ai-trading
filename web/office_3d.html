@@ -92,6 +92,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 <ol id="meeting-progress-stages" aria-label="기록된 회의 실행 단계" style="flex-wrap:wrap;gap:6px;list-style:none;padding:0" hidden></ol>
 <progress id="meeting-progress-count" max="7" value="0" aria-label="기록된 검증 응답 수" style="width:100%;accent-color:#80c8e8" hidden></progress>
 <p id="meeting-progress-detail" style="white-space:pre-wrap"></p>
+<p id="meeting-progress-age" class="notice" aria-live="off" hidden></p>
 <p id="meeting-progress-retry" class="notice" role="status" aria-live="polite" hidden></p>
 <button id="meeting-progress-refresh" type="button" aria-describedby="meeting-progress-retry">진행 기록 다시 확인</button>
 <button id="meeting-progress-open-record" type="button" aria-controls="ai-meeting-panel" disabled>이 실행의 회의 기록 확인</button>
@@ -2525,6 +2526,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const status=document.getElementById("meeting-progress-status"),detail=document.getElementById("meeting-progress-detail"),button=document.getElementById("meeting-progress-refresh");
  const recordButton=document.getElementById("meeting-progress-open-record");
  const retryNote=document.getElementById("meeting-progress-retry");
+ const ageNote=document.getElementById("meeting-progress-age");
  const steps=document.getElementById("meeting-progress-stages"),countBar=document.getElementById("meeting-progress-count");
  const stages={INPUT:"입력 확인",PREPARATION:"회의 입력 준비",SETUP:"로컬 설정 점검",CONFIGURATION:"실행 설정",INFERENCE:"모델 응답 수집",PUBLICATION:"결과 저장",COMPLETED:"완료"};
  const labels={RUNNING:"기록된 진행 단계",READY_NO_MODEL_CALLS:"준비 점검 완료 · 모델 호출 없음",COMPLETED:"회의 실행 완료 기록",BLOCKED:"실행 중단 기록"};
@@ -2533,6 +2535,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function emitView(state,executionId=null){if(typeof CustomEvent==="function")document.dispatchEvent(new CustomEvent("spacebar:workflow-view",{detail:{state,execution_id:executionId}}));}
  function clear(message){
   if(retryNote){retryNote.textContent="";retryNote.hidden=true;}
+  if(ageNote){ageNote.textContent="";ageNote.title="";ageNote.hidden=true;}
   emitView("UNAVAILABLE");
   if(recordButton){recordButton.disabled=true;delete recordButton.dataset.executionId;}
   observed=null;detail.textContent="";status.textContent=message;status.setAttribute("data-state","unavailable");
@@ -2555,7 +2558,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(extended){countBar.value=v.validated_responses;countBar.setAttribute("aria-valuetext",v.validated_responses+"/7 · 기록된 검증 응답");}
   }
  }
- function expire(){if(observed!==null&&(Date.now()<observed||Date.now()-observed>300000))clear("진행 기록 만료 또는 시계 변경 · 다시 확인 필요");}
+ function expire(){
+  if(observed===null)return;
+  const elapsed=Date.now()-observed;
+  if(elapsed<0||elapsed>300000){clear("진행 기록 만료 또는 시계 변경 · 다시 확인 필요");return;}
+  if(ageNote){
+   const text="진행 기록 갱신 후 "+Math.floor(elapsed/1000)+"초 · 표시 유효시간 "+Math.ceil((300000-elapsed)/1000)+"초 남음";
+   if(ageNote.textContent!==text)ageNote.textContent=text;
+   ageNote.title="기록 시각 (UTC): "+new Date(observed).toISOString();ageNote.hidden=false;
+  }
+ }
  function showOffline(){clear("브라우저 네트워크 연결 없음 · 재연결 후 다시 확인합니다");status.title="브라우저가 오프라인 상태로 보고했습니다. 서버 상태를 확인한 결과는 아닙니다.";button.disabled=true;}
  async function load(){
   if(offline){showOffline();return;}
@@ -2601,6 +2613,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    renderOverview(v,extended);
    if(recordButton&&v.status==="COMPLETED"){recordButton.dataset.executionId=v.execution_id;recordButton.disabled=false;}
    observed=updated;status.textContent=labels[v.status]+" · "+stages[v.workflow_stage];status.setAttribute("data-state",v.status);
+   expire();if(observed===null)throw Error("진행 기록 만료 또는 시계 변경 · 다시 확인 필요");
    detail.textContent="실행 ID: "+v.execution_id+"\n기록 시각: "+new Date(updated).toLocaleString();
    if(extended)detail.textContent+="\n기록된 에이전트: "+v.agent+" · "+({ANALYSIS:"분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"})[v.phase]+
     "\n응답 시도 기록: "+v.attempted_calls+"/7 · 검증된 응답: "+v.validated_responses+"/7 · 과금·실제 생존 확인 아님";
