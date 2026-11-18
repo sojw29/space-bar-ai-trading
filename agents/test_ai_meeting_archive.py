@@ -28,6 +28,34 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_changed_statement_summary_counts_overlapping_changes_once(self):
+        left, right = archive(), archive()
+        right['record']['transcript'][0].update(summary='changed', concerns=['new concern'])
+        right['record']['transcript'][2]['verdict'] = 'REVIEW_NEEDED'
+        right['record']['verdict_counts'].update(OBSERVATION_ONLY=6, REVIEW_NEEDED=1)
+        right['record']['final_verdict'] = 'REVIEW_NEEDED'
+        before = deepcopy((left, right))
+        result = compare_archives(left, right, now=NOW)
+        self.assertEqual(result['change_summary'], {'changed_statement_count': 2,
+            'changed_statement_ids': ['M01', 'M03'], 'verdict_changed': 1,
+            'summary_changed': 1, 'concerns_changed': 1})
+        report = render_report(left, right, now=NOW)
+        self.assertIn('변경된 발언 요약', report)
+        self.assertIn('요약 · 우려', report)
+        self.assertIn('발언별 변경 여부', report)
+        self.assertNotIn('new concern', report)
+        self.assertEqual((left, right), before)
+
+    def test_metadata_changes_do_not_invent_statement_changes(self):
+        left, right = archive(), archive()
+        right['record']['model'] = 'changed-model'
+        result = compare_archives(left, right, now=NOW)
+        self.assertTrue(result['model_changed'])
+        self.assertEqual(result['change_summary']['changed_statement_count'], 0)
+        self.assertEqual(result['change_summary']['changed_statement_ids'], [])
+        self.assertIn('변경된 발언 없음', render_report(left, right, now=NOW))
+        self.assertEqual(len(result['statements']), 7)
+
     def test_time_relations_preserve_argument_order_including_reverse_and_equal_times(self):
         left, right = archive(), archive()
         right['record']['source_generated_at_utc'] = '2026-11-14T10:05:00Z'
