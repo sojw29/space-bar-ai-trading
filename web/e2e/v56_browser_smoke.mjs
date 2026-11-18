@@ -115,6 +115,11 @@ async function smoke(){
  assert.equal(await page.locator("#meeting-progress-open-record").isDisabled(),true);
 
  assert.ok((await page.locator("#meeting-progress-detail").textContent()).includes(executionId));
+ const progressAge=page.locator("#meeting-progress-age");
+ assert.equal(await progressAge.isVisible(),true);
+ assert.match(await progressAge.textContent(),/진행 기록 갱신 후 \d+초 · 표시 유효시간 \d+초 남음/);
+ assert.equal(await progressAge.getAttribute("title"),"기록 시각 (UTC): "+new Date(workflowStatus.updated_at_utc).toISOString());
+ assert.equal(await progressAge.getAttribute("aria-live"),"off");
  workflowStatus.event="STAGE_STARTED";workflowStatus.workflow_stage="INFERENCE";workflowStatus.status="RUNNING";
  await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
  await page.locator("#meeting-progress-refresh").click();
@@ -139,6 +144,9 @@ async function smoke(){
  assert.equal(await page.locator("#meeting-progress-count").isVisible(),false);
 
  workflowStatus.version="MEETING_WORKFLOW_STATUS_1";
+ assert.equal(await progressAge.isVisible(),false);
+ assert.equal(await progressAge.textContent(),"");
+ assert.equal(await progressAge.getAttribute("title"),"");
  for(const field of ["agent","phase","attempted_calls","validated_responses"])delete workflowStatus[field];
  workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.event="WORKFLOW_FINISHED";
  workflowStatus.workflow_stage="COMPLETED";workflowStatus.status="COMPLETED";
