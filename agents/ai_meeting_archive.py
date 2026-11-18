@@ -3,6 +3,7 @@ import argparse
 from collections import Counter
 from datetime import datetime, timezone
 import json
+from html import escape
 from pathlib import Path
 import re
 import sys
@@ -110,20 +111,60 @@ def compare_archives(left, right, *, now=None):
                 for x, y in zip(a['transcript'], b['transcript'])]}
 
 
+def render_report(left, right=None, *, now=None):
+    validate_archive(left, now=now)
+    comparison = compare_archives(left, right, now=now) if right is not None else None
+    records = [left['record']] + ([right['record']] if right is not None else [])
+    def cell(value):
+        return escape('미기록' if value is None else str(value))
+    def table(headers, rows):
+        return '<div class="table"><table><thead><tr>'+''.join('<th scope="col">'+cell(x)+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join(
+            '<tr>'+''.join('<td>'+cell(x)+'</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table></div>'
+    fields = [('실행 ID', 'workflow_execution_id'), ('실행 모드', 'execution_mode'),
+              ('데이터 출처', 'market_source'), ('모델', 'model'),
+              ('원본 생성 UTC', 'source_generated_at_utc'), ('회의 완료 UTC', 'generated_at_utc'),
+              ('최종 상태', 'final_verdict')]
+    rows = [[label, *[r[key] for r in records]] for label, key in fields]
+    rows.extend([[verdict+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
+    body = table(['항목', '왼쪽 기록', '오른쪽 기록'] if comparison else ['항목', '저장 기록'], rows)
+    if comparison:
+        body += '<h2>변경 요약</h2>'+table(['항목', '결과'], [
+            ['시장 출처 비교', comparison['market_comparison']],
+            ['실행 모드 변경', '변경' if comparison['execution_mode_changed'] else '동일'],
+            ['최종 상태 변경', '변경' if comparison['final_verdict_changed'] else '동일']])
+        body += '<h2>발언별 변경 여부</h2>'+table(
+            ['ID', '역할', '단계', '왼쪽 판단', '오른쪽 판단', '판단', '요약', '우려'],
+            [[s['id'], s['agent'], s['phase'], s['left_verdict'], s['right_verdict'],
+              *['변경' if s[k] else '동일' for k in ('verdict_changed', 'summary_changed', 'concerns_changed')]]
+             for s in comparison['statements']])
+    return ('<!doctype html><html lang="ko"><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'">'
+            '<title>SPACE BAR 저장 회의 보고서</title><style>body{font:16px system-ui;max-width:1100px;margin:24px auto;padding:16px;color:#172b40}table{border-collapse:collapse;width:100%}th,td{border:1px solid #a9b9c9;padding:10px;text-align:left;overflow-wrap:anywhere}.table{overflow-x:auto}p{line-height:1.6}</style>'
+            '<h1>SPACE BAR · 저장 회의 보고서</h1>'
+            '<p>과거 보관 기록의 형식 검사 결과입니다. 실제 모델 실행의 진위·현재 프로세스 생존·거래 승인을 확인하지 않습니다. '
+            'OFFLINE_FIXTURE는 테스트 기록, LIVE_PROVIDER는 저장된 API 실행 표시입니다.</p>'
+            '<p>왼쪽·오른쪽은 입력 순서입니다. 변경은 정확도·수익성 향상을 뜻하지 않습니다. UNKNOWN은 시장 출처 미확인입니다.</p>'
+            +body+'</html>')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Inspect one saved meeting archive or compare two; offline/read-only')
     parser.add_argument('left')
     parser.add_argument('right', nargs='?')
+    parser.add_argument('--format', choices=('json', 'html'), default='json')
     args = parser.parse_args()
     try:
         left = read_archive(args.left)
-        result = compare_archives(left, read_archive(args.right)) if args.right else {
+        right = read_archive(args.right) if args.right else None
+        result = compare_archives(left, right) if right is not None else {
             'version': 'MEETING_ARCHIVE_INSPECTION_1', 'research_only': True,
             'orders_enabled': False, 'record': describe(left)}
+        output = render_report(left, right) if args.format == 'html' else json.dumps(result, ensure_ascii=False, indent=2)
     except (OSError, ValueError, TypeError, KeyError, RuntimeError, OverflowError):
         print('Meeting archive unavailable or invalid; no files were changed.', file=sys.stderr)
         return 2
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(output)
     return 0
 
 
