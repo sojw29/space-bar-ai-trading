@@ -41,6 +41,13 @@ and concern changes for each M01–M07 statement. Left and right follow argument
 order; changes do not imply an improvement in accuracy or profitability. Unknown
 market sources remain `UNKNOWN`, rather than being assumed equivalent.
 
+Comparison also reports model changes and independent source/completion time
+relations. `RIGHT_LATER`, `RIGHT_EARLIER` or `SAME_TIME` describes the recorded UTC
+times; `right_minus_left_seconds` is signed and negative when the right timestamp
+is earlier. Input files are never automatically reordered. A later completion
+can use earlier source data, so the HTML report shows both time relations. These
+timestamps do not establish authenticity, synchronized clocks or data quality.
+
 Historical archives do not expire for comparison. Structure, UTC time ordering,
 seven role/phase identities, counts, field allowlists and no-order flags must
 still match the archive schema. Duplicate JSON keys, oversized files (over

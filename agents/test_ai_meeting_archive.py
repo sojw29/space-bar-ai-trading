@@ -28,6 +28,36 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_time_relations_preserve_argument_order_including_reverse_and_equal_times(self):
+        left, right = archive(), archive()
+        right['record']['source_generated_at_utc'] = '2026-11-14T10:05:00Z'
+        right['record']['generated_at_utc'] = '2026-11-14T11:02:00Z'
+        result = compare_archives(left, right, now=NOW)
+        self.assertEqual(result['time_relation']['source'],
+                         {'order': 'RIGHT_LATER', 'right_minus_left_seconds': 300.0})
+        self.assertEqual(result['time_relation']['completion']['right_minus_left_seconds'], 60.0)
+        reversed_result = compare_archives(right, left, now=NOW)
+        self.assertEqual(reversed_result['time_relation']['source'],
+                         {'order': 'RIGHT_EARLIER', 'right_minus_left_seconds': -300.0})
+        self.assertEqual(reversed_result['left']['generated_at_utc'], right['record']['generated_at_utc'])
+        equal = compare_archives(left, left, now=NOW)
+        self.assertEqual(equal['time_relation']['completion'],
+                         {'order': 'SAME_TIME', 'right_minus_left_seconds': 0.0})
+        self.assertIn('오른쪽 기록이 먼저', render_report(right, left, now=NOW))
+        self.assertIn('-300.0', render_report(right, left, now=NOW))
+
+    def test_source_and_completion_order_can_differ_and_model_changes_stay_explicit(self):
+        left, right = archive(), archive()
+        right['record'].update(source_generated_at_utc='2026-11-14T09:00:00Z',
+                               generated_at_utc='2026-11-14T11:02:00Z', model='other-model')
+        before = deepcopy((left, right))
+        result = compare_archives(left, right, now=NOW)
+        self.assertEqual(result['time_relation']['source']['order'], 'RIGHT_EARLIER')
+        self.assertEqual(result['time_relation']['completion']['order'], 'RIGHT_LATER')
+        self.assertTrue(result['model_changed'])
+        self.assertEqual((left, right), before)
+        self.assertFalse(compare_archives(left, left, now=NOW)['model_changed'])
+
     def test_html_report_escapes_metadata_and_preserves_provenance_and_changes(self):
         left, right = archive(), archive()
         right['record']['model'] = '<script>alert("model")</script>'
