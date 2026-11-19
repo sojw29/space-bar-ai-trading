@@ -28,6 +28,21 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_html_labels_are_localized_without_changing_machine_comparison_codes(self):
+        left, right = archive(), archive()
+        left['record']['market_source'] = right['record']['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
+        right['record']['transcript'][0]['verdict'] = 'REVIEW_NEEDED'
+        right['record']['final_verdict'] = 'REVIEW_NEEDED'
+        right['record']['verdict_counts'].update(OBSERVATION_ONLY=6, REVIEW_NEEDED=1)
+        before = deepcopy((left, right))
+        report = render_report(left, right, now=NOW)
+        for label in ('초기 분석', '상호 검토', '최종 결론', '추가 검토 필요', 'Bybit USDT 무기한 5분봉', '오프라인 테스트 (OFFLINE_FIXTURE)'):
+            self.assertIn(label, report)
+        compared = compare_archives(left, right, now=NOW)
+        self.assertEqual(compared['statements'][0]['right_verdict'], 'REVIEW_NEEDED')
+        self.assertEqual(compared['statements'][0]['phase'], 'ANALYSIS')
+        self.assertEqual((left, right), before)
+
     def test_comparison_context_collects_actual_differences_without_a_quality_score(self):
         left, right = archive(), archive()
         left['record'].update(market_source='BYBIT_USDT_PERPETUAL_5M')

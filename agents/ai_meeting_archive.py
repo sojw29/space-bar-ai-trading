@@ -156,12 +156,20 @@ def render_report(left, right=None, *, now=None):
     def table(headers, rows):
         return '<div class="table"><table><thead><tr>'+''.join('<th scope="col">'+cell(x)+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join(
             '<tr>'+''.join('<td>'+cell(x)+'</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table></div>'
+    verdict_labels = {'OBSERVATION_ONLY': '관측 요약', 'REVIEW_NEEDED': '추가 검토 필요', 'INSUFFICIENT_DATA': '자료 부족'}
+    phase_labels = {'ANALYSIS': '초기 분석', 'PEER_REVIEW': '상호 검토', 'CONCLUSION': '최종 결론'}
+    mode_labels = {'OFFLINE_FIXTURE': '오프라인 테스트 (OFFLINE_FIXTURE)', 'LIVE_PROVIDER': '모델 API 실행 기록 (LIVE_PROVIDER)'}
+    market_labels = {None: '미기록', 'BYBIT_USDT_PERPETUAL_5M': 'Bybit USDT 무기한 5분봉', 'OKX_USDT_PERPETUAL_5M': 'OKX USDT 무기한 5분봉'}
+    def metadata(record, key):
+        value = record[key]
+        mapping = {'execution_mode': mode_labels, 'market_source': market_labels, 'final_verdict': verdict_labels}.get(key)
+        return mapping[value] if mapping is not None else value
     fields = [('실행 ID', 'workflow_execution_id'), ('실행 모드', 'execution_mode'),
               ('데이터 출처', 'market_source'), ('모델', 'model'),
               ('원본 생성 UTC', 'source_generated_at_utc'), ('회의 완료 UTC', 'generated_at_utc'),
               ('최종 상태', 'final_verdict')]
-    rows = [[label, *[r[key] for r in records]] for label, key in fields]
-    rows.extend([[verdict+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
+    rows = [[label, *[metadata(r, key) for r in records]] for label, key in fields]
+    rows.extend([[verdict_labels[verdict]+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
     body = table(['항목', '왼쪽 기록', '오른쪽 기록'] if comparison else ['항목', '저장 기록'], rows)
     if comparison:
         context_labels = {'MARKET_SOURCE_UNKNOWN': '시장 출처 미기록으로 출처 동일 여부 미확인',
@@ -173,7 +181,6 @@ def render_report(left, right=None, *, now=None):
         context_html = ('<ul>'+''.join('<li>'+cell(context_labels[key])+'</li>' for key in context_items)+'</ul>'
                         if context_items else '<p>표시된 비교 조건 차이 없음 · 입력 데이터 동일성이나 실제 실행을 확인한 결과는 아닙니다.</p>')
         body = '<section aria-label="비교 조건 요약"><h2>비교 조건 요약</h2>'+context_html+'<p>기록된 조건 차이의 안내이며 비교 가능성·정확도·수익성 점수가 아닙니다.</p></section>'+body
-        verdict_labels = {'OBSERVATION_ONLY': '관측 요약', 'REVIEW_NEEDED': '추가 검토 필요', 'INSUFFICIENT_DATA': '자료 부족'}
         transitions = comparison['verdict_transitions']
         body += '<h2>판단 전환표</h2><p>행은 왼쪽 기록의 판단, 열은 오른쪽 기록의 판단입니다. 같은 판단을 유지한 발언도 포함하며 총 7개입니다. 전환이나 건수 감소가 정확도·수익성 향상을 뜻하지 않습니다.</p>'+table(
             ['왼쪽 → 오른쪽', *[verdict_labels[key] for key in VERDICTS]],
@@ -195,7 +202,7 @@ def render_report(left, right=None, *, now=None):
         changed = [s for s in comparison['statements'] if s['id'] in summary['changed_statement_ids']]
         if changed:
             body += table(['변경 ID', '역할', '단계', '변경 항목'], [
-                [s['id'], s['agent'], s['phase'], ' · '.join(label for key, label in
+                [s['id'], s['agent'], phase_labels[s['phase']], ' · '.join(label for key, label in
                  [('verdict_changed', '판단'), ('summary_changed', '요약'), ('concerns_changed', '우려')] if s[key])]
                 for s in changed])
         else:
@@ -207,19 +214,20 @@ def render_report(left, right=None, *, now=None):
               comparison['time_relation'][key]['right_minus_left_seconds']]
              for label, key in [('원본 데이터 생성', 'source'), ('회의 완료', 'completion')]])
         body += '<h2>변경 요약</h2>'+table(['항목', '결과'], [
-            ['시장 출처 비교', comparison['market_comparison']],
+            ['시장 출처 비교', {'SAME': '같은 시장 출처', 'DIFFERENT': '다른 시장 출처', 'UNKNOWN': '시장 출처 미확인 (UNKNOWN)'}[comparison['market_comparison']]],
             ['모델 변경', '변경' if comparison['model_changed'] else '동일'],
             ['실행 모드 변경', '변경' if comparison['execution_mode_changed'] else '동일'],
             ['최종 상태 변경', '변경' if comparison['final_verdict_changed'] else '동일']])
         body += '<h2>발언별 변경 여부</h2>'+table(
             ['ID', '역할', '단계', '왼쪽 판단', '오른쪽 판단', '판단', '요약', '우려'],
-            [[s['id'], s['agent'], s['phase'], s['left_verdict'], s['right_verdict'],
+            [[s['id'], s['agent'], phase_labels[s['phase']], verdict_labels[s['left_verdict']], verdict_labels[s['right_verdict']],
               *['변경' if s[k] else '동일' for k in ('verdict_changed', 'summary_changed', 'concerns_changed')]]
              for s in comparison['statements']])
     return ('<!doctype html><html lang="ko"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'">'
-            '<title>SPACE BAR 저장 회의 보고서</title><style>body{font:16px system-ui;max-width:1100px;margin:24px auto;padding:16px;color:#172b40}table{border-collapse:collapse;width:100%}th,td{border:1px solid #a9b9c9;padding:10px;text-align:left;overflow-wrap:anywhere}.table{overflow-x:auto}p{line-height:1.6}</style>'
+            '<title>SPACE BAR 저장 회의 보고서</title><style>body{font:16px system-ui;max-width:1100px;margin:24px auto;padding:16px;color:#172b40}table{border-collapse:collapse;width:100%}th,td{border:1px solid #a9b9c9;padding:10px;text-align:left;overflow-wrap:anywhere}.table{overflow-x:auto}p{line-height:1.6}'
+            '@page{size:A4 landscape;margin:12mm}@media print{body{max-width:none;margin:0;padding:0;font-size:10pt;color:#000}.table{overflow:visible}table{table-layout:fixed}th,td{padding:5px}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}h1,h2{break-after:avoid}section{break-inside:avoid}p{line-height:1.4}}</style>'
             '<h1>SPACE BAR · 저장 회의 보고서</h1>'
             '<p>과거 보관 기록의 형식 검사 결과입니다. 실제 모델 실행의 진위·현재 프로세스 생존·거래 승인을 확인하지 않습니다. '
             'OFFLINE_FIXTURE는 테스트 기록, LIVE_PROVIDER는 저장된 API 실행 표시입니다.</p>'
