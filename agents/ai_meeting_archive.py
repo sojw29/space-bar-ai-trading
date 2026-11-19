@@ -116,9 +116,23 @@ def compare_archives(left, right, *, now=None):
             ids = [s['id'] for s in statements if (s['left_verdict'], s['right_verdict']) == (old, new)]
             transitions.append({'left_verdict': old, 'right_verdict': new,
                                 'count': len(ids), 'statement_ids': ids})
+    context = []
+    if market == 'UNKNOWN':
+        context.append('MARKET_SOURCE_UNKNOWN')
+    elif market == 'DIFFERENT':
+        context.append('MARKET_SOURCE_CHANGED')
+    if a['model'] != b['model']:
+        context.append('MODEL_CHANGED')
+    if a['execution_mode'] != b['execution_mode']:
+        context.append('EXECUTION_MODE_CHANGED')
+    if relation('source_generated_at_utc')['order'] != 'SAME_TIME':
+        context.append('SOURCE_TIME_CHANGED')
+    if relation('generated_at_utc')['order'] == 'RIGHT_EARLIER':
+        context.append('RIGHT_COMPLETION_EARLIER')
     return {'version': 'MEETING_ARCHIVE_COMPARISON_1', 'research_only': True,
             'orders_enabled': False, 'left': describe(left), 'right': describe(right),
             'market_comparison': market,
+            'comparison_context': context,
             'time_relation': {'basis': 'RECORDED_UTC_TIMESTAMPS',
                               'source': relation('source_generated_at_utc'),
                               'completion': relation('generated_at_utc')},
@@ -150,6 +164,15 @@ def render_report(left, right=None, *, now=None):
     rows.extend([[verdict+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
     body = table(['항목', '왼쪽 기록', '오른쪽 기록'] if comparison else ['항목', '저장 기록'], rows)
     if comparison:
+        context_labels = {'MARKET_SOURCE_UNKNOWN': '시장 출처 미기록으로 출처 동일 여부 미확인',
+                          'MARKET_SOURCE_CHANGED': '시장 출처가 다름', 'MODEL_CHANGED': '모델이 다름',
+                          'EXECUTION_MODE_CHANGED': '실행 모드가 다름 (테스트/API 실행 표시 구분)',
+                          'SOURCE_TIME_CHANGED': '원본 데이터 생성 시각이 다름',
+                          'RIGHT_COMPLETION_EARLIER': '오른쪽 기록의 회의 완료 시각이 더 이름'}
+        context_items = comparison['comparison_context']
+        context_html = ('<ul>'+''.join('<li>'+cell(context_labels[key])+'</li>' for key in context_items)+'</ul>'
+                        if context_items else '<p>표시된 비교 조건 차이 없음 · 입력 데이터 동일성이나 실제 실행을 확인한 결과는 아닙니다.</p>')
+        body = '<section aria-label="비교 조건 요약"><h2>비교 조건 요약</h2>'+context_html+'<p>기록된 조건 차이의 안내이며 비교 가능성·정확도·수익성 점수가 아닙니다.</p></section>'+body
         verdict_labels = {'OBSERVATION_ONLY': '관측 요약', 'REVIEW_NEEDED': '추가 검토 필요', 'INSUFFICIENT_DATA': '자료 부족'}
         transitions = comparison['verdict_transitions']
         body += '<h2>판단 전환표</h2><p>행은 왼쪽 기록의 판단, 열은 오른쪽 기록의 판단입니다. 같은 판단을 유지한 발언도 포함하며 총 7개입니다. 전환이나 건수 감소가 정확도·수익성 향상을 뜻하지 않습니다.</p>'+table(

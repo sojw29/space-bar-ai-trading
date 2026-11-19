@@ -28,6 +28,29 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_comparison_context_collects_actual_differences_without_a_quality_score(self):
+        left, right = archive(), archive()
+        left['record'].update(market_source='BYBIT_USDT_PERPETUAL_5M')
+        right['record'].update(market_source='OKX_USDT_PERPETUAL_5M', model='other-model',
+                               execution_mode='LIVE_PROVIDER', model_inference_performed=True,
+                               source_generated_at_utc='2026-11-14T09:00:00Z', generated_at_utc='2026-11-14T11:00:30Z')
+        before = deepcopy((left, right))
+        result = compare_archives(left, right, now=NOW)
+        self.assertEqual(result['comparison_context'], ['MARKET_SOURCE_CHANGED', 'MODEL_CHANGED',
+            'EXECUTION_MODE_CHANGED', 'SOURCE_TIME_CHANGED', 'RIGHT_COMPLETION_EARLIER'])
+        report = render_report(left, right, now=NOW)
+        self.assertLess(report.index('비교 조건 요약'), report.index('<table>'))
+        self.assertIn('시장 출처가 다름', report)
+        self.assertIn('실행 모드가 다름', report)
+        self.assertEqual((left, right), before)
+
+    def test_unknown_and_matching_conditions_do_not_claim_verified_equal_inputs(self):
+        left, right = archive(), archive()
+        self.assertEqual(compare_archives(left, right, now=NOW)['comparison_context'], ['MARKET_SOURCE_UNKNOWN'])
+        left['record']['market_source'] = right['record']['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
+        self.assertEqual(compare_archives(left, right, now=NOW)['comparison_context'], [])
+        self.assertIn('입력 데이터 동일성이나 실제 실행을 확인한 결과는 아닙니다', render_report(left, right, now=NOW))
+
     def test_all_verdict_transitions_have_conserved_counts_and_ids(self):
         for old in ('OBSERVATION_ONLY', 'REVIEW_NEEDED', 'INSUFFICIENT_DATA'):
             for new in ('OBSERVATION_ONLY', 'REVIEW_NEEDED', 'INSUFFICIENT_DATA'):

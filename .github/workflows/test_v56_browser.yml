@@ -44,6 +44,9 @@ jobs:
       - name: Chromium software-WebGL smoke vs actual localhost server
         working-directory: web/e2e
         run: npm test
+      - name: Render offline meeting archive reports at desktop and mobile widths
+        working-directory: web/e2e
+        run: node meeting_archive_report.mjs
       - name: Upload browser screenshots (even on failure)
         if: always()
         uses: actions/upload-artifact@v4
