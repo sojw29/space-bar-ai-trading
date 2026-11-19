@@ -48,6 +48,13 @@ is earlier. Input files are never automatically reordered. A later completion
 can use earlier source data, so the HTML report shows both time relations. These
 timestamps do not establish authenticity, synchronized clocks or data quality.
 
+`comparison_context` collects recorded condition differences in stable order:
+unknown/different market source, different model, different execution mode,
+different source timestamp and earlier completion on the right. The HTML report
+shows their Korean descriptions before the metadata tables. An empty list means
+none of these conditions differs; it does not verify identical inputs, provider
+execution, comparability or quality. This summary is not a confidence score.
+
 `change_summary` lists changed statement IDs in M01–M07 order and counts distinct
 changed statements plus verdict/summary/concern changes. A statement changed in
 multiple ways counts once in `changed_statement_count` but in each applicable
