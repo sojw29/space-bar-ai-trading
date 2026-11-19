@@ -38,8 +38,14 @@ class MeetingTests(unittest.TestCase):
                          [(a, 'ANALYSIS') for a in ('ATLAS', 'QUANT', 'GUARDIAN')] +
                          [(a, 'PEER_REVIEW') for a in ('ATLAS', 'QUANT', 'GUARDIAN')] +
                          [('COMMANDER', 'CONCLUSION')])
-        self.assertEqual(len(fixture.calls[3][2]['analyses']), 3)
-        self.assertEqual(len(fixture.calls[-1][2]['discussion']), 6)
+        for index, agent in enumerate(('ATLAS', 'QUANT', 'GUARDIAN')):
+            analysis_context = fixture.calls[index][2]
+            review_context = fixture.calls[index + 3][2]
+            self.assertEqual(set(analysis_context), {'facts'})
+            self.assertEqual(review_context['own_analysis'], result['transcript'][index])
+            self.assertEqual(review_context['peer_analyses'],
+                             [row for row in result['transcript'][:3] if row['agent'] != agent])
+        self.assertEqual(fixture.calls[-1][2]['discussion'], result['transcript'][:6])
         self.assertNotIn('unexpected', json.dumps(fixture.calls))
         self.assertFalse(result['model_inference_performed'])
         self.assertEqual(result['execution_mode'], 'OFFLINE_FIXTURE')
