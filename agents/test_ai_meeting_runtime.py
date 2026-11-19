@@ -46,6 +46,10 @@ class MeetingTests(unittest.TestCase):
             self.assertEqual(review_context['peer_analyses'],
                              [row for row in result['transcript'][:3] if row['agent'] != agent])
         self.assertEqual(fixture.calls[-1][2]['discussion'], result['transcript'][:6])
+        self.assertEqual([row['references'] for row in result['statement_refs']], [
+            [], [], [], ['M01', 'M02', 'M03'], ['M02', 'M01', 'M03'],
+            ['M03', 'M01', 'M02'], ['M01', 'M02', 'M03', 'M04', 'M05', 'M06'],
+        ])
         self.assertNotIn('unexpected', json.dumps(fixture.calls))
         self.assertFalse(result['model_inference_performed'])
         self.assertEqual(result['execution_mode'], 'OFFLINE_FIXTURE')

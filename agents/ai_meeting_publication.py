@@ -14,7 +14,7 @@ from urllib.request import build_opener
 
 from agent_research_runtime_v233 import utc_time
 from ai_meeting_runtime import (ANALYSTS, VERDICTS, MeetingError, NoRedirect,
-                                publish_report, validate_statement)
+                                meeting_input_refs, publish_report, validate_statement)
 from provider_transport_preflight_v240 import preflight
 from market_source_provenance import with_market_source
 
@@ -67,9 +67,10 @@ def validate_public_report(report, *, bundle=None, now=None):
     if refs is not None:
         if not isinstance(refs, list) or len(refs) != 7:
             raise MeetingError('INVALID_STATEMENT_REFS')
+        legacy_refs = isinstance(refs[-1], dict) and refs[-1].get("references") == []
         for index, (agent, entry) in enumerate(zip((*ANALYSTS, *ANALYSTS, 'COMMANDER'), refs)):
             phase = 'ANALYSIS' if index < 3 else 'PEER_REVIEW' if index < 6 else 'CONCLUSION'
-            expected_refs = ['M%02d' % (index-2)] if 3 <= index <= 5 else []
+            expected_refs = meeting_input_refs(index, legacy=legacy_refs)
             if (not isinstance(entry, dict) or
                     set(entry) != {'id', 'agent', 'phase', 'references'} or
                     entry['id'] != 'M%02d' % (index+1) or

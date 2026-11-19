@@ -164,6 +164,17 @@ class OpenAIProvider:
             raise MeetingError("PROVIDER_RESPONSE_INVALID") from None
 
 
+def meeting_input_refs(index, *, legacy=False):
+    """Return statement IDs supplied to a meeting stage, in context order."""
+    initial = ["M01", "M02", "M03"]
+    if 3 <= index < 6:
+        own = initial[index - 3]
+        return [own] if legacy else [own, *(ref for ref in initial if ref != own)]
+    if index == 6 and not legacy:
+        return initial + ["M04", "M05", "M06"]
+    return []
+
+
 def run_meeting(bundle, provider, *, clock=None, progress=None):
     """Injected providers are fixtures; only the concrete transport marks live inference."""
     clock = clock or (lambda: datetime.now(timezone.utc))
@@ -220,7 +231,7 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
             "call_count": len(transcript), "final_verdict": final, "transcript": transcript,
             "statement_refs": [{"id": "M%02d" % (i+1), "agent": t["agent"],
                                 "phase": t["phase"],
-                                "references": ["M%02d" % (i-2)] if 3 <= i <= 5 else []}
+                                "references": meeting_input_refs(i)}
                                for i, t in enumerate(transcript)]})
 
 
