@@ -32,6 +32,17 @@ try{
   assert.equal(await page.getByRole('heading',{name:'판단 전환표',exact:true}).count(),1);
   assert.equal(await page.getByRole('heading',{name:'발언별 변경 여부',exact:true}).count(),1);
   assert.equal(await page.getByText('M07',{exact:true}).count(),1);
+  const statementTable=page.getByRole('region',{name:'발언별 변경 여부 표 · 좌우 스크롤 가능',exact:true});
+  assert.equal(await statementTable.locator('tbody tr').count(),7);
+  assert.equal(await statementTable.locator('.changed-row').count(),1);
+  assert.ok((await statementTable.locator('.changed-row').textContent()).includes('M01'));
+  assert.equal(await statementTable.getByRole('cell',{name:'변경 없음',exact:true}).count(),6);
+  await statementTable.focus();
+  assert.equal(await statementTable.evaluate(node=>node===document.activeElement),true);
+  if(viewport.width===390){
+   assert.equal(await statementTable.evaluate(node=>node.scrollWidth>node.clientWidth),true);
+  }
+
   assert.ok(await page.getByRole('cell',{name:'초기 분석',exact:true}).count()>0);
   assert.ok(await page.getByRole('cell',{name:'최종 결론',exact:true}).count()>0);
   assert.equal(await page.locator('body').evaluate(node=>node.scrollWidth<=window.innerWidth),true);
@@ -45,6 +56,8 @@ try{
   assert.equal(new URL(page.url()).hash,'#report-top');
   await page.emulateMedia({media:'print'});
   assert.equal(await navigation.isVisible(),false);
+  assert.equal(await statementTable.locator('.changed-row td').first().evaluate(node=>getComputedStyle(node).borderLeftWidth),'4px');
+  assert.equal(await statementTable.getByRole('cell',{name:'변경 있음',exact:true}).count(),1);
   assert.equal(await page.locator('.back-top').first().isVisible(),false);
   await page.setViewportSize({width:1122,height:794});
   assert.equal(await page.locator('.table').first().evaluate(node=>getComputedStyle(node).overflowX),'visible');
