@@ -153,9 +153,10 @@ def render_report(left, right=None, *, now=None):
     records = [left['record']] + ([right['record']] if right is not None else [])
     def cell(value):
         return escape('미기록' if value is None else str(value))
-    def table(headers, rows):
-        return '<div class="table"><table><thead><tr>'+''.join('<th scope="col">'+cell(x)+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join(
-            '<tr>'+''.join('<td>'+cell(x)+'</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table></div>'
+    def table(headers, rows, *, changed_rows=(), label=None):
+        region = (' role="region" tabindex="0" aria-label="'+cell(label)+'"') if label else ''
+        return '<div class="table"'+region+'><table><thead><tr>'+''.join('<th scope="col">'+cell(x)+'</th>' for x in headers)+'</tr></thead><tbody>'+''.join(
+            ('<tr class="changed-row">' if index in changed_rows else '<tr>')+''.join('<td>'+cell(x)+'</td>' for x in row)+'</tr>' for index, row in enumerate(rows))+'</tbody></table></div>'
     verdict_labels = {'OBSERVATION_ONLY': '관측 요약', 'REVIEW_NEEDED': '추가 검토 필요', 'INSUFFICIENT_DATA': '자료 부족'}
     phase_labels = {'ANALYSIS': '초기 분석', 'PEER_REVIEW': '상호 검토', 'CONCLUSION': '최종 결론'}
     mode_labels = {'OFFLINE_FIXTURE': '오프라인 테스트 (OFFLINE_FIXTURE)', 'LIVE_PROVIDER': '모델 API 실행 기록 (LIVE_PROVIDER)'}
@@ -218,11 +219,13 @@ def render_report(left, right=None, *, now=None):
             ['모델 변경', '변경' if comparison['model_changed'] else '동일'],
             ['실행 모드 변경', '변경' if comparison['execution_mode_changed'] else '동일'],
             ['최종 상태 변경', '변경' if comparison['final_verdict_changed'] else '동일']])
-        body += '<h2 id="statement-changes">발언별 변경 여부</h2>'+table(
-            ['ID', '역할', '단계', '왼쪽 판단', '오른쪽 판단', '판단', '요약', '우려'],
-            [[s['id'], s['agent'], phase_labels[s['phase']], verdict_labels[s['left_verdict']], verdict_labels[s['right_verdict']],
+        body += '<h2 id="statement-changes">발언별 변경 여부</h2><p>변경된 발언은 ‘변경 있음’ 표시와 굵은 테두리로 구분합니다. 모든 발언을 원래 순서로 표시합니다. 표를 좌우로 스크롤하면 나머지 열을 볼 수 있습니다.</p>'+table(
+            ['ID', '변경 상태', '역할', '단계', '왼쪽 판단', '오른쪽 판단', '판단', '요약', '우려'],
+            [[s['id'], '변경 있음' if s['id'] in summary['changed_statement_ids'] else '변경 없음', s['agent'], phase_labels[s['phase']], verdict_labels[s['left_verdict']], verdict_labels[s['right_verdict']],
               *['변경' if s[k] else '동일' for k in ('verdict_changed', 'summary_changed', 'concerns_changed')]]
-             for s in comparison['statements']])
+             for s in comparison['statements']],
+            changed_rows={i for i, s in enumerate(comparison['statements']) if s['id'] in summary['changed_statement_ids']},
+            label='발언별 변경 여부 표 · 좌우 스크롤 가능')
     sections = [('record-metadata', '기록 정보')]
     if comparison:
         sections = [('comparison-context', '비교 조건 요약'), *sections,
@@ -235,7 +238,7 @@ def render_report(left, right=None, *, now=None):
     return ('<!doctype html><html lang="ko"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'">'
-            '<title>SPACE BAR 저장 회의 보고서</title><style>body{font:16px system-ui;max-width:1100px;margin:24px auto;padding:16px;color:#172b40}table{border-collapse:collapse;width:100%}th,td{border:1px solid #a9b9c9;padding:10px;text-align:left;overflow-wrap:anywhere}.table{overflow-x:auto}p{line-height:1.6}nav{padding:12px;border:1px solid #a9b9c9}nav ul{display:flex;flex-wrap:wrap;gap:12px 24px;padding-left:20px}a{color:#075b9c}a:focus-visible{outline:3px solid #075b9c;outline-offset:3px}h2{scroll-margin-top:16px}.back-top{font-size:14px}'
+            '<title>SPACE BAR 저장 회의 보고서</title><style>body{font:16px system-ui;max-width:1100px;margin:24px auto;padding:16px;color:#172b40}table{border-collapse:collapse;width:100%}th,td{border:1px solid #a9b9c9;padding:10px;text-align:left;overflow-wrap:anywhere}.table{overflow-x:auto}p{line-height:1.6}nav{padding:12px;border:1px solid #a9b9c9}nav ul{display:flex;flex-wrap:wrap;gap:12px 24px;padding-left:20px}a{color:#075b9c}a:focus-visible{outline:3px solid #075b9c;outline-offset:3px}h2{scroll-margin-top:16px}.back-top{font-size:14px}.changed-row{background:#edf5ff}.changed-row td:first-child{border-left:4px solid #172b40;font-weight:700}.table:focus-visible{outline:3px solid #075b9c;outline-offset:3px}'
             '@page{size:A4 landscape;margin:12mm}@media print{nav,.back-top{display:none}body{max-width:none;margin:0;padding:0;font-size:10pt;color:#000}.table{overflow:visible}table{table-layout:fixed}th,td{padding:5px}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}h1,h2{break-after:avoid}section{break-inside:avoid}p{line-height:1.4}}</style>'
             '<h1 id="report-top">SPACE BAR · 저장 회의 보고서</h1>'
             '<p>과거 보관 기록의 형식 검사 결과입니다. 실제 모델 실행의 진위·현재 프로세스 생존·거래 승인을 확인하지 않습니다. '

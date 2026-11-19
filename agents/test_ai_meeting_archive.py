@@ -29,6 +29,45 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_report_emphasizes_all_change_types_without_hiding_unchanged_rows(self):
+        class Rows(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.marked, self.current, self.in_cell = [], None, False
+            def handle_starttag(self, tag, attrs):
+                if tag == 'tr' and dict(attrs).get('class') == 'changed-row':
+                    self.current = []
+                if tag == 'td':
+                    self.in_cell = True
+            def handle_data(self, data):
+                if self.current is not None and self.in_cell:
+                    self.current.append(data)
+            def handle_endtag(self, tag):
+                if tag == 'td':
+                    self.in_cell = False
+                if tag == 'tr' and self.current is not None:
+                    self.marked.append(self.current)
+                    self.current = None
+        right = archive()
+        right['record']['transcript'][0]['summary'] = 'changed summary'
+        right['record']['transcript'][3]['concerns'] = ['new concern']
+        right['record']['transcript'][6]['verdict'] = 'REVIEW_NEEDED'
+        right['record']['final_verdict'] = 'REVIEW_NEEDED'
+        right['record']['verdict_counts'].update(OBSERVATION_ONLY=6, REVIEW_NEEDED=1)
+        for candidate, expected in [(archive(), []), (right, ['M01', 'M04', 'M07'])]:
+            parser = Rows()
+            report = render_report(archive(), candidate, now=NOW)
+            parser.feed(report)
+            self.assertEqual([row[0] for row in parser.marked], expected)
+            self.assertTrue(all(row[1] == '변경 있음' for row in parser.marked))
+            self.assertEqual(report.count('>변경 없음</td>'), 7-len(expected))
+            self.assertIn('role="region" tabindex="0" aria-label="발언별 변경 여부 표', report)
+            self.assertNotIn('changed summary', report)
+            self.assertNotIn('new concern', report)
+        metadata_only = archive()
+        metadata_only['record']['model'] = 'different-model'
+        self.assertNotIn('<tr class="changed-row">', render_report(archive(), metadata_only, now=NOW))
+
     def test_navigation_targets_exist_once_for_inspection_and_comparison(self):
         class Links(HTMLParser):
             def __init__(self):
