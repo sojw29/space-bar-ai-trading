@@ -1,7 +1,7 @@
 """Inspect/compare exported meeting archives locally. No network or file writes."""
 import argparse
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from html import escape
 from pathlib import Path
@@ -163,11 +163,17 @@ def render_report(left, right=None, *, now=None):
     market_labels = {None: '미기록', 'BYBIT_USDT_PERPETUAL_5M': 'Bybit USDT 무기한 5분봉', 'OKX_USDT_PERPETUAL_5M': 'OKX USDT 무기한 5분봉'}
     def metadata(record, key):
         value = record[key]
+        if key in ('source_generated_at_utc', 'generated_at_utc'):
+            try:
+                local = timestamp(value).astimezone(timezone(timedelta(hours=9))).isoformat(sep=' ')
+            except OverflowError:
+                local = '변환 범위 초과'
+            return value+' (UTC) / '+local+' (KST)'
         mapping = {'execution_mode': mode_labels, 'market_source': market_labels, 'final_verdict': verdict_labels}.get(key)
         return mapping[value] if mapping is not None else value
     fields = [('실행 ID', 'workflow_execution_id'), ('실행 모드', 'execution_mode'),
               ('데이터 출처', 'market_source'), ('모델', 'model'),
-              ('원본 생성 UTC', 'source_generated_at_utc'), ('회의 완료 UTC', 'generated_at_utc'),
+              ('원본 생성 UTC / KST', 'source_generated_at_utc'), ('회의 완료 UTC / KST', 'generated_at_utc'),
               ('최종 상태', 'final_verdict')]
     rows = [[label, *[metadata(r, key) for r in records]] for label, key in fields]
     rows.extend([[verdict_labels[verdict]+' 발언 수', *[r['verdict_counts'][verdict] for r in records]] for verdict in VERDICTS])
@@ -243,6 +249,7 @@ def render_report(left, right=None, *, now=None):
             '<h1 id="report-top">SPACE BAR · 저장 회의 보고서</h1>'
             '<p>과거 보관 기록의 형식 검사 결과입니다. 실제 모델 실행의 진위·현재 프로세스 생존·거래 승인을 확인하지 않습니다. '
             'OFFLINE_FIXTURE는 테스트 기록, LIVE_PROVIDER는 저장된 API 실행 표시입니다.</p>'
+            '<p>KST는 UTC+09:00 한국시간입니다. 원본 UTC와 같은 순간을 표시하며 입력 기록과 시간 차이 계산은 변경하지 않습니다.</p>'
             '<p>왼쪽·오른쪽은 입력 순서입니다. 변경은 정확도·수익성 향상을 뜻하지 않습니다. UNKNOWN은 시장 출처 미확인입니다.</p>'
             +navigation+body+'</html>')
 

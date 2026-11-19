@@ -29,6 +29,24 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_report_kst_rollover_preserves_utc_input_and_comparison(self):
+        left, right = archive(), archive()
+        for item in (left, right):
+            item['record'].update(source_generated_at_utc='2026-11-14T16:30:00.123456Z',
+                                  started_at_utc='2026-11-14T17:00:00Z',
+                                  generated_at_utc='2026-11-14T17:01:00+00:00')
+            item['archived_at_utc'] = '2026-11-14T18:00:00Z'
+        original = deepcopy(left)
+        before = compare_archives(left, right, now=NOW)
+        for candidate in (None, right):
+            report = render_report(left, candidate, now=NOW)
+            self.assertIn('2026-11-14T16:30:00.123456Z (UTC)', report)
+            self.assertIn('2026-11-15 01:30:00.123456+09:00 (KST)', report)
+            self.assertIn('2026-11-15 02:01:00+09:00 (KST)', report)
+        self.assertEqual(left, original)
+        self.assertEqual(compare_archives(left, right, now=NOW), before)
+
+
     def test_report_emphasizes_all_change_types_without_hiding_unchanged_rows(self):
         class Rows(HTMLParser):
             def __init__(self):
