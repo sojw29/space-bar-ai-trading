@@ -36,7 +36,16 @@ try{
   assert.ok(await page.getByRole('cell',{name:'최종 결론',exact:true}).count()>0);
   assert.equal(await page.locator('body').evaluate(node=>node.scrollWidth<=window.innerWidth),true);
   assert.deepEqual(requests,[],'standalone report must not request network assets');
+  const navigation=page.getByRole('navigation',{name:'보고서 목차'});
+  assert.equal(await navigation.getByRole('link').count(),7);
+  await navigation.getByRole('link',{name:'발언별 변경 여부',exact:true}).click();
+  assert.equal(new URL(page.url()).hash,'#statement-changes');
+  assert.ok((await page.locator('#statement-changes').boundingBox()).y < viewport.height);
+  await page.locator('#statement-changes + .back-top a').click();
+  assert.equal(new URL(page.url()).hash,'#report-top');
   await page.emulateMedia({media:'print'});
+  assert.equal(await navigation.isVisible(),false);
+  assert.equal(await page.locator('.back-top').first().isVisible(),false);
   await page.setViewportSize({width:1122,height:794});
   assert.equal(await page.locator('.table').first().evaluate(node=>getComputedStyle(node).overflowX),'visible');
   assert.equal(await page.locator('thead').first().evaluate(node=>getComputedStyle(node).display),'table-header-group');

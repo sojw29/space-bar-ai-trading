@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
+from html.parser import HTMLParser
 from pathlib import Path
 import subprocess
 import sys
@@ -28,6 +29,30 @@ def archive():
 
 
 class MeetingArchiveTests(unittest.TestCase):
+    def test_navigation_targets_exist_once_for_inspection_and_comparison(self):
+        class Links(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.ids, self.targets = [], []
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if 'id' in attrs:
+                    self.ids.append(attrs['id'])
+                if tag == 'a':
+                    self.targets.append(attrs['href'])
+        for right, section_count in [(None, 1), (archive(), 7)]:
+            with self.subTest(comparison=right is not None):
+                parser = Links()
+                report = render_report(archive(), right, now=NOW)
+                parser.feed(report)
+                self.assertEqual(len(parser.ids), len(set(parser.ids)))
+                self.assertEqual(len(parser.targets), section_count * 2)
+                for target in parser.targets:
+                    self.assertTrue(target.startswith('#'))
+                    self.assertEqual(parser.ids.count(target[1:]), 1)
+                self.assertIn('aria-label="보고서 목차"', report)
+                self.assertNotIn('<script', report)
+
     def test_html_labels_are_localized_without_changing_machine_comparison_codes(self):
         left, right = archive(), archive()
         left['record']['market_source'] = right['record']['market_source'] = 'BYBIT_USDT_PERPETUAL_5M'
