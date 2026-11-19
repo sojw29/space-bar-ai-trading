@@ -34,6 +34,11 @@ It contains no JavaScript or remote assets, escapes archive text and works for
 one-record inspection or two-record comparison. Save the stdout HTML to a new
 report file (never redirect into an input archive), then open it in a browser.
 This CLI does not itself write a report file or add dashboard controls.
+HTML judgment/phase/source labels are Korean; JSON codes remain unchanged. The
+standalone report includes A4 landscape print styling, repeating table headers
+and row-splitting avoidance for browser Print / Save as PDF. Browser print
+settings may override page size; use the generated preview to check pagination.
+Chromium layout/PDF checks do not certify identical output on real iPhone Safari.
 Inspection reports
 record metadata and verdict counts. Comparison reports left/right provenance,
 market-source compatibility, final verdict changes and separate verdict, summary

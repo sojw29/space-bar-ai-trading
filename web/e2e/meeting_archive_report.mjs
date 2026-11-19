@@ -32,9 +32,20 @@ try{
   assert.equal(await page.getByRole('heading',{name:'판단 전환표',exact:true}).count(),1);
   assert.equal(await page.getByRole('heading',{name:'발언별 변경 여부',exact:true}).count(),1);
   assert.equal(await page.getByText('M07',{exact:true}).count(),1);
+  assert.ok(await page.getByRole('cell',{name:'초기 분석',exact:true}).count()>0);
+  assert.ok(await page.getByRole('cell',{name:'최종 결론',exact:true}).count()>0);
   assert.equal(await page.locator('body').evaluate(node=>node.scrollWidth<=window.innerWidth),true);
   assert.deepEqual(requests,[],'standalone report must not request network assets');
+  await page.emulateMedia({media:'print'});
+  await page.setViewportSize({width:1122,height:794});
+  assert.equal(await page.locator('.table').first().evaluate(node=>getComputedStyle(node).overflowX),'visible');
+  assert.equal(await page.locator('thead').first().evaluate(node=>getComputedStyle(node).display),'table-header-group');
+  assert.equal(await page.locator('tr').first().evaluate(node=>getComputedStyle(node).breakInside),'avoid');
+  assert.equal(await page.locator('body').evaluate(node=>node.scrollWidth<=window.innerWidth),true);
+  const pdf=await page.pdf({preferCSSPageSize:true,printBackground:true});
+  assert.equal(pdf.subarray(0,5).toString(),'%PDF-');assert.ok(pdf.length>1000);
+  assert.deepEqual(requests,[],'print/PDF rendering must not fetch remote assets');
   await context.close();
  }
- console.log('Archive CLI HTML: desktop/mobile, escaped metadata, no script/network: PASS');
+ console.log('Archive CLI HTML: desktop/mobile, localized labels, print/PDF, no script/network: PASS');
 }finally{await browser.close();}
