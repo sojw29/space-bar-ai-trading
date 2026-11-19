@@ -600,6 +600,13 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  const rowsWithRefs=elements['ai-meeting-rows'].children;
+  rowsWithRefs[3].events.click();
+  assert.match(elements['ai-meeting-linked'].textContent,/제공된 발언 \(3건\)/);
+  assert.match(elements['ai-meeting-linked'].textContent,/\[M02\] QUANT/);
+  rowsWithRefs[6].events.click();
+  assert.match(elements['ai-meeting-linked'].textContent,/제공된 발언 \(6건\)/);
+  assert.match(elements['ai-meeting-linked'].textContent,/\[M06\] GUARDIAN/);
   // Corrupted transcript order and peer-review references must fail closed.
   for(const field of ['transcript','statement_refs']){
    const original=data.payload[field];
