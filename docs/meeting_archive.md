@@ -87,3 +87,5 @@ expiry or clock rollback disable saving. Once downloaded, the file is a dated
 historical record; its existence does not verify a running process or authorize
 orders. Browser download support, including on real iPhone Safari, must be
 checked on the target device.
+
+HTML 보고서 상단 목차에서 기록 정보와 각 비교 표로 바로 이동할 수 있습니다. 각 표 제목 아래에서 목차로 돌아갈 수 있으며 JavaScript나 외부 연결이 필요하지 않습니다. 단일 기록에는 해당 기록 정보만 표시하고, 인쇄/PDF에서는 이동 링크를 숨깁니다.
