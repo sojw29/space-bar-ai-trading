@@ -29,6 +29,8 @@ try{
   assert.ok((await page.locator('section[aria-label="비교 조건 요약"]').textContent()).includes('실행 모드가 다름'));
   assert.equal(await page.getByText('<img src=https://archive.invalid/test>',{exact:true}).count(),1);
   assert.equal(await page.locator('img,script,iframe').count(),0);
+  assert.ok((await page.locator('body').textContent()).includes('2026-11-14 19:00:00+09:00 (KST)'));
+  assert.ok((await page.locator('body').textContent()).includes('2026-11-14T10:00:00Z (UTC)'));
   assert.equal(await page.getByRole('heading',{name:'판단 전환표',exact:true}).count(),1);
   assert.equal(await page.getByRole('heading',{name:'발언별 변경 여부',exact:true}).count(),1);
   assert.equal(await page.getByText('M07',{exact:true}).count(),1);
