@@ -247,19 +247,26 @@ def render_report(left, right=None, *, now=None):
                     ('statement-changes', '발언별 변경 여부')]
     if any('input_statement_ids' in record for record in records):
         sections.append(('statement-inputs', '검토에 제공된 발언'))
-        rows = []
+        body += '<h2 id="statement-inputs">검토에 제공된 발언</h2>'
         for side, record in zip(('왼쪽', '오른쪽'), records):
+            if comparison:
+                body += '<h3>'+side+' 기록</h3>'
             inputs = record.get('input_statement_ids')
             if inputs is None:
-                rows.append([side if comparison else '저장 기록', '미기록', '미기록'])
+                body += '<p>제공된 발언 목록 미기록</p>'
                 continue
             statements = {item['id']: item for item in record['transcript']}
             for item, refs in zip(record['transcript'][3:], inputs[3:]):
-                rows.append([side if comparison else '저장 기록',
-                             item['id']+' '+item['agent'],
-                             ' · '.join(ref+' '+statements[ref]['agent'] for ref in refs) or '미기록'])
-        body += '<h2 id="statement-inputs">검토에 제공된 발언</h2>'+table(
-            ['기록', '검토 또는 결론', '제공된 발언 ID와 역할'], rows)
+                title = cell(item['id']+' '+item['agent']+' · '+phase_labels[item['phase']])
+                if not refs:
+                    body += '<p>'+title+' · 제공된 발언 목록 미기록</p>'
+                    continue
+                body += '<details><summary>'+title+f' · 제공된 발언 {len(refs)}건</summary><ul>'
+                for ref in refs:
+                    statement = statements[ref]
+                    label = cell(ref+' '+statement['agent']+' · '+verdict_labels[statement['verdict']])
+                    body += '<li><strong>'+label+'</strong><p>'+cell(statement['summary'])+'</p></li>'
+                body += '</ul></details>'
     navigation = '<nav aria-label="보고서 목차"><p>바로 이동</p><ul>'+''.join(
         '<li><a href="#'+key+'">'+label+'</a></li>' for key, label in sections)+'</ul></nav>'
     body = body.replace('</h2>', '</h2><p class="back-top"><a href="#report-top">목차로 돌아가기</a></p>')

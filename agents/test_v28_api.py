@@ -1018,7 +1018,12 @@ setImmediate(async()=>{
         from ai_meeting_archive import render_report
         self.assertEqual(exported_archive["record"]["input_statement_ids"][-1],
                          ["M01", "M02", "M03", "M04", "M05", "M06"])
-        self.assertIn("M06 GUARDIAN", render_report(exported_archive))
+        exported_archive["record"]["transcript"][5]["summary"] = "<em>검토 요약</em>"
+        report = render_report(exported_archive)
+        self.assertIn("M07 COMMANDER · 최종 결론 · 제공된 발언 6건", report)
+        self.assertIn("M06 GUARDIAN · ", report)
+        self.assertIn("&lt;em&gt;검토 요약&lt;/em&gt;", report)
+        self.assertNotIn("<em>검토 요약</em>", report)
 
     def test_office3d_served_over_http_with_mobile_and_meeting_contract(self):
         # Verify the real dashboard server delivers the 3D room rather than a
