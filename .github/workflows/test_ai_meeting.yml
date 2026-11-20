@@ -6,6 +6,8 @@ on:
       - 'tests/test_codespaces_meeting_launcher.py'
       - 'agents/ai_meeting_runtime.py'
       - 'agents/ai_meeting_archive.py'
+      - 'agents/dashboard_api_v28.py'
+      - 'agents/test_v28_api.py'
       - 'agents/ohlcv_indicators_v225.py'
       - 'agents/market_source_provenance.py'
       - 'agents/ai_meeting_publication.py'
@@ -40,5 +42,7 @@ jobs:
           python-version: '3.11'
       - run: node --version
       - run: python -m unittest discover -s agents -p 'test_ai_meeting*.py' -v
+      - name: Verify meeting API, browser rendering, and JSON-to-HTML export
+        run: python -m unittest discover -s agents -p 'test_v28_api.py' -v
       - run: bash -n .devcontainer/start-room.sh
       - run: python -m unittest discover -s tests -p 'test_codespaces_meeting_launcher.py' -v

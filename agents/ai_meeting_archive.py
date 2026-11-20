@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import sys
 
+from ai_meeting_runtime import meeting_input_refs
+
 VERDICTS = ('OBSERVATION_ONLY', 'REVIEW_NEEDED', 'INSUFFICIENT_DATA')
 PLAN = [(agent, phase) for phase in ('ANALYSIS', 'PEER_REVIEW')
         for agent in ('ATLAS', 'QUANT', 'GUARDIAN')] + [('COMMANDER', 'CONCLUSION')]
@@ -39,7 +41,7 @@ def validate_archive(value, *, now=None):
             and value['trade_authorization'] == 'DENIED'
             and value['process_liveness_verified'] is False)
     record = value['record']
-    require(isinstance(record, dict) and set(record) == RECORD)
+    require(isinstance(record, dict) and set(record) - {"input_statement_ids"} == RECORD)
     require(record['execution_mode'] in ('OFFLINE_FIXTURE', 'LIVE_PROVIDER'))
     require(record['model_inference_performed'] is (record['execution_mode'] == 'LIVE_PROVIDER'))
     identity = record['workflow_execution_id']
@@ -64,6 +66,11 @@ def validate_archive(value, *, now=None):
         require(isinstance(concerns, list) and len(concerns) <= 8
                 and all(isinstance(c, str) and c.strip() and len(c) <= 400 for c in concerns))
         counts[statement['verdict']] += 1
+    if 'input_statement_ids' in record:
+        inputs = record['input_statement_ids']
+        require(isinstance(inputs, list) and len(inputs) == len(PLAN))
+        legacy = inputs[-1] == []
+        require(inputs == [meeting_input_refs(i, legacy=legacy) for i in range(len(PLAN))])
     saved_counts = record['verdict_counts']
     require(isinstance(saved_counts, dict) and set(saved_counts) == set(VERDICTS)
             and all(type(saved_counts[key]) is int and saved_counts[key] == counts[key] for key in VERDICTS))
@@ -129,6 +136,16 @@ def compare_archives(left, right, *, now=None):
         context.append('SOURCE_TIME_CHANGED')
     if relation('generated_at_utc')['order'] == 'RIGHT_EARLIER':
         context.append('RIGHT_COMPLETION_EARLIER')
+    left_inputs, right_inputs = a.get('input_statement_ids'), b.get('input_statement_ids')
+    input_comparison = None
+    if left_inputs is not None or right_inputs is not None:
+        input_comparison = []
+        for index, statement in enumerate(statements[3:], 3):
+            old = left_inputs[index] if left_inputs is not None else []
+            new = right_inputs[index] if right_inputs is not None else []
+            status = ('UNKNOWN' if not old or not new else 'SAME' if old == new else 'DIFFERENT')
+            input_comparison.append({'id': statement['id'], 'agent': statement['agent'],
+                                     'left': old or None, 'right': new or None, 'status': status})
     return {'version': 'MEETING_ARCHIVE_COMPARISON_1', 'research_only': True,
             'orders_enabled': False, 'left': describe(left), 'right': describe(right),
             'market_comparison': market,
@@ -144,7 +161,8 @@ def compare_archives(left, right, *, now=None):
             'change_summary': {'changed_statement_count': len(changed_ids),
                                'changed_statement_ids': changed_ids,
                                **{key: sum(s[key] for s in statements) for key in change_keys}},
-            'statements': statements}
+            'statements': statements,
+            **({'statement_input_comparison': input_comparison} if input_comparison is not None else {})}
 
 
 def render_report(left, right=None, *, now=None):
@@ -238,6 +256,38 @@ def render_report(left, right=None, *, now=None):
                     ('verdict-transitions', '판단 전환표'), ('changed-statements', '변경된 발언 요약'),
                     ('record-times', '기록 시각 관계'), ('metadata-changes', '변경 요약'),
                     ('statement-changes', '발언별 변경 여부')]
+    if any('input_statement_ids' in record for record in records):
+        sections.append(('statement-inputs', '검토에 제공된 발언'))
+        body += '<h2 id="statement-inputs">검토에 제공된 발언</h2>'
+        if comparison:
+            input_labels = {'UNKNOWN': '비교 불가 · 미기록', 'SAME': '동일', 'DIFFERENT': '다름'}
+            body += table(['검토 또는 결론', '왼쪽 발언 ID', '오른쪽 발언 ID', '목록 비교'], [
+                [row['id']+' '+row['agent'], ' · '.join(row['left'] or []) or '미기록',
+                 ' · '.join(row['right'] or []) or '미기록', input_labels[row['status']]]
+                for row in comparison['statement_input_comparison']])
+        for side, record in zip(('왼쪽', '오른쪽'), records):
+            if comparison:
+                body += '<h3>'+side+' 기록</h3>'
+            inputs = record.get('input_statement_ids')
+            if inputs is None:
+                body += '<p>제공된 발언 목록 미기록</p>'
+                continue
+            statements = {item['id']: item for item in record['transcript']}
+            for item, refs in zip(record['transcript'][3:], inputs[3:]):
+                title = cell(item['id']+' '+item['agent']+' · '+phase_labels[item['phase']])
+                if not refs:
+                    body += '<p>'+title+' · 제공된 발언 목록 미기록</p>'
+                    continue
+                body += '<details><summary>'+title+f' · 제공된 발언 {len(refs)}건</summary><ul>'
+                for ref in refs:
+                    statement = statements[ref]
+                    label = cell(ref+' '+statement['agent']+' · '+verdict_labels[statement['verdict']])
+                    body += '<li><strong>'+label+'</strong><p>'+cell(statement['summary'])+'</p>'
+                    if statement['concerns']:
+                        body += '<p>기록된 우려 사항</p><ul>'+''.join(
+                            '<li>'+cell(concern)+'</li>' for concern in statement['concerns'])+'</ul>'
+                    body += '</li>'
+                body += '</ul></details>'
     navigation = '<nav aria-label="보고서 목차"><p>바로 이동</p><ul>'+''.join(
         '<li><a href="#'+key+'">'+label+'</a></li>' for key, label in sections)+'</ul></nav>'
     body = body.replace('</h2>', '</h2><p class="back-top"><a href="#report-top">목차로 돌아가기</a></p>')

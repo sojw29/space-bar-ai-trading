@@ -212,7 +212,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                                 ("GUARDIAN", "ANALYSIS"), ("ATLAS", "PEER_REVIEW"),
                                 ("QUANT", "PEER_REVIEW"), ("GUARDIAN", "PEER_REVIEW"),
                                 ("COMMANDER", "CONCLUSION")]
-                    from ai_meeting_runtime import validate_statement
+                    from ai_meeting_runtime import meeting_input_refs, validate_statement
                     entries = []
                     for item, (agent, phase) in zip(raw["transcript"], expected):
                         if not isinstance(item, dict) or item.get("agent") != agent or item.get("phase") != phase:
@@ -224,8 +224,9 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     if refs is not None:
                         if not isinstance(refs, list) or len(refs) != 7:
                             raise ValueError("invalid_statement_refs")
+                        legacy_refs = isinstance(refs[-1], dict) and refs[-1].get("references") == []
                         for i, (entry, (agent, phase)) in enumerate(zip(refs, expected)):
-                            expected_refs = ["M%02d" % (i-2)] if 3 <= i <= 5 else []
+                            expected_refs = meeting_input_refs(i, legacy=legacy_refs)
                             if (not isinstance(entry, dict) or
                                     entry.get("id") != "M%02d" % (i+1) or
                                     entry.get("agent") != agent or
@@ -235,7 +236,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                     else:
                         refs = [{"id": "M%02d" % (i+1), "agent": agent,
                                  "phase": phase,
-                                 "references": ["M%02d" % (i-2)] if 3 <= i <= 5 else []}
+                                 "references": meeting_input_refs(i, legacy=True)}
                                 for i, (agent, phase) in enumerate(expected)]
                     from datetime import datetime, timezone
                     source_time = raw.get("source_generated_at_utc")

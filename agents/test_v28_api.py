@@ -600,6 +600,19 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  const originalConcerns=data.payload.transcript[5].concerns;
+  data.payload.transcript[5].concerns=['<em>자료 범위</em>','시각 차이'];
+  await elements['ai-meeting-refresh'].events.click();
+  const rowsWithRefs=elements['ai-meeting-rows'].children;
+  rowsWithRefs[3].events.click();
+  assert.match(elements['ai-meeting-linked'].textContent,/제공된 발언 \(3건\)/);
+  assert.match(elements['ai-meeting-linked'].textContent,/\[M02\] QUANT/);
+  rowsWithRefs[6].events.click();
+  assert.match(elements['ai-meeting-linked'].textContent,/제공된 발언 \(6건\)/);
+  assert.match(elements['ai-meeting-linked'].textContent,/\[M06\] GUARDIAN/);
+  assert.ok(elements['ai-meeting-linked'].textContent.includes('기록된 우려 사항:\n• <em>자료 범위</em>\n• 시각 차이'));
+  data.payload.transcript[5].concerns=originalConcerns;
+  await elements['ai-meeting-refresh'].events.click();
   // Corrupted transcript order and peer-review references must fail closed.
   for(const field of ['transcript','statement_refs']){
    const original=data.payload[field];
@@ -1008,6 +1021,24 @@ setImmediate(async()=>{
         from ai_meeting_archive import validate_archive
         exported_archive = validate_archive(json.loads(result.stdout))
         self.assertEqual(len(exported_archive["record"]["transcript"]), 7)
+        from ai_meeting_archive import render_report
+        self.assertEqual(exported_archive["record"]["input_statement_ids"][-1],
+                         ["M01", "M02", "M03", "M04", "M05", "M06"])
+        exported_archive["record"]["transcript"][5]["summary"] = "<em>검토 요약</em>"
+        exported_archive["record"]["transcript"][5]["concerns"] = ["자료 <범위>", "시간 > 차이"]
+        report = render_report(exported_archive)
+        self.assertIn("M07 COMMANDER · 최종 결론 · 제공된 발언 6건", report)
+        self.assertIn("M06 GUARDIAN · ", report)
+        self.assertIn("&lt;em&gt;검토 요약&lt;/em&gt;", report)
+        self.assertNotIn("<em>검토 요약</em>", report)
+        self.assertIn("<p>기록된 우려 사항</p><ul><li>자료 &lt;범위&gt;</li><li>시간 &gt; 차이</li></ul>", report)
+        from copy import deepcopy
+        from ai_meeting_archive import compare_archives
+        legacy = deepcopy(exported_archive)
+        legacy["record"]["input_statement_ids"] = [[], [], [], ["M01"], ["M02"], ["M03"], []]
+        diff = compare_archives(legacy, exported_archive)["statement_input_comparison"]
+        self.assertEqual([row["status"] for row in diff], ["DIFFERENT"] * 3 + ["UNKNOWN"])
+        self.assertIn("비교 불가 · 미기록", render_report(legacy, exported_archive))
 
     def test_office3d_served_over_http_with_mobile_and_meeting_contract(self):
         # Verify the real dashboard server delivers the 3D room rather than a

@@ -2332,9 +2332,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const refs=d.statement_refs;
   if(refs!==undefined){
    if(!Array.isArray(refs)||refs.length!==7)throw Error("회의 참조 목록 검증 실패");
+   const legacyRefs=Array.isArray(refs[6]?.references)&&refs[6].references.length===0;
+   const initialRefs=["M01","M02","M03"];
    for(let i=0;i<7;i++){
     const phase=i<3?"ANALYSIS":i<6?"PEER_REVIEW":"CONCLUSION";
-    const expectedRefs=i>=3&&i<6?["M"+String(i-2).padStart(2,"0")]:[];
+    const own=initialRefs[i-3];
+    const expectedRefs=i<3?[]:i===6?(legacyRefs?[]:[...initialRefs,"M04","M05","M06"]):
+      (legacyRefs?[own]:[own,...initialRefs.filter(id=>id!==own)]);
     const entry=refs[i];
     if(!entry||typeof entry!=="object"||Array.isArray(entry)||
        Object.keys(entry).sort().join(",")!=="agent,id,phase,references"||
@@ -2364,6 +2368,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       (initial.verdict===t.verdict?" (판단 유지)":" (판단 변경)");
     }
    }
+   const inputRefs=refs?.[i].references??[];
+   if(inputRefs.length>1){
+    item.textContent+="\n검토에 제공된 발언: "+inputRefs.map(id=>
+     "["+id+"] "+order[Number(id.slice(1))-1]).join(" · ");
+   }
    item.setAttribute?.("data-phase",phase);
    item.setAttribute?.("data-agent",t.agent);
    item.setAttribute?.("data-statement-id",statementId);
@@ -2373,11 +2382,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     item.setAttribute?.("aria-label","발언 "+statementId+" 연결 기록 확인");
     const showLinked=()=>{
      if(!canUseRecord())return;
-     const source=i>=3&&i<6?d.transcript[i-3]:null;
-     const sourceId=i>=3&&i<6?(refs?refs[i].references[0]:"M"+String(i-2).padStart(2,"0")):null;
+     const sourceIds=refs?.[i].references??(i>=3&&i<6?["M0"+(i-2)]:[]);
+     const sources=sourceIds.map(id=>{
+      const source=d.transcript[Number(id.slice(1))-1];
+      return "["+id+"] "+source.agent+" · "+labels[source.verdict]+"\n"+source.summary+
+       (source.concerns.length?"\n기록된 우려 사항:\n"+source.concerns.map(concern=>"• "+concern).join("\n"):"");
+     });
+     const context=sources.length?"검토에 제공된 발언 ("+sources.length+"건)\n"+sources.join("\n\n"):
+      i<3?"독립 분석 단계 · 제공된 앞선 발언 없음":"최종 결론 · 이 기록에 저장된 참조 목록 없음";
      linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\n"+t.summary+
-      (source?"\n연결 초기 발언 ["+sourceId+"] "+source.agent+" · "+labels[source.verdict]+"\n"+source.summary:
-       i<3?"\n초기 분석 발언입니다. 같은 에이전트의 상호 검토 단계에서 이 발언을 참조합니다.":"\n최종 결론 발언입니다.");
+      "\n\n"+context;
      linked.hidden=false;
     };
     item.addEventListener?.("click",showLinked);
@@ -2538,6 +2552,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    workflow_execution_id:d.workflow_execution_id??null,market_source:d.market_source??null,model:d.model,
    source_generated_at_utc:new Date(source).toISOString(),started_at_utc:new Date(started).toISOString(),generated_at_utc:new Date(finished).toISOString(),
    final_verdict:d.final_verdict,verdict_counts:{...counts},
+   ...(refs?{input_statement_ids:refs.map(entry=>[...entry.references])}:{}),
    transcript:d.transcript.map((t,i)=>({id:"M"+String(i+1).padStart(2,"0"),agent:t.agent,phase:t.phase,verdict:t.verdict,summary:t.summary,concerns:[...t.concerns]}))};
   if(exportJson)exportJson.disabled=false;
   if(showConclusion)showConclusion.disabled=false;
