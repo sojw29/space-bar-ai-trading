@@ -265,7 +265,11 @@ def render_report(left, right=None, *, now=None):
                 for ref in refs:
                     statement = statements[ref]
                     label = cell(ref+' '+statement['agent']+' · '+verdict_labels[statement['verdict']])
-                    body += '<li><strong>'+label+'</strong><p>'+cell(statement['summary'])+'</p></li>'
+                    body += '<li><strong>'+label+'</strong><p>'+cell(statement['summary'])+'</p>'
+                    if statement['concerns']:
+                        body += '<p>기록된 우려 사항</p><ul>'+''.join(
+                            '<li>'+cell(concern)+'</li>' for concern in statement['concerns'])+'</ul>'
+                    body += '</li>'
                 body += '</ul></details>'
     navigation = '<nav aria-label="보고서 목차"><p>바로 이동</p><ul>'+''.join(
         '<li><a href="#'+key+'">'+label+'</a></li>' for key, label in sections)+'</ul></nav>'
