@@ -2385,7 +2385,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      const sourceIds=refs?.[i].references??(i>=3&&i<6?["M0"+(i-2)]:[]);
      const sources=sourceIds.map(id=>{
       const source=d.transcript[Number(id.slice(1))-1];
-      return "["+id+"] "+source.agent+" · "+labels[source.verdict]+"\n"+source.summary;
+      return "["+id+"] "+source.agent+" · "+labels[source.verdict]+"\n"+source.summary+
+       (source.concerns.length?"\n기록된 우려 사항:\n"+source.concerns.map(concern=>"• "+concern).join("\n"):"");
      });
      const context=sources.length?"검토에 제공된 발언 ("+sources.length+"건)\n"+sources.join("\n\n"):
       i<3?"독립 분석 단계 · 제공된 앞선 발언 없음":"최종 결론 · 이 기록에 저장된 참조 목록 없음";

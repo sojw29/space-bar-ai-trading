@@ -600,6 +600,9 @@ setImmediate(async()=>{
    assert.equal(elements['ai-meeting-rows'].children.length,7,field);
    assert.equal(elements['ai-meeting-status'].attrs['data-connection'],'validated',field);
   }
+  const originalConcerns=data.payload.transcript[5].concerns;
+  data.payload.transcript[5].concerns=['<em>자료 범위</em>','시각 차이'];
+  await elements['ai-meeting-refresh'].events.click();
   const rowsWithRefs=elements['ai-meeting-rows'].children;
   rowsWithRefs[3].events.click();
   assert.match(elements['ai-meeting-linked'].textContent,/제공된 발언 \(3건\)/);
@@ -607,6 +610,9 @@ setImmediate(async()=>{
   rowsWithRefs[6].events.click();
   assert.match(elements['ai-meeting-linked'].textContent,/제공된 발언 \(6건\)/);
   assert.match(elements['ai-meeting-linked'].textContent,/\[M06\] GUARDIAN/);
+  assert.ok(elements['ai-meeting-linked'].textContent.includes('기록된 우려 사항:\n• <em>자료 범위</em>\n• 시각 차이'));
+  data.payload.transcript[5].concerns=originalConcerns;
+  await elements['ai-meeting-refresh'].events.click();
   // Corrupted transcript order and peer-review references must fail closed.
   for(const field of ['transcript','statement_refs']){
    const original=data.payload[field];
