@@ -136,6 +136,16 @@ def compare_archives(left, right, *, now=None):
         context.append('SOURCE_TIME_CHANGED')
     if relation('generated_at_utc')['order'] == 'RIGHT_EARLIER':
         context.append('RIGHT_COMPLETION_EARLIER')
+    left_inputs, right_inputs = a.get('input_statement_ids'), b.get('input_statement_ids')
+    input_comparison = None
+    if left_inputs is not None or right_inputs is not None:
+        input_comparison = []
+        for index, statement in enumerate(statements[3:], 3):
+            old = left_inputs[index] if left_inputs is not None else []
+            new = right_inputs[index] if right_inputs is not None else []
+            status = ('UNKNOWN' if not old or not new else 'SAME' if old == new else 'DIFFERENT')
+            input_comparison.append({'id': statement['id'], 'agent': statement['agent'],
+                                     'left': old or None, 'right': new or None, 'status': status})
     return {'version': 'MEETING_ARCHIVE_COMPARISON_1', 'research_only': True,
             'orders_enabled': False, 'left': describe(left), 'right': describe(right),
             'market_comparison': market,
@@ -151,7 +161,8 @@ def compare_archives(left, right, *, now=None):
             'change_summary': {'changed_statement_count': len(changed_ids),
                                'changed_statement_ids': changed_ids,
                                **{key: sum(s[key] for s in statements) for key in change_keys}},
-            'statements': statements}
+            'statements': statements,
+            **({'statement_input_comparison': input_comparison} if input_comparison is not None else {})}
 
 
 def render_report(left, right=None, *, now=None):
@@ -248,6 +259,12 @@ def render_report(left, right=None, *, now=None):
     if any('input_statement_ids' in record for record in records):
         sections.append(('statement-inputs', '검토에 제공된 발언'))
         body += '<h2 id="statement-inputs">검토에 제공된 발언</h2>'
+        if comparison:
+            input_labels = {'UNKNOWN': '비교 불가 · 미기록', 'SAME': '동일', 'DIFFERENT': '다름'}
+            body += table(['검토 또는 결론', '왼쪽 발언 ID', '오른쪽 발언 ID', '목록 비교'], [
+                [row['id']+' '+row['agent'], ' · '.join(row['left'] or []) or '미기록',
+                 ' · '.join(row['right'] or []) or '미기록', input_labels[row['status']]]
+                for row in comparison['statement_input_comparison']])
         for side, record in zip(('왼쪽', '오른쪽'), records):
             if comparison:
                 body += '<h3>'+side+' 기록</h3>'

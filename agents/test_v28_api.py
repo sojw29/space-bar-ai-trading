@@ -1032,6 +1032,13 @@ setImmediate(async()=>{
         self.assertIn("&lt;em&gt;검토 요약&lt;/em&gt;", report)
         self.assertNotIn("<em>검토 요약</em>", report)
         self.assertIn("<p>기록된 우려 사항</p><ul><li>자료 &lt;범위&gt;</li><li>시간 &gt; 차이</li></ul>", report)
+        from copy import deepcopy
+        from ai_meeting_archive import compare_archives
+        legacy = deepcopy(exported_archive)
+        legacy["record"]["input_statement_ids"] = [[], [], [], ["M01"], ["M02"], ["M03"], []]
+        diff = compare_archives(legacy, exported_archive)["statement_input_comparison"]
+        self.assertEqual([row["status"] for row in diff], ["DIFFERENT"] * 3 + ["UNKNOWN"])
+        self.assertIn("비교 불가 · 미기록", render_report(legacy, exported_archive))
 
     def test_office3d_served_over_http_with_mobile_and_meeting_contract(self):
         # Verify the real dashboard server delivers the 3D room rather than a
