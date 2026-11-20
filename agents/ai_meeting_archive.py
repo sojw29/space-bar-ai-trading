@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import sys
 
+from ai_meeting_runtime import meeting_input_refs
+
 VERDICTS = ('OBSERVATION_ONLY', 'REVIEW_NEEDED', 'INSUFFICIENT_DATA')
 PLAN = [(agent, phase) for phase in ('ANALYSIS', 'PEER_REVIEW')
         for agent in ('ATLAS', 'QUANT', 'GUARDIAN')] + [('COMMANDER', 'CONCLUSION')]
@@ -39,7 +41,7 @@ def validate_archive(value, *, now=None):
             and value['trade_authorization'] == 'DENIED'
             and value['process_liveness_verified'] is False)
     record = value['record']
-    require(isinstance(record, dict) and set(record) == RECORD)
+    require(isinstance(record, dict) and set(record) - {"input_statement_ids"} == RECORD)
     require(record['execution_mode'] in ('OFFLINE_FIXTURE', 'LIVE_PROVIDER'))
     require(record['model_inference_performed'] is (record['execution_mode'] == 'LIVE_PROVIDER'))
     identity = record['workflow_execution_id']
@@ -64,6 +66,11 @@ def validate_archive(value, *, now=None):
         require(isinstance(concerns, list) and len(concerns) <= 8
                 and all(isinstance(c, str) and c.strip() and len(c) <= 400 for c in concerns))
         counts[statement['verdict']] += 1
+    if 'input_statement_ids' in record:
+        inputs = record['input_statement_ids']
+        require(isinstance(inputs, list) and len(inputs) == len(PLAN))
+        legacy = inputs[-1] == []
+        require(inputs == [meeting_input_refs(i, legacy=legacy) for i in range(len(PLAN))])
     saved_counts = record['verdict_counts']
     require(isinstance(saved_counts, dict) and set(saved_counts) == set(VERDICTS)
             and all(type(saved_counts[key]) is int and saved_counts[key] == counts[key] for key in VERDICTS))
@@ -238,6 +245,21 @@ def render_report(left, right=None, *, now=None):
                     ('verdict-transitions', '판단 전환표'), ('changed-statements', '변경된 발언 요약'),
                     ('record-times', '기록 시각 관계'), ('metadata-changes', '변경 요약'),
                     ('statement-changes', '발언별 변경 여부')]
+    if any('input_statement_ids' in record for record in records):
+        sections.append(('statement-inputs', '검토에 제공된 발언'))
+        rows = []
+        for side, record in zip(('왼쪽', '오른쪽'), records):
+            inputs = record.get('input_statement_ids')
+            if inputs is None:
+                rows.append([side if comparison else '저장 기록', '미기록', '미기록'])
+                continue
+            statements = {item['id']: item for item in record['transcript']}
+            for item, refs in zip(record['transcript'][3:], inputs[3:]):
+                rows.append([side if comparison else '저장 기록',
+                             item['id']+' '+item['agent'],
+                             ' · '.join(ref+' '+statements[ref]['agent'] for ref in refs) or '미기록'])
+        body += '<h2 id="statement-inputs">검토에 제공된 발언</h2>'+table(
+            ['기록', '검토 또는 결론', '제공된 발언 ID와 역할'], rows)
     navigation = '<nav aria-label="보고서 목차"><p>바로 이동</p><ul>'+''.join(
         '<li><a href="#'+key+'">'+label+'</a></li>' for key, label in sections)+'</ul></nav>'
     body = body.replace('</h2>', '</h2><p class="back-top"><a href="#report-top">목차로 돌아가기</a></p>')

@@ -1015,6 +1015,10 @@ setImmediate(async()=>{
         from ai_meeting_archive import validate_archive
         exported_archive = validate_archive(json.loads(result.stdout))
         self.assertEqual(len(exported_archive["record"]["transcript"]), 7)
+        from ai_meeting_archive import render_report
+        self.assertEqual(exported_archive["record"]["input_statement_ids"][-1],
+                         ["M01", "M02", "M03", "M04", "M05", "M06"])
+        self.assertIn("M06 GUARDIAN", render_report(exported_archive))
 
     def test_office3d_served_over_http_with_mobile_and_meeting_contract(self):
         # Verify the real dashboard server delivers the 3D room rather than a

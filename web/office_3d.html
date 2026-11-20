@@ -2551,6 +2551,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    workflow_execution_id:d.workflow_execution_id??null,market_source:d.market_source??null,model:d.model,
    source_generated_at_utc:new Date(source).toISOString(),started_at_utc:new Date(started).toISOString(),generated_at_utc:new Date(finished).toISOString(),
    final_verdict:d.final_verdict,verdict_counts:{...counts},
+   ...(refs?{input_statement_ids:refs.map(entry=>[...entry.references])}:{}),
    transcript:d.transcript.map((t,i)=>({id:"M"+String(i+1).padStart(2,"0"),agent:t.agent,phase:t.phase,verdict:t.verdict,summary:t.summary,concerns:[...t.concerns]}))};
   if(exportJson)exportJson.disabled=false;
   if(showConclusion)showConclusion.disabled=false;
