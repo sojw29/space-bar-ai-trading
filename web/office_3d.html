@@ -2043,6 +2043,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <div style="margin-top:8px"><label for="ai-meeting-search">발언·우려 검색</label>
 <input id="ai-meeting-search" type="search" maxlength="120" autocomplete="off" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" placeholder="발언 번호 또는 검색어" style="box-sizing:border-box;max-width:100%;padding:7px;background:#152941;color:#e8f4ff;border:1px solid #547c9a;border-radius:6px"></div>
 <button id="ai-meeting-view-reset" type="button" aria-controls="ai-meeting-rows" aria-describedby="ai-meeting-agent-count" style="margin-top:8px;padding:7px" disabled>필터·검색 초기화</button>
+<button id="ai-meeting-search-original" type="button" aria-controls="ai-meeting-rows" style="margin-top:8px;padding:7px" hidden>원문 보기</button>
 <p id="ai-meeting-agent-count" role="status" aria-live="polite"></p>
 <p class="notice">검색·선택에 초점이 있는 동안 정기 자동 조회를 잠시 멈춥니다. 수동 다시 확인과 기록 만료 검사는 계속 동작합니다.</p>
 </div>
@@ -2126,11 +2127,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const phaseFilter=document.getElementById("ai-meeting-phase-filter");
  const verdictFilter=document.getElementById("ai-meeting-verdict-filter");
  const statementSearch=document.getElementById("ai-meeting-search");
+ const searchOriginal=document.getElementById("ai-meeting-search-original");
+ let searchedOriginal=null;
  const resetView=document.getElementById("ai-meeting-view-reset");
  let renderedStatements=[],validatedViewKey=null;
  function clearAgentView(){
   if(exportJson)exportJson.disabled=true;
   renderedStatements=[];validatedViewKey=null;
+  searchedOriginal=null;
+  if(searchOriginal)searchOriginal.hidden=true;
   if(resetView)resetView.disabled=true;
   if(agentControls)agentControls.hidden=true;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=true;}
@@ -2152,6 +2157,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(resetView)resetView.disabled=renderedStatements.length===0||(agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&!(statementSearch?.value));
   const searchedId=/^(?:\[(m0[1-7])\]|(m0[1-7]))$/.exec(query);
   const id=searchedId?(searchedId[1]??searchedId[2]):null;
+  searchedOriginal=id?renderedStatements.find(entry=>entry.id===id):null;
+  if(searchOriginal)searchOriginal.hidden=!searchedOriginal;
   const term=id?"["+id+"]":query;
   let count=0,originalCount=0;
   for(const entry of renderedStatements){
@@ -2167,6 +2174,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const searchStatus=id?" · 원문 "+originalCount+"개 · 인용 발언 "+(count-originalCount)+"개":query?" · 검색 적용":"";
   if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+searchStatus+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
+ function focusStatement(node){
+  node.tabIndex=-1;
+  node.focus?.({preventScroll:true});
+  node.scrollIntoView?.({block:"nearest"});
+ }
+ searchOriginal?.addEventListener("click",()=>{
+  if(!canUseRecord()||!searchedOriginal)return;
+  const {node}=searchedOriginal;
+  if(node.hidden){
+   if(agentFilter)agentFilter.value="ALL";
+   if(phaseFilter)phaseFilter.value="ALL";
+   if(verdictFilter)verdictFilter.value="ALL";
+   applyAgentView();
+  }
+  focusStatement(node);
+ });
  agentFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
  phaseFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
  verdictFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
@@ -2607,9 +2630,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        if(statementSearch)statementSearch.value="";
        applyAgentView();
       }
-      entry.node.tabIndex=-1;
-      entry.node.focus?.({preventScroll:true});
-      entry.node.scrollIntoView?.({block:"nearest"});
+      focusStatement(entry.node);
      };
      links.append?.(button);
     }
