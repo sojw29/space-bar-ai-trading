@@ -2076,6 +2076,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-save-picked-concerns-txt" type="button" style="min-height:44px" disabled>선택 우려 TXT 저장</button>
   <button id="ai-meeting-save-picked-concerns-json" type="button" style="min-height:44px" disabled>선택 우려 JSON 저장</button>
   <button id="ai-meeting-clear-picked-concerns" type="button" style="min-height:44px" disabled>우려 선택 해제</button>
+  <label>일괄 선택 유형 <select id="ai-meeting-concern-bulk-type" style="min-height:44px">
+   <option value="added">새로 기록된 우려</option>
+   <option value="continued">이어진 우려</option>
+   <option value="not_repeated">재언급되지 않은 우려</option>
+  </select></label>
+  <button id="ai-meeting-pick-concern-type" type="button" style="min-height:44px" disabled>이 유형 모두 선택</button>
+  <button id="ai-meeting-unpick-concern-type" type="button" style="min-height:44px" disabled>이 유형 선택 해제</button>
+  <button id="ai-meeting-open-picked-concern" type="button" style="min-height:44px" disabled>첫 선택 우려 열기</button>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
  </div></div>
@@ -2337,12 +2345,45 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const pickedConcernExports=["TXT","JSON"].map(format=>({
   format,button:document.getElementById("ai-meeting-save-picked-concerns-"+format.toLowerCase()),
  }));
+ const concernBulkType=document.getElementById("ai-meeting-concern-bulk-type");
+ const pickConcernType=document.getElementById("ai-meeting-pick-concern-type");
+ const unpickConcernType=document.getElementById("ai-meeting-unpick-concern-type");
+ const openPickedConcern=document.getElementById("ai-meeting-open-picked-concern");
  function updatePickedConcerns(){
   const count=pickedFinalConcerns.size;
-  if(pickedConcernCount)pickedConcernCount.textContent="선택한 우려 "+count+"건";
+  const selectedCounts={added:0,continued:0,not_repeated:0};
+  for(const id of pickedFinalConcerns)selectedCounts[id.split(":")[0]]++;
+  if(pickedConcernCount)pickedConcernCount.textContent="선택한 우려 "+count+"건"+
+   (count?" · 신규 "+selectedCounts.added+" · 이어짐 "+selectedCounts.continued+
+    " · 재언급 없음 "+selectedCounts.not_repeated:"");
+  const category=concernBulkType?.value||"added";
+  const available=comparisonReport?.final_concerns[category]?.length??0;
+  if(pickConcernType)pickConcernType.disabled=available===selectedCounts[category];
+  if(unpickConcernType)unpickConcernType.disabled=!selectedCounts[category];
+  if(openPickedConcern)openPickedConcern.disabled=count===0;
   if(clearPickedConcerns)clearPickedConcerns.disabled=count===0;
   for(const {button} of pickedConcernExports)if(button)button.disabled=count===0;
  }
+ function setConcernTypeSelection(selected){
+  if(!pairedArchives&&!canUseRecord())return;
+  const category=concernBulkType?.value||"added";
+  for(const [id,checkbox] of concernCheckboxes){
+   if(!id.startsWith(category+":"))continue;
+   checkbox.checked=selected;
+   if(selected)pickedFinalConcerns.add(id);
+   else pickedFinalConcerns.delete(id);
+  }
+  updatePickedConcerns();
+ }
+ concernBulkType?.addEventListener("change",updatePickedConcerns);
+ pickConcernType?.addEventListener("click",()=>setConcernTypeSelection(true));
+ unpickConcernType?.addEventListener("click",()=>setConcernTypeSelection(false));
+ openPickedConcern?.addEventListener("click",()=>{
+  const first=[...concernCheckboxes.keys()].find(id=>pickedFinalConcerns.has(id));
+  if(!first)return;
+  const [category,index]=first.split(":");
+  openFinalConcern(category,Number(index));
+ });
  clearPickedConcerns?.addEventListener("click",()=>{
   pickedFinalConcerns.clear();
   for(const checkbox of concernCheckboxes.values())checkbox.checked=false;
