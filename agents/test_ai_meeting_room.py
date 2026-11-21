@@ -147,6 +147,13 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(review.scrolled,true);
    rows[0].click();
    assert.doesNotMatch(linked.textContent,/이 분석을 인용한 상호 검토/);
+   phase.value='ANALYSIS';phase.change();
+   assert.equal(linked.hidden,false);
+   phase.value='PEER_REVIEW';phase.change();
+   assert.equal(rows[0].hidden,true);
+   assert.equal(linked.hidden,true);
+   assert.equal(linked.textContent,'');
+   assert.equal(rows[0].attrs['aria-current'],'false');
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
