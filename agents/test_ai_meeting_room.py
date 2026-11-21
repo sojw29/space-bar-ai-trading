@@ -122,6 +122,10 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(linked.hidden,false);
    assert.match(linked.textContent,/상호 검토에서 인용한 초기 분석 \(1건\)\n\[M02\] QUANT/);
    assert.match(linked.textContent,/그 외 검토에 제공된 발언 \(2건\)\n\[M01\] ATLAS/);
+   rows[1].click();
+   assert.match(linked.textContent,/이 분석을 인용한 상호 검토 \(1건\)\n\[M04\] ATLAS/);
+   rows[0].click();
+   assert.doesNotMatch(linked.textContent,/이 분석을 인용한 상호 검토/);
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
