@@ -2069,6 +2069,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    </select>
   </label>
   <label>발언 검색 <input id="ai-meeting-comparison-search" type="search" maxlength="120" style="display:block;width:100%;min-height:44px"></label>
+  <label>검색 범위 <select id="ai-meeting-comparison-search-scope" style="display:block;width:100%;min-height:44px">
+   <option value="ALL">전체</option><option value="SUMMARY">요약</option><option value="CONCERNS">우려</option><option value="ID">발언 번호</option>
+  </select></label>
   <label>이전 판정 <select id="ai-meeting-comparison-previous-verdict" style="display:block;width:100%;min-height:44px">
    <option value="ALL">전체</option><option value="OBSERVATION_ONLY">관측 요약</option><option value="REVIEW_NEEDED">추가 검토 필요</option><option value="INSUFFICIENT_DATA">자료 부족</option>
   </select></label>
@@ -2084,6 +2087,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-comparison-reset-filters" type="button" style="min-height:44px" disabled>비교 필터 초기화</button>
   <button id="ai-meeting-comparison-save-filtered-text" type="button" style="min-height:44px" disabled>표시된 발언 TXT 저장</button>
   <button id="ai-meeting-comparison-save-filtered-json" type="button" style="min-height:44px" disabled>표시된 발언 JSON 저장</button>
+  <button id="ai-meeting-comparison-save-filtered-csv" type="button" style="min-height:44px" disabled>표시된 발언 CSV 저장</button>
+  <button id="ai-meeting-comparison-save-filtered-csv" type="button" style="min-height:44px" disabled>표시된 발언 CSV 저장</button>
   <p id="ai-meeting-comparison-change-count" role="status"></p>
  </div></div>
  <div id="ai-meeting-comparison-evidence" hidden></div>
@@ -2230,6 +2235,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const comparisonFilters=document.getElementById("ai-meeting-comparison-filters");
  const comparisonAgent=document.getElementById("ai-meeting-comparison-agent");
  const comparisonPhase=document.getElementById("ai-meeting-comparison-phase");
+ const searchScope=document.getElementById("ai-meeting-comparison-search-scope");
+ const saveFilteredCsv=document.getElementById("ai-meeting-comparison-save-filtered-csv");
  const comparisonSearch=document.getElementById("ai-meeting-comparison-search");
  const previousComparisonVerdict=document.getElementById("ai-meeting-comparison-previous-verdict");
  const comparisonType=document.getElementById("ai-meeting-comparison-type");
@@ -2245,6 +2252,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function applyComparisonFilters(){
   const agent=comparisonAgent?.value||"ALL",phase=comparisonPhase?.value||"ALL";
   const search=(comparisonSearch?.value??"").trim().toLowerCase();
+  const scope=searchScope?.value||"ALL";
+  const idQuery=/^(?:\[(m0[1-7])\]|(m0[1-7]))$/.exec(search);
   const verdict=comparisonVerdict?.value||"ALL";
   const summaries=comparisonSummaryChanges?.checked,concerns=comparisonConcernChanges?.checked;
   const previousVerdict=previousComparisonVerdict?.value||"ALL",type=comparisonType?.value||"ALL";
@@ -2256,17 +2265,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   };
   const visible=comparisonChanges.filter(entry=>{
    const {node,statement,change,searchText}=entry;
+   const exactId=(scope==="ALL"||scope==="ID")&&idQuery;
+   const matches=!search||(exactId?statement.id.toLowerCase()===(idQuery[1]??idQuery[2]):searchText[scope].includes(search));
    node.hidden=!inScope(entry)||(agent!=="ALL"&&statement.agent!==agent)||(phase!=="ALL"&&statement.phase!==phase)||
     (verdict!=="ALL"&&statement.verdict!==verdict)||(previousVerdict!=="ALL"&&change.earlier_verdict!==previousVerdict)||
-    !searchText.includes(search);
+    !matches;
    return !node.hidden;
   });
   const contentView=type==="SUMMARY"||type==="CONCERNS"||(type==="ALL"&&(summaries||concerns));
   if(comparisonFilters)comparisonFilters.hidden=comparisonChanges.length===0;
-  if(comparisonReset)comparisonReset.disabled=agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&previousVerdict==="ALL"&&type==="ALL"&&!search&&!summaries&&!concerns;
-  for(const button of [saveFilteredText,saveFilteredJson]){if(button)button.disabled=visible.length===0;}
+  if(comparisonReset)comparisonReset.disabled=agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&previousVerdict==="ALL"&&type==="ALL"&&scope==="ALL"&&!search&&!summaries&&!concerns;
+  for(const button of [saveFilteredText,saveFilteredJson,saveFilteredCsv]){if(button)button.disabled=visible.length===0;}
   if(comparisonChangeCount)comparisonChangeCount.textContent=visible.length?
-   (contentView?"발언 변경 ":"판정 변경 ")+visible.length+" / "+comparisonChanges.filter(inScope).length+"건":
+   (contentView?"발언 변경 ":"판정 변경 ")+visible.length+" / "+comparisonChanges.filter(inScope).length+"건"+
+   " · 판정 "+visible.filter(entry=>entry.verdictChanged).length+
+   " · 요약 "+visible.filter(entry=>entry.summaryChanged).length+
+   " · 우려 "+visible.filter(entry=>entry.concernsChanged).length:
    contentView?"조건에 맞는 발언 변경 없음":"조건에 맞는 판정 변경 없음";
   if(comparisonToggle){
    const kind=contentView?"발언 변경":"판정 변경";
@@ -2279,7 +2293,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  comparisonAgent?.addEventListener("change",applyComparisonFilters);
  comparisonPhase?.addEventListener("change",applyComparisonFilters);
  comparisonSearch?.addEventListener("input",applyComparisonFilters);
- for(const control of [comparisonVerdict,previousComparisonVerdict,comparisonType,comparisonSummaryChanges,comparisonConcernChanges]){
+ for(const control of [comparisonVerdict,previousComparisonVerdict,comparisonType,comparisonSummaryChanges,comparisonConcernChanges,searchScope]){
   control?.addEventListener("change",applyComparisonFilters);
  }
  comparisonReset?.addEventListener("click",()=>{
@@ -2290,6 +2304,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(previousComparisonVerdict)previousComparisonVerdict.value="ALL";
   if(comparisonType)comparisonType.value="ALL";
   if(comparisonSearch)comparisonSearch.value="";
+  if(searchScope)searchScope.value="ALL";
   if(comparisonSummaryChanges)comparisonSummaryChanges.checked=false;
   if(comparisonConcernChanges)comparisonConcernChanges.checked=false;
   applyComparisonFilters();
@@ -2421,7 +2436,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     pair.append(delta);
    }
    pair.addEventListener("toggle",applyComparisonFilters);
-   const searchText=[right.id,left.summary,right.summary,...left.concerns,...right.concerns].join("\n").toLowerCase();
+   const searchText={
+    ID:right.id.toLowerCase(),
+    SUMMARY:[left.summary,right.summary].join("\n").toLowerCase(),
+    CONCERNS:[...left.concerns,...right.concerns].join("\n").toLowerCase(),
+   };
+   searchText.ALL=[searchText.ID,searchText.SUMMARY,searchText.CONCERNS].join("\n");
    comparisonChanges.push({node:pair,change,statement:{...right,verdict:newVerdict},verdictChanged,summaryChanged,concernsChanged,searchText});
    groups.push(pair);
   }
@@ -2588,7 +2608,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const filters={
    agent:comparisonAgent?.value||"ALL",phase:comparisonPhase?.value||"ALL",type:comparisonType?.value||"ALL",
    earlier_verdict:previousComparisonVerdict?.value||"ALL",later_verdict:comparisonVerdict?.value||"ALL",
-   search:comparisonSearch?.value?.trim()||"",include_summary_changes:!!comparisonSummaryChanges?.checked,
+   search:comparisonSearch?.value?.trim()||"",search_scope:searchScope?.value||"ALL",include_summary_changes:!!comparisonSummaryChanges?.checked,
    include_concern_changes:!!comparisonConcernChanges?.checked,
   };
   const json=format==="JSON";
@@ -2598,7 +2618,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "이후 "+later.generated_at_utc,"시장 데이터 출처: "+(market_source??"미기록"),
    "적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
     " · 이전 판정 "+(labels[filters.earlier_verdict]??"전체")+" · 이후 판정 "+(labels[filters.later_verdict]??"전체")+
-    " · 검색어 "+(filters.search||"없음")+" · 요약 포함 "+(filters.include_summary_changes?"예":"아니오")+
+    " · 검색어 "+(filters.search||"없음")+" · 검색 범위 "+filters.search_scope+" · 요약 포함 "+(filters.include_summary_changes?"예":"아니오")+
     " · 우려 포함 "+(filters.include_concern_changes?"예":"아니오")];
   for(const change of changes){
    lines.push("["+change.id+"] "+change.agent+" · "+change.phase+" · "+labels[change.earlier_verdict]+" → "+labels[change.later_verdict]);
@@ -2607,8 +2627,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(change.concerns_removed.length)lines.push("빠진 우려: "+change.concerns_removed.join(" / "));
   }
   try{
-   saveMeetingFile((json?JSON.stringify(result,null,2):lines.join("\n"))+"\n",
-    "spacebar-meeting-filtered-changes."+format.toLowerCase(),json?"application/json;charset=utf-8":"text/plain;charset=utf-8");
+   let content=(json?JSON.stringify(result,null,2):lines.join("\n"))+"\n";
+   let mime=json?"application/json;charset=utf-8":"text/plain;charset=utf-8";
+   if(format==="CSV"){
+    const cell=value=>{
+     const raw=String(value??"");
+     const safe=/^[\s\uFEFF]*[=+@-]|^[\t\r\n]/.test(raw)?"'"+raw:raw;
+     return '"'+safe.replace(/"/g,'""')+'"';
+    };
+    const rows=[["발언 번호","에이전트","단계","이전 판정","이후 판정","이전 요약","이후 요약","추가된 우려","빠진 우려","이전 회의 UTC","이후 회의 UTC"]];
+    for(const change of changes){
+     rows.push([change.id,change.agent,change.phase,labels[change.earlier_verdict],labels[change.later_verdict],
+      change.summary?.earlier,change.summary?.later,change.concerns_added.join(" / "),change.concerns_removed.join(" / "),
+      earlier.generated_at_utc,later.generated_at_utc]);
+    }
+    content="\uFEFF"+rows.map(row=>row.map(cell).join(",")).join("\r\n")+"\r\n";
+    mime="text/csv;charset=utf-8";
+   }
+   saveMeetingFile(content,"spacebar-meeting-filtered-changes."+format.toLowerCase(),mime);
    if(comparisonSaveStatus)comparisonSaveStatus.textContent="표시된 발언 "+format+" 저장을 요청했습니다.";
   }catch(_){
    if(comparisonSaveStatus)comparisonSaveStatus.textContent="표시된 발언 "+format+" 저장을 시작하지 못했습니다.";
@@ -2616,6 +2652,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  saveFilteredText?.addEventListener("click",()=>downloadFilteredComparison("TXT"));
  saveFilteredJson?.addEventListener("click",()=>downloadFilteredComparison("JSON"));
+ saveFilteredCsv?.addEventListener("click",()=>downloadFilteredComparison("CSV"));
  saveComparison?.addEventListener("click",()=>downloadComparison("TXT"));
  saveComparisonJson?.addEventListener("click",()=>downloadComparison("JSON"));
  function readComparisonArchive(archive){
