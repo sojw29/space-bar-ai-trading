@@ -34,7 +34,8 @@ PHASE_GUIDANCE = {
                    "If the evidence cannot settle a disagreement, retain it as an open concern.",
     "CONCLUSION": "Use both rounds to distinguish shared observations, contested claims "
                   "and unresolved evidence gaps. Attribute disagreements to their agents "
-                  "and state what additional evidence would resolve them. If evidence_priority is supplied, "
+                  "and cite the supplied statement IDs when describing those disagreements. "
+                  "State what additional evidence would resolve them. If evidence_priority is supplied, "
                   "explain the cited constraint and what evidence would be needed to address it.",
 }
 SCHEMA = {"type": "object", "additionalProperties": False,
@@ -228,7 +229,9 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
         speak(agent, "PEER_REVIEW", {"facts": facts, "own_analysis": own_analysis,
                                     "peer_analyses": peer_analyses,
                                     "analysis_statement_ids": analysis_statement_ids})
-    conclusion_context = {"facts": facts, "discussion": deepcopy(transcript)}
+    discussion = [{"id": f"M{index:02}", **statement}
+                  for index, statement in enumerate(transcript, 1)]
+    conclusion_context = {"facts": facts, "discussion": discussion}
     priority = evidence_priority(transcript)
     if priority is not None:
         conclusion_context["evidence_priority"] = priority

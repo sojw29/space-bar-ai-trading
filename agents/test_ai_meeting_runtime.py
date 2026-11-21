@@ -47,7 +47,11 @@ class MeetingTests(unittest.TestCase):
             self.assertEqual(review_context['own_analysis'], result['transcript'][index])
             self.assertEqual(review_context['peer_analyses'],
                              [row for row in result['transcript'][:3] if row['agent'] != agent])
-        self.assertEqual(fixture.calls[-1][2]['discussion'], result['transcript'][:6])
+        self.assertEqual(fixture.calls[-1][2]['discussion'], [
+            {'id': f'M{index:02}', **row}
+            for index, row in enumerate(result['transcript'][:6], 1)
+        ])
+        self.assertTrue(all('id' not in row for row in result['transcript']))
         self.assertEqual([row['references'] for row in result['statement_refs']], [
             [], [], [], ['M01', 'M02', 'M03'], ['M02', 'M01', 'M03'],
             ['M03', 'M01', 'M02'], ['M01', 'M02', 'M03', 'M04', 'M05', 'M06'],
