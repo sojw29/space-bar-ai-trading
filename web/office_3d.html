@@ -2150,9 +2150,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(verdictFilter)verdictFilter.value=verdict;
   const query=typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120).trim().toLowerCase():"";
   if(resetView)resetView.disabled=renderedStatements.length===0||(agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&!(statementSearch?.value));
-  let count=0;
-  for(const entry of renderedStatements){entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||(verdict!=="ALL"&&entry.verdict!==verdict)||(query!==""&&!entry.searchText.includes(query));if(!entry.node.hidden)count++;}
-  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+(query?" · 검색 적용":"")+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
+  const searchedId=/^(?:\[(m0[1-7])\]|(m0[1-7]))$/.exec(query);
+  const id=searchedId?(searchedId[1]??searchedId[2]):null;
+  const term=id?"["+id+"]":query;
+  let count=0,originalCount=0;
+  for(const entry of renderedStatements){
+   entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||
+    (verdict!=="ALL"&&entry.verdict!==verdict)||(term!==""&&!entry.searchText.includes(term));
+   if(!entry.node.hidden){
+    count++;
+    if(entry.id===id)originalCount++;
+   }
+  }
+  const searchStatus=id?" · 원문 "+originalCount+"개 · 인용 발언 "+(count-originalCount)+"개":query?" · 검색 적용":"";
+  if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+searchStatus+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
  agentFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
  phaseFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
@@ -2508,7 +2519,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   renderedStatements=output.map((node,i)=>{
    const {agent,phase,verdict,summary,concerns}=d.transcript[i];
    const id=refs?.[i].id??"M"+String(i+1).padStart(2,"0");
-   return {node,agent,phase,verdict,searchText:["["+id+"]",summary,...concerns].join("\n").toLowerCase()};
+   return {node,agent,phase,verdict,id:id.toLowerCase(),searchText:["["+id+"]",summary,...concerns].join("\n").toLowerCase()};
   });
   if(agentControls)agentControls.hidden=false;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=false;}
