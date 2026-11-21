@@ -2157,6 +2157,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const entry of renderedStatements){
    entry.node.hidden=(agent!=="ALL"&&entry.agent!==agent)||(phase!=="ALL"&&entry.phase!==phase)||
     (verdict!=="ALL"&&entry.verdict!==verdict)||(term!==""&&!entry.searchText.includes(term));
+   const matchLabel=id&&!entry.node.hidden?(entry.id===id?"원문":"인용 발언"):"";
+   entry.node.textContent=matchLabel?matchLabel+" · "+entry.text:entry.text;
    if(!entry.node.hidden){
     count++;
     if(entry.id===id)originalCount++;
@@ -2519,7 +2521,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   renderedStatements=output.map((node,i)=>{
    const {agent,phase,verdict,summary,concerns}=d.transcript[i];
    const id=refs?.[i].id??"M"+String(i+1).padStart(2,"0");
-   return {node,agent,phase,verdict,id:id.toLowerCase(),searchText:["["+id+"]",summary,...concerns].join("\n").toLowerCase()};
+   return {node,agent,phase,verdict,id:id.toLowerCase(),text:node.textContent,searchText:["["+id+"]",summary,...concerns].join("\n").toLowerCase()};
   });
   if(agentControls)agentControls.hidden=false;
   if(agentFilter){agentFilter.value="ALL";agentFilter.disabled=false;}
