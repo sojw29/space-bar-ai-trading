@@ -588,14 +588,21 @@ async function smoke(){
    assert.match(await meetingPage.locator("#ai-meeting-comparison-summary").textContent(),/초기 분석 변경 1건/);
    const evidence=meetingPage.locator("#ai-meeting-comparison-evidence");
    const change=evidence.locator("details").first();
-   await change.locator("summary").click();
+   await meetingPage.locator("#ai-meeting-comparison-agent").selectOption("QUANT");
+   await meetingPage.locator("#ai-meeting-comparison-phase").selectOption("ANALYSIS");
+   assert.match(await meetingPage.locator("#ai-meeting-comparison-change-count").textContent(),/1 \/ 1건/);
+   await meetingPage.locator("#ai-meeting-comparison-toggle-changes").click();
+   assert.equal(await change.evaluate(node=>node.open),true);
    assert.match(await change.textContent(),/Updated QUANT evidence/);
    const grid=change.locator("div").first();
    assert.equal(await grid.evaluate(node=>node.scrollWidth<=node.clientWidth+1),true);
    await change.getByRole("button",{name:"[M02] 현재 회의에서 열기",exact:true}).click();
    assert.match(await meetingPage.locator("#ai-meeting-linked").textContent(),/^선택 발언 \[M02\] QUANT/);
    await evidence.getByText("우려 사항이 기록된 원문",{exact:true}).click();
-   assert.match(await evidence.locator("details").last().textContent(),/Check volume history/);
+   const concern=evidence.getByText("새로 기록된 우려 · Check volume history",{exact:true});
+   await concern.click();
+   assert.equal(await concern.evaluate(node=>node.parentElement.open),true);
+   assert.match(await concern.locator("..").textContent(),/이후 \[M07\] COMMANDER/);
   }
   const expectedBeforeExpiry=viewport.width===390?2:1;
   assert.equal(transcriptCalls,expectedBeforeExpiry);
