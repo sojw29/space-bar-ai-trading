@@ -218,10 +218,10 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
         result = validate_statement(provider.complete(agent, phase, deepcopy(context)))
         allowed_ids = set(meeting_input_refs(len(transcript)))
         for text in (result["summary"], *result["concerns"]):
-            citation_groups = re.findall(r"\[\s*(M[0-9][^\[\]]*)\]", text)
-            cited_ids = {citation.strip() for group in citation_groups for citation in group.split(",")}
-            if not cited_ids.issubset(allowed_ids):
-                raise MeetingError("INVALID_STATEMENT_CITATION")
+            for group in re.finditer(r"\[\s*(M[0-9][^\[\]]*)(\])?", text):
+                cited_ids = {citation.strip() for citation in group[1].split(",")}
+                if not group[2] or not cited_ids.issubset(allowed_ids):
+                    raise MeetingError("INVALID_STATEMENT_CITATION")
         transcript.append({"agent": agent, "phase": phase, **result})
         if progress:
             progress({'agent': agent, 'phase': phase, 'event': 'RESPONSE_VALIDATED',
