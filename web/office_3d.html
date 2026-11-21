@@ -2017,6 +2017,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
 <p id="ai-meeting-decision" role="note" style="white-space:pre-wrap;padding:10px;border-left:3px solid #547c9a;background:#152941" hidden></p>
 <p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
+<button id="ai-meeting-close-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>상세 닫기</button>
 <div id="ai-meeting-timeline" aria-label="회의 판단 타임라인" hidden></div>
 <p id="ai-meeting-verdict-counts" role="note" aria-label="전체 회의 검토 상태별 발언 수" style="padding:8px;background:#152941" hidden></p>
 <div id="ai-meeting-review-shortcuts" hidden>
@@ -2119,6 +2120,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  exportText?.addEventListener("click",()=>downloadRecord("TXT"));
  exportJson?.addEventListener("click",()=>downloadRecord("JSON"));
  const linked=document.getElementById("ai-meeting-linked");
+ const closeLinked=document.getElementById("ai-meeting-close-linked");
  const timeline=document.getElementById("ai-meeting-timeline");
  const shortcut=document.getElementById("ai-meeting-shortcut");
  const completedRecord=document.getElementById("meeting-progress-open-record");
@@ -2274,7 +2276,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    node.setAttribute?.("aria-current","true");
   }
  }
- function clearLinked(){selectStatement(null);if(linked){linked.textContent="";linked.hidden=true;}}
+ let linkedTrigger=null;
+ function showLinkedPanel(trigger){
+  linkedTrigger=trigger;
+  linked.hidden=false;
+  if(closeLinked)closeLinked.hidden=false;
+ }
+ function clearLinked(){
+  selectStatement(null);
+  linkedTrigger=null;
+  if(linked){linked.textContent="";linked.hidden=true;}
+  if(closeLinked)closeLinked.hidden=true;
+ }
+ closeLinked?.addEventListener("click",()=>{
+  const trigger=linkedTrigger;
+  clearLinked();
+  trigger?.focus?.();
+ });
  function clearDecision(){exportRecord=null;if(exportText)exportText.disabled=true;if(exportStatus)exportStatus.textContent="";if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;if(showConclusion)showConclusion.disabled=true;}
  function setConnection(state,reason,provenance=""){
   if(state!=="validated")verifiedRecordId=null;
@@ -2491,7 +2509,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       }
       linked.append?.(actions);
      }
-     linked.hidden=false;
+     showLinkedPanel(item);
     };
     item.addEventListener?.("click",showLinked);
     item.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showLinked();}});
@@ -2558,7 +2576,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       "\n검토 단계에서 새로 언급: "+format(added)+
       "\n검토 단계에서 재언급 없음: "+format(notRepeated)+
       "\n※ 문구가 정확히 일치하는 경우만 동일 우려로 분류합니다. 재언급이 없다고 해결된 것은 아닙니다.";
-     linked.hidden=false;
+     showLinkedPanel(line);
     };
     line.addEventListener?.("click",showDetails);
     line.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showDetails();}});
@@ -2582,7 +2600,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const final=d.transcript[6];
     linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+final.summary+
      (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
-    linked.hidden=false;
+    showLinkedPanel(conclusion);
    };
    conclusion.addEventListener?.("click",showConclusion);
    conclusion.addEventListener?.("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showConclusion();}});
