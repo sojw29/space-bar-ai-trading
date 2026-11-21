@@ -42,6 +42,8 @@ class MeetingTests(unittest.TestCase):
             analysis_context = fixture.calls[index][2]
             review_context = fixture.calls[index + 3][2]
             self.assertEqual(set(analysis_context), {'facts'})
+            self.assertEqual(review_context['analysis_statement_ids'],
+                             {'ATLAS': 'M01', 'QUANT': 'M02', 'GUARDIAN': 'M03'})
             self.assertEqual(review_context['own_analysis'], result['transcript'][index])
             self.assertEqual(review_context['peer_analyses'],
                              [row for row in result['transcript'][:3] if row['agent'] != agent])

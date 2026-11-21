@@ -29,7 +29,8 @@ ROLES = {"ATLAS": "Inspect supplied trend observations and data limitations.",
 PHASE_GUIDANCE = {
     "ANALYSIS": "Record your own role-specific observation, its supporting fact and its limitation.",
     "PEER_REVIEW": "Compare your initial analysis with the two peer analyses. Name the peer "
-                   "and cite the supplied observation behind any agreement or challenge. "
+                   "and cite the corresponding analysis statement ID and supplied observation behind any "
+                   "agreement or challenge. Do not invent statement IDs. "
                    "If the evidence cannot settle a disagreement, retain it as an open concern.",
     "CONCLUSION": "Use both rounds to distinguish shared observations, contested claims "
                   "and unresolved evidence gaps. Attribute disagreements to their agents "
@@ -220,11 +221,13 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
     for agent in ANALYSTS:
         speak(agent, "ANALYSIS", {"facts": facts})
     analyses = deepcopy(transcript)
+    analysis_statement_ids = {agent: f"M{index:02}" for index, agent in enumerate(ANALYSTS, 1)}
     for own_analysis in analyses:
         agent = own_analysis["agent"]
         peer_analyses = [analysis for analysis in analyses if analysis["agent"] != agent]
         speak(agent, "PEER_REVIEW", {"facts": facts, "own_analysis": own_analysis,
-                                    "peer_analyses": peer_analyses})
+                                    "peer_analyses": peer_analyses,
+                                    "analysis_statement_ids": analysis_statement_ids})
     conclusion_context = {"facts": facts, "discussion": deepcopy(transcript)}
     priority = evidence_priority(transcript)
     if priority is not None:
