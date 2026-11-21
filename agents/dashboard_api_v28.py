@@ -212,7 +212,8 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                                 ("GUARDIAN", "ANALYSIS"), ("ATLAS", "PEER_REVIEW"),
                                 ("QUANT", "PEER_REVIEW"), ("GUARDIAN", "PEER_REVIEW"),
                                 ("COMMANDER", "CONCLUSION")]
-                    from ai_meeting_runtime import meeting_input_refs, validate_statement
+                    from ai_meeting_runtime import (meeting_final_verdict, meeting_input_refs,
+                                                    validate_statement)
                     entries = []
                     for item, (agent, phase) in zip(raw["transcript"], expected):
                         if not isinstance(item, dict) or item.get("agent") != agent or item.get("phase") != phase:
@@ -267,11 +268,7 @@ def make_handler(history_path, live_store=None, paper_monitor=None, paper_journa
                         import re
                         if not isinstance(execution_id, str) or not re.fullmatch('[a-f0-9]{32}', execution_id):
                             raise ValueError("invalid_workflow_execution_id")
-                    expected_final = entries[-1]["verdict"]
-                    if any(e["verdict"] == "INSUFFICIENT_DATA" for e in entries):
-                        expected_final = "INSUFFICIENT_DATA"
-                    elif any(e["agent"] == "GUARDIAN" and e["verdict"] == "REVIEW_NEEDED" for e in entries):
-                        expected_final = "REVIEW_NEEDED"
+                    expected_final = meeting_final_verdict(entries)
                     if raw.get("final_verdict") != expected_final:
                         raise ValueError("invalid_final_verdict")
                     if meeting_execution_id is not None and execution_id != meeting_execution_id:
