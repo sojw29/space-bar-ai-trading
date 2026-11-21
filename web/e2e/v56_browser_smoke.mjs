@@ -459,7 +459,7 @@ async function smoke(){
     identityPage.evaluate(name=>window.dispatchEvent(name==="pageshow"?new PageTransitionEvent("pageshow",{persisted:true}):new Event("online")),eventName)
    ]);
    await identityPage.locator('#meeting-progress-status[data-state="COMPLETED"]').waitFor();
-   assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
+   await identityPage.locator("#meeting-progress-open-record:enabled").waitFor();
   }
 
   // Reconnect while an older progress response is still pending; replay once.
