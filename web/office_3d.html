@@ -2041,22 +2041,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:8px">
    <div>
     <label for="ai-meeting-pair-slot-1">비교 파일 1</label>
-    <input id="ai-meeting-pair-slot-1" aria-describedby="ai-meeting-pair-info-1" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
+    <input id="ai-meeting-pair-slot-1" aria-describedby="ai-meeting-pair-info-1 ai-meeting-pair-feedback-1" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
     <p id="ai-meeting-pair-info-1" style="overflow-wrap:anywhere">선택한 파일 없음</p>
+    <p id="ai-meeting-pair-feedback-1" role="status" hidden></p>
     <button id="ai-meeting-pair-remove-1" type="button" style="min-height:44px" hidden>파일 1 제외</button>
    </div>
    <div>
     <label for="ai-meeting-pair-slot-2">비교 파일 2</label>
-    <input id="ai-meeting-pair-slot-2" aria-describedby="ai-meeting-pair-info-2" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
+    <input id="ai-meeting-pair-slot-2" aria-describedby="ai-meeting-pair-info-2 ai-meeting-pair-feedback-2" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
     <p id="ai-meeting-pair-info-2" style="overflow-wrap:anywhere">선택한 파일 없음</p>
+    <p id="ai-meeting-pair-feedback-2" role="status" hidden></p>
     <button id="ai-meeting-pair-remove-2" type="button" style="min-height:44px" hidden>파일 2 제외</button>
    </div>
   </div>
+  <button id="ai-meeting-reset-pair" type="button" style="min-height:44px" disabled>파일 선택 초기화</button>
+  <button id="ai-meeting-open-pair-result" type="button" style="min-height:44px" hidden>파일 비교 결과로 이동</button>
   <button id="ai-meeting-exit-file-pair" type="button" style="min-height:44px" hidden>현재 회의 비교로 돌아가기</button>
   <p id="ai-meeting-comparison-import-status" role="status"></p>
  </div>
  <p id="ai-meeting-comparison-baseline" role="note" hidden></p>
- <p id="ai-meeting-comparison-summary" role="status" hidden></p>
+ <p id="ai-meeting-comparison-summary" tabindex="-1" role="status" hidden></p>
  <div id="ai-meeting-comparison-filters" hidden><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:8px;margin:8px 0">
   <label>변경 에이전트
    <select id="ai-meeting-comparison-agent" style="display:block;width:100%;min-height:44px" aria-controls="ai-meeting-comparison-evidence">
@@ -2241,7 +2245,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   input:document.getElementById("ai-meeting-pair-slot-"+index),
   info:document.getElementById("ai-meeting-pair-info-"+index),
   remove:document.getElementById("ai-meeting-pair-remove-"+index),
+  feedback:document.getElementById("ai-meeting-pair-feedback-"+index),
  }));
+ const resetPair=document.getElementById("ai-meeting-reset-pair");
+ const openPairResult=document.getElementById("ai-meeting-open-pair-result");
  const exitFilePair=document.getElementById("ai-meeting-exit-file-pair");
  const importComparisonStatus=document.getElementById("ai-meeting-comparison-import-status");
  const comparisonBaselineLabel=document.getElementById("ai-meeting-comparison-baseline");
@@ -2638,6 +2645,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const origin=pairedArchives?"ARCHIVE_PAIR":comparisonBaselineOrigin;
   if(!comparisonResult)return;
   if(exitFilePair)exitFilePair.hidden=!pairedArchives;
+  if(openPairResult)openPairResult.hidden=!pairedArchives;
   if(pinComparison)pinComparison.disabled=!exportRecord?.record||!!pairedArchives;
   if(importComparison)importComparison.disabled=!exportRecord?.record||!!pairedArchives;
   if(clearComparison)clearComparison.hidden=!comparisonBaseline||!!pairedArchives;
@@ -2891,11 +2899,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const slot=pairSlots[index],record=slot?.record;
    const period=pairedArchives?(first.generated_at_utc===second.generated_at_utc?
     "완료 시각 동일":(index===0)===(first.generated_at_utc<second.generated_at_utc)?"이전 회의":"이후 회의")+" · ":"";
+   const source=record?.market_source==="BYBIT_USDT_PERPETUAL_5M"?"Bybit USDT 무기한 5분봉":
+    record?.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":"시장 데이터 출처 미기록";
    if(info)info.textContent=record?period+slot.name+" · "+record.generated_at_utc+
-    " · "+(record.workflow_execution_id??"실행 ID 미기록"):"선택한 파일 없음";
+    " · "+(record.workflow_execution_id??"실행 ID 미기록")+" · "+source+
+    " · 최종 판정 "+labels[record.final_verdict]:"선택한 파일 없음";
    if(remove)remove.hidden=!slot;
   });
+  updatePairReset();
   renderComparison();
+ }
+ const pendingPairSlots=new Set();
+ function updatePairReset(){
+  if(resetPair)resetPair.disabled=!pairSlots.some(Boolean)&&pendingPairSlots.size===0;
+ }
+ function slotFeedback(index,message){
+  const feedback=pairSlotControls[index].feedback;
+  if(feedback){feedback.textContent=message;feedback.hidden=!message;}
  }
  function replacePairSlot(index,slot){
   const next=[...pairSlots];
@@ -2912,20 +2932,36 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(!file||!importComparisonStatus)return;
    const revision=++slotRevisions[index];
    comparisonImportRevision++;
+   pendingPairSlots.delete("both");
+   pendingPairSlots.add(index);
+   updatePairReset();
+   slotFeedback(index,"파일을 확인하고 있어요.");
    importComparisonStatus.textContent="비교 파일 "+(index+1)+"을 확인하고 있어요.";
    try{
     const slot=await readPairSlot(file);
     if(revision!==slotRevisions[index])return;
     replacePairSlot(index,slot);
+    slotFeedback(index,"");
     importComparisonStatus.textContent=pairedArchives?
      "저장한 회의록 두 개를 불러왔어요.":"파일 "+(index+1)+"을 선택했어요. 다른 파일을 선택해 주세요.";
    }catch(error){
-    if(revision===slotRevisions[index])importComparisonStatus.textContent=error.message+" 기존 비교는 유지했어요.";
+    if(revision===slotRevisions[index]){
+     slotFeedback(index,error.message);
+     importComparisonStatus.textContent=error.message+" 기존 비교는 유지했어요.";
+    }
+   }finally{
+    if(revision===slotRevisions[index]){
+     pendingPairSlots.delete(index);
+     updatePairReset();
+    }
    }
   });
   remove?.addEventListener("click",()=>{
    slotRevisions[index]++;
    comparisonImportRevision++;
+   pendingPairSlots.delete(index);
+   pendingPairSlots.delete("both");
+   slotFeedback(index,"");
    replacePairSlot(index,null);
    if(importComparisonStatus)importComparisonStatus.textContent="파일 "+(index+1)+"을 제외했어요.";
    input?.focus?.();
@@ -2938,6 +2974,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   slotRevisions[0]++;
   slotRevisions[1]++;
   const revision=++comparisonImportRevision;
+  pendingPairSlots.clear();
+  pendingPairSlots.add("both");
+  updatePairReset();
+  slotFeedback(0,"");
+  slotFeedback(1,"");
   importComparisonStatus.textContent="저장한 회의록 두 개를 확인하고 있어요.";
   try{
    if(files.length!==2)throw Error("회의록 JSON 두 개를 함께 선택하거나 파일을 하나씩 선택해 주세요.");
@@ -2947,20 +2988,38 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    importComparisonStatus.textContent="저장한 회의록 두 개를 불러왔어요.";
   }catch(error){
    if(revision===comparisonImportRevision)importComparisonStatus.textContent=error.message+" 기존 비교는 유지했어요.";
+  }finally{
+   if(revision===comparisonImportRevision){
+    pendingPairSlots.delete("both");
+    updatePairReset();
+   }
   }
  });
- exitFilePair?.addEventListener("click",()=>{
+ function clearPairFiles(){
+  pendingPairSlots.clear();
+  slotFeedback(0,"");
+  slotFeedback(1,"");
   comparisonImportRevision++;
   slotRevisions[0]++;
   slotRevisions[1]++;
   setPairSlots([null,null]);
   if(importComparisonStatus)importComparisonStatus.textContent="";
+  pairSlotControls[0].input?.focus?.();
+ }
+ exitFilePair?.addEventListener("click",clearPairFiles);
+ resetPair?.addEventListener("click",clearPairFiles);
+ openPairResult?.addEventListener("click",()=>{
+  if(!pairedArchives||!comparisonSummary||comparisonSummary.hidden)return;
+  comparisonSummary.focus?.({preventScroll:true});
+  comparisonSummary.scrollIntoView?.({block:"start"});
  });
  importComparison?.addEventListener("change",async()=>{
   const file=importComparison.files?.[0];
   importComparison.value="";
   if(!file||!importComparisonStatus||pairedArchives||!canUseRecord()||!exportRecord?.record)return;
   const revision=++comparisonImportRevision,current=exportRecord.record;
+  pendingPairSlots.delete("both");
+  updatePairReset();
   importComparisonStatus.textContent="저장한 회의록을 확인하고 있어요.";
   try{
    const baseline=await loadArchiveFile(file);
@@ -2979,6 +3038,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
  pinComparison?.addEventListener("click",()=>{
   if(pairedArchives||!canUseRecord()||!exportRecord?.record)return;
+  pendingPairSlots.delete("both");
+  updatePairReset();
   comparisonImportRevision++;
   if(importComparisonStatus)importComparisonStatus.textContent="";
   comparisonBaseline=exportRecord.record;
@@ -2986,6 +3047,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   renderComparison();
  });
  clearComparison?.addEventListener("click",()=>{
+  pendingPairSlots.delete("both");
+  updatePairReset();
   comparisonImportRevision++;
   if(importComparisonStatus)importComparisonStatus.textContent="";
   comparisonBaseline=null;
