@@ -553,9 +553,10 @@ async function smoke(){
   await meetingPage.setViewportSize(viewport);
   await serveThree(meetingPage);
   let transcriptCalls=0;
+  let displayedTranscript=transcript;
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
    transcriptCalls++;
-   return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
+   return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(displayedTranscript)});
   });
   await meetingPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await meetingPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
@@ -572,6 +573,32 @@ async function smoke(){
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
   assert.equal(transcriptCalls,1);
+  if(viewport.width===390){
+   await meetingPage.locator("#ai-meeting-comparison > summary").click();
+   const pin=meetingPage.locator("#ai-meeting-pin-comparison");
+   assert.ok((await pin.boundingBox()).height>=44);
+   await pin.click();
+   displayedTranscript=structuredClone(transcript);
+   displayedTranscript.generated_at_utc=new Date(Date.parse(finished)+1000).toISOString();
+   displayedTranscript.transcript[1].verdict="REVIEW_NEEDED";
+   displayedTranscript.transcript[1].summary="Updated QUANT evidence";
+   displayedTranscript.transcript[6].concerns=["Check volume history"];
+   await meetingPage.locator("#ai-meeting-refresh").click();
+   await meetingPage.locator("#ai-meeting-comparison-summary").waitFor();
+   assert.match(await meetingPage.locator("#ai-meeting-comparison-summary").textContent(),/초기 분석 변경 1건/);
+   const evidence=meetingPage.locator("#ai-meeting-comparison-evidence");
+   const change=evidence.locator("details").first();
+   await change.locator("summary").click();
+   assert.match(await change.textContent(),/Updated QUANT evidence/);
+   const grid=change.locator("div").first();
+   assert.equal(await grid.evaluate(node=>node.scrollWidth<=node.clientWidth+1),true);
+   await change.getByRole("button",{name:"[M02] 현재 회의에서 열기",exact:true}).click();
+   assert.match(await meetingPage.locator("#ai-meeting-linked").textContent(),/^선택 발언 \[M02\] QUANT/);
+   await evidence.getByText("우려 사항이 기록된 원문",{exact:true}).click();
+   assert.match(await evidence.locator("details").last().textContent(),/Check volume history/);
+  }
+  const expectedBeforeExpiry=viewport.width===390?2:1;
+  assert.equal(transcriptCalls,expectedBeforeExpiry);
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
   // A validated historical transcript must fail closed if its source expires.
@@ -587,12 +614,13 @@ async function smoke(){
    document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
    "expired transcript must be cleared");
+  assert.equal(await meetingPage.locator("#ai-meeting-comparison-evidence").isVisible(),false);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
    "expired transcript must not remain validated");
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/회의 원본 오래됨 또는 시각 오류/);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
-  assert.equal(transcriptCalls,2,"foreground expiry must fetch exactly once");
+  assert.equal(transcriptCalls,expectedBeforeExpiry+1,"foreground expiry must fetch exactly once");
   await meetingPage.evaluate(()=>{Date.now=window.__meetingRealNow;delete window.__meetingRealNow});
   // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
@@ -607,13 +635,13 @@ async function smoke(){
    "refresh after expiry must restore the complete meeting conclusion");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"none");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
-  assert.equal(transcriptCalls,3,"manual refresh must fetch exactly once");
+  assert.equal(transcriptCalls,expectedBeforeExpiry+2,"manual refresh must fetch exactly once");
   // Exercise the actual handler used by Safari's back/forward cache restore.
   await meetingPage.evaluate(()=>window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true})));
   await meetingPage.waitForFunction(()=>
    document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="validated"&&
    document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
-  assert.equal(transcriptCalls,4,"cached page restoration must refresh exactly once");
+  assert.equal(transcriptCalls,expectedBeforeExpiry+3,"cached page restoration must refresh exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
 
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
@@ -628,7 +656,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
-  assert.equal(transcriptCalls,5);
+  assert.equal(transcriptCalls,expectedBeforeExpiry+4);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
