@@ -2179,16 +2179,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   node.focus?.({preventScroll:true});
   node.scrollIntoView?.({block:"nearest"});
  }
- searchOriginal?.addEventListener("click",()=>{
-  if(!canUseRecord()||!searchedOriginal)return;
-  const {node,agent,phase,verdict}=searchedOriginal;
-  if(node.hidden){
-   for(const [filter,value] of [[agentFilter,agent],[phaseFilter,phase],[verdictFilter,verdict]]){
-    if(filter&&filter.value!==value)filter.value="ALL";
-   }
+ function revealStatement(entry){
+  if(!entry.node.hidden)return;
+  for(const [filter,value] of [[agentFilter,entry.agent],[phaseFilter,entry.phase],[verdictFilter,entry.verdict]]){
+   if(filter&&filter.value!==value)filter.value="ALL";
+  }
+  applyAgentView();
+  if(entry.node.hidden&&statementSearch){
+   statementSearch.value="";
    applyAgentView();
   }
-  focusStatement(node);
+ }
+ searchOriginal?.addEventListener("click",()=>{
+  if(!canUseRecord()||!searchedOriginal)return;
+  revealStatement(searchedOriginal);
+  focusStatement(searchedOriginal.node);
  });
  agentFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
  phaseFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
@@ -2624,11 +2629,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        previousView=filters.map(filter=>filter.value);
        evidenceButton=button;
        restore.hidden=false;
-       if(agentFilter)agentFilter.value="ALL";
-       if(phaseFilter)phaseFilter.value="ALL";
-       if(verdictFilter)verdictFilter.value="ALL";
-       if(statementSearch)statementSearch.value="";
-       applyAgentView();
+       revealStatement(entry);
       }
       focusStatement(entry.node);
      };
