@@ -2389,6 +2389,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        entry.references.some((id,j)=>id!==expectedRefs[j]))throw Error("회의 발언 참조 검증 실패");
    }
   }
+  const reviewsByAnalysis=new Map();
   for(let i=0;i<7;i++){
    const t=d.transcript[i],phase=i<3?"ANALYSIS":i<6?"PEER_REVIEW":"CONCLUSION";
    if(!t||t.agent!==order[i]||t.phase!==phase||!verdicts.includes(t.verdict)||
@@ -2420,6 +2421,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const citedIds=new Set([t.summary,...t.concerns].flatMap(text=>
      Array.from(text.matchAll(/\[(M0[1-3])\]/g),match=>match[1])));
     cited.push(...sourceIds.filter(id=>citedIds.has(id)));
+    for(const id of cited){
+     if(!reviewsByAnalysis.has(id))reviewsByAnalysis.set(id,[]);
+     reviewsByAnalysis.get(id).push(statementId);
+    }
     if(cited.length)item.textContent+="\n인용한 초기 분석: "+cited.map(id=>
      "["+id+"] "+order[Number(id.slice(1))-1]).join(" · ");
    }
@@ -2442,8 +2447,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      if(cited.length)sections.push("상호 검토에서 인용한 초기 분석 ("+cited.length+"건)\n"+cited.map(formatSource).join("\n\n"));
      if(remaining.length)sections.push((cited.length?"그 외 검토에 제공된 발언":"검토에 제공된 발언")+
       " ("+remaining.length+"건)\n"+remaining.map(formatSource).join("\n\n"));
+     if(phase==="ANALYSIS"){
+      const reviews=reviewsByAnalysis.get(statementId)??[];
+      sections.push("독립 분석 단계 · 제공된 앞선 발언 없음");
+      if(reviews.length)sections.push("이 분석을 인용한 상호 검토 ("+reviews.length+"건)\n"+reviews.map(formatSource).join("\n\n"));
+     }
      const context=sections.length?sections.join("\n\n"):
-      i<3?"독립 분석 단계 · 제공된 앞선 발언 없음":"이 기록에 저장된 참조 목록 없음";
+      "이 기록에 저장된 참조 목록 없음";
      linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\n"+t.summary+
       "\n\n"+context;
      linked.hidden=false;
