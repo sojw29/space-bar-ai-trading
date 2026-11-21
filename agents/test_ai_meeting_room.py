@@ -20,11 +20,11 @@ class MeetingRoomTests(unittest.TestCase):
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 (async()=>{
- for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','citations','peer-citation','malformed','timer','foreground','rollback','text-only']){
+ for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','citations','peer-citation','meeting-comparison','malformed','timer','foreground','rollback','text-only']){
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-pin-comparison','ai-meeting-clear-comparison'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -40,6 +40,11 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    data.transcript[6].concerns=['중복 인용 [M02]'];
   }
   if(mode==='peer-citation')data.transcript[3].summary='QUANT 분석 [M02] 인용';
+  if(mode==='meeting-comparison'){
+   data.transcript[3].concerns=['표본 부족'];
+   data.transcript[4].concerns=['표본 부족'];
+   data.transcript[6].concerns=['표본 부족'];
+  }
   if(mode==='malformed')data.transcript[0].summary=null;
   if(mode==='text-only')data.transcript[0].summary='<img src=x onerror=alert(1)>';
   const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:()=>({style:{},children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},focus(){this.focused=true},scrollIntoView(){this.scrolled=true},set innerHTML(_){throw Error('unsafe HTML sink')}})};
@@ -53,6 +58,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   assert.match(elements['ai-meeting-status'].textContent,mode==='live'?/모델 API 실행 완료 기록/:/실제 AI 실행 아님/);
   if(mode==='guardian-review')assert.match(elements['ai-meeting-decision'].textContent,/판정 규칙 근거 위치: \[M06\] GUARDIAN/);
   if(mode==='missing-priority'){
+   const missing=elements['ai-meeting-issue-rows'].children.at(-1);
+   assert.equal(missing.textContent,'자료 부족으로 표시된 발언');
+   assert.equal(missing.children[0].textContent,'[M07] COMMANDER');
    const decision=elements['ai-meeting-decision'].textContent;
    assert.match(decision,/판정 규칙 근거 위치: \[M07\] COMMANDER · 자료 부족/);
    assert.doesNotMatch(decision,/\[M06\] GUARDIAN · 추가 검토/);
@@ -184,6 +192,31 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(linked.textContent,'');
    assert.equal(rows[0].attrs['aria-current'],'false');
   }
+  if(mode==='meeting-comparison'){
+   const cards=elements['ai-meeting-opinion-cards'].children;
+   assert.equal(cards.length,3);
+   assert.match(cards[0].textContent,/ATLAS.*\n\[M01\].*\n\[M04\]/);
+   assert.match(elements['ai-meeting-opinion-agreement'].textContent,/표본 부족 · ATLAS, QUANT/);
+   const issue=elements['ai-meeting-issue-rows'].children[0];
+   assert.deepEqual(Array.from(issue.children,button=>button.textContent),['[M04] ATLAS','[M05] QUANT','[M07] COMMANDER']);
+   issue.children[0].click();
+   assert.match(elements['ai-meeting-linked'].textContent,/^선택 발언 \[M04\]/);
+   const result=elements['ai-meeting-comparison-result'];
+   elements['ai-meeting-pin-comparison'].click();
+   assert.match(result.textContent,/비교 기준 지정됨/);
+   now+=60000;
+   data.generated_at_utc=new Date(now).toISOString();
+   data.transcript[3].verdict='REVIEW_NEEDED';
+   data.transcript[6].verdict=data.final_verdict='REVIEW_NEEDED';
+   data.transcript[6].concerns=['거래량 확인 필요'];
+   await elements['ai-meeting-refresh'].click();
+   assert.match(result.textContent,/최종 판정: 관측 요약 → 추가 검토 필요/);
+   assert.match(result.textContent,/ATLAS 관측 요약 → 추가 검토 필요/);
+   assert.match(result.textContent,/새로 기록된 최종 우려: 거래량 확인 필요/);
+   assert.match(result.textContent,/재언급되지 않은 우려: 표본 부족/);
+   elements['ai-meeting-clear-comparison'].click();
+   assert.match(result.textContent,/비교 기준을 지정/);
+  }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
    now=Date.parse(data.source_generated_at_utc)+8*3600000;
@@ -199,7 +232,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     assert.equal(elements['ai-meeting-refresh'].disabled,false);
    }
   }
-  assert.equal(requests,['foreground','rollback'].includes(mode)?2:1,'Foreground must retry once; invalid snapshots stay cleared');
+  assert.equal(requests,['foreground','rollback','meeting-comparison'].includes(mode)?2:1,'Foreground must retry once; invalid snapshots stay cleared');
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
