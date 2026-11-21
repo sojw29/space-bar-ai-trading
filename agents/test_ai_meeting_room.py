@@ -20,7 +20,7 @@ class MeetingRoomTests(unittest.TestCase):
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 (async()=>{
- for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','malformed','timer','foreground','rollback','text-only']){
+ for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','citations','malformed','timer','foreground','rollback','text-only']){
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
@@ -34,6 +34,10 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    data.transcript[5].verdict='REVIEW_NEEDED';
    data.final_verdict='REVIEW_NEEDED';
    if(mode==='missing-priority')data.transcript[6].verdict=data.final_verdict='INSUFFICIENT_DATA';
+  }
+  if(mode==='citations'){
+   data.transcript[6].summary='분석 [M02], 검토 [M05]';
+   data.transcript[6].concerns=['중복 인용 [M02]'];
   }
   if(mode==='malformed')data.transcript[0].summary=null;
   if(mode==='text-only')data.transcript[0].summary='<img src=x onerror=alert(1)>';
@@ -68,6 +72,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(target.hidden,true);
    assert.equal(restore.hidden,true);
    assert.equal(button.focused,true);
+  }
+  if(mode==='citations'){
+   const buttons=elements['ai-meeting-decision'].children[0].children;
+   assert.deepEqual(buttons.map(button=>button.textContent),['[M02] 발언 보기','[M05] 발언 보기','이전 발언 보기 복원']);
+   buttons[1].onclick();
+   assert.equal(elements['ai-meeting-rows'].children[4].focused,true);
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
