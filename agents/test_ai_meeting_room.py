@@ -21,10 +21,10 @@ const assert=require('node:assert/strict'),vm=require('node:vm');
 const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 (async()=>{
  for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','citations','peer-citation','meeting-comparison','malformed','timer','foreground','rollback','text-only']){
-  let now=Date.parse(input.report.generated_at_utc),requests=0;
+  let now=Date.parse(input.report.generated_at_utc),requests=0,noServer=false;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-import','ai-meeting-comparison-import-status','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-import','ai-meeting-import-pair','ai-meeting-exit-file-pair','ai-meeting-comparison-import-status','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -50,7 +50,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   const downloads=[];
   let savedBlob;
   const document={activeElement:null,body:{appendChild(){}},hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:tag=>tag==='a'?{click(){downloads.push(this.download)},remove(){}}:({style:{},children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},focus(){this.focused=true},scrollIntoView(){this.scrolled=true},set innerHTML(_){throw Error('unsafe HTML sink')}})};
-  vm.runInNewContext(input.script,{document,Blob,URL:{createObjectURL(blob){savedBlob=blob;return "blob:test"},revokeObjectURL(){}},setTimeout:()=>0,Date:class extends Date{static now(){return now}},setInterval:fn=>timers.push(fn),fetch:async()=>{requests++;return {ok:mode!=='missing',text:async()=>JSON.stringify(data)}}});
+  vm.runInNewContext(input.script,{document,Blob,URL:{createObjectURL(blob){savedBlob=blob;return "blob:test"},revokeObjectURL(){}},setTimeout:()=>0,Date:class extends Date{static now(){return now}},setInterval:fn=>timers.push(fn),fetch:async()=>{requests++;return {ok:mode!=='missing'&&!noServer,text:async()=>JSON.stringify(data)}}});
   await new Promise(setImmediate);
   if(['missing','orders','stale','partial','invalid-final','malformed'].includes(mode)){
    assert.equal(elements['ai-meeting-rows'].children.length,0,mode);
@@ -350,6 +350,40 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    await importFile(archive,262145);
    assert.match(importStatus.textContent,/256 KiB/);
    assert.equal(result.textContent,fromFile);
+   const second={...archive,archived_at_utc:data.generated_at_utc,record:{
+    ...archive.record,source_generated_at_utc:data.source_generated_at_utc,started_at_utc:data.started_at_utc,
+    generated_at_utc:data.generated_at_utc,final_verdict:data.final_verdict,
+    verdict_counts:{OBSERVATION_ONLY:4,REVIEW_NEEDED:3,INSUFFICIENT_DATA:0},
+    transcript:data.transcript.map((statement,index)=>({id:'M0'+(index+1),...statement})),
+   }};
+   const pairInput=elements['ai-meeting-import-pair'];
+   const exitPair=elements['ai-meeting-exit-file-pair'];
+   const fileFor=value=>({size:12000,text:async()=>JSON.stringify(value)});
+   pairInput.files=[fileFor(second),fileFor(archive)];
+   await pairInput.change();
+   assert.equal(exitPair.hidden,false);
+   assert.match(result.textContent,/최종 판정: 관측 요약 → 추가 검토 필요/);
+   assert.match(result.textContent,/비교 출처: 저장한 회의록 JSON 두 개/);
+   assert.equal(evidence.children[0].children[1].children[1].children.length,1);
+   saveJson.click();
+   assert.equal(JSON.parse(await savedBlob.text()).baseline_origin,'ARCHIVE_PAIR');
+   const fromPair=result.textContent;
+   pairInput.files=[fileFor(second),fileFor(second)];
+   await pairInput.change();
+   assert.match(importStatus.textContent,/서로 다른 회의록/);
+   assert.equal(result.textContent,fromPair);
+   noServer=true;
+   await elements['ai-meeting-refresh'].click();
+   assert.match(elements['ai-meeting-status'].textContent,/미연결/);
+   assert.equal(result.textContent,fromPair);
+   saveJson.click();
+   assert.equal(JSON.parse(await savedBlob.text()).baseline_origin,'ARCHIVE_PAIR');
+   noServer=false;
+   await elements['ai-meeting-refresh'].click();
+   assert.equal(result.textContent,fromPair);
+   exitPair.click();
+   assert.equal(exitPair.hidden,true);
+   assert.equal(result.textContent,fromFile);
    elements['ai-meeting-pin-comparison'].click();
    Object.assign(data,earlier);
    await elements['ai-meeting-refresh'].click();
@@ -381,7 +415,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     assert.equal(elements['ai-meeting-refresh'].disabled,false);
    }
   }
-  assert.equal(requests,mode==='meeting-comparison'?4:['foreground','rollback'].includes(mode)?2:1,'Foreground must retry once; invalid snapshots stay cleared');
+  assert.equal(requests,mode==='meeting-comparison'?6:['foreground','rollback'].includes(mode)?2:1,'Foreground must retry once; invalid snapshots stay cleared');
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
