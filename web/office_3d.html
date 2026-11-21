@@ -2069,6 +2069,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    </select>
   </label>
   <label>발언 검색 <input id="ai-meeting-comparison-search" type="search" maxlength="120" style="display:block;width:100%;min-height:44px"></label>
+  <label>발언 변경 정렬 <select id="ai-meeting-comparison-sort" style="display:block;width:100%;min-height:44px">
+   <option value="ORDER">발언 번호 순</option><option value="REVERSE">발언 번호 역순</option>
+   <option value="VERDICT">자료 부족·추가 검토 우선</option><option value="CONCERNS">우려 변경이 많은 순</option>
+  </select></label>
   <label>검색 범위 <select id="ai-meeting-comparison-search-scope" style="display:block;width:100%;min-height:44px">
    <option value="ALL">전체</option><option value="SUMMARY">요약</option><option value="CONCERNS">우려</option><option value="ID">발언 번호</option>
   </select></label>
@@ -2235,6 +2239,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const comparisonFilters=document.getElementById("ai-meeting-comparison-filters");
  const comparisonAgent=document.getElementById("ai-meeting-comparison-agent");
  const comparisonPhase=document.getElementById("ai-meeting-comparison-phase");
+ const comparisonSort=document.getElementById("ai-meeting-comparison-sort");
  const searchScope=document.getElementById("ai-meeting-comparison-search-scope");
  const saveFilteredCsv=document.getElementById("ai-meeting-comparison-save-filtered-csv");
  const comparisonSearch=document.getElementById("ai-meeting-comparison-search");
@@ -2248,8 +2253,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const comparisonToggle=document.getElementById("ai-meeting-comparison-toggle-changes");
  const comparisonReset=document.getElementById("ai-meeting-comparison-reset-filters");
  const comparisonChangeCount=document.getElementById("ai-meeting-comparison-change-count");
- let comparisonChanges=[],comparisonDisclosures=[],comparisonOrigin=null;
+ let comparisonChanges=[],comparisonDisclosures=[],comparisonOrigin=null,appliedComparisonSort="ORDER";
+ function orderComparisonChanges(){
+  const sort=comparisonSort?.value||"ORDER";
+  if(!comparisonChanges.length||sort===appliedComparisonSort)return;
+  const verdictRank={INSUFFICIENT_DATA:0,REVIEW_NEEDED:1,OBSERVATION_ONLY:2};
+  const concernCount=change=>change.concerns_added.length+change.concerns_removed.length;
+  comparisonChanges.sort((a,b)=>{
+   const sequence=a.change.id.localeCompare(b.change.id);
+   if(sort==="REVERSE")return -sequence;
+   if(sort==="VERDICT")return verdictRank[a.change.later_verdict]-verdictRank[b.change.later_verdict]||sequence;
+   if(sort==="CONCERNS")return concernCount(b.change)-concernCount(a.change)||sequence;
+   return sequence;
+  });
+  for(const {node} of [...comparisonChanges].reverse())comparisonEvidence?.insertBefore(node,comparisonEvidence.firstChild);
+  appliedComparisonSort=sort;
+ }
  function applyComparisonFilters(){
+  orderComparisonChanges();
   const agent=comparisonAgent?.value||"ALL",phase=comparisonPhase?.value||"ALL";
   const search=(comparisonSearch?.value??"").trim().toLowerCase();
   const scope=searchScope?.value||"ALL";
@@ -2274,7 +2295,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
   const contentView=type==="SUMMARY"||type==="CONCERNS"||(type==="ALL"&&(summaries||concerns));
   if(comparisonFilters)comparisonFilters.hidden=comparisonChanges.length===0;
-  if(comparisonReset)comparisonReset.disabled=agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&previousVerdict==="ALL"&&type==="ALL"&&scope==="ALL"&&!search&&!summaries&&!concerns;
+  if(comparisonReset)comparisonReset.disabled=agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&previousVerdict==="ALL"&&type==="ALL"&&scope==="ALL"&&!search&&!summaries&&!concerns&&(comparisonSort?.value||"ORDER")==="ORDER";
   for(const button of [saveFilteredText,saveFilteredJson,saveFilteredCsv]){if(button)button.disabled=visible.length===0;}
   if(comparisonChangeCount)comparisonChangeCount.textContent=visible.length?
    (contentView?"발언 변경 ":"판정 변경 ")+visible.length+" / "+comparisonChanges.filter(inScope).length+"건"+
@@ -2293,7 +2314,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  comparisonAgent?.addEventListener("change",applyComparisonFilters);
  comparisonPhase?.addEventListener("change",applyComparisonFilters);
  comparisonSearch?.addEventListener("input",applyComparisonFilters);
- for(const control of [comparisonVerdict,previousComparisonVerdict,comparisonType,comparisonSummaryChanges,comparisonConcernChanges,searchScope]){
+ for(const control of [comparisonVerdict,previousComparisonVerdict,comparisonType,comparisonSummaryChanges,comparisonConcernChanges,searchScope,comparisonSort]){
   control?.addEventListener("change",applyComparisonFilters);
  }
  comparisonReset?.addEventListener("click",()=>{
@@ -2305,6 +2326,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(comparisonType)comparisonType.value="ALL";
   if(comparisonSearch)comparisonSearch.value="";
   if(searchScope)searchScope.value="ALL";
+  if(comparisonSort)comparisonSort.value="ORDER";
   if(comparisonSummaryChanges)comparisonSummaryChanges.checked=false;
   if(comparisonConcernChanges)comparisonConcernChanges.checked=false;
   applyComparisonFilters();
@@ -2472,6 +2494,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   comparisonOrigin=null;
   if(returnComparison)returnComparison.hidden=true;
   comparisonChanges=[];
+  appliedComparisonSort="ORDER";
   comparisonDisclosures=[];
   applyComparisonFilters();
   if(comparisonSummary){comparisonSummary.textContent="";comparisonSummary.hidden=true;}
@@ -2608,7 +2631,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const filters={
    agent:comparisonAgent?.value||"ALL",phase:comparisonPhase?.value||"ALL",type:comparisonType?.value||"ALL",
    earlier_verdict:previousComparisonVerdict?.value||"ALL",later_verdict:comparisonVerdict?.value||"ALL",
-   search:comparisonSearch?.value?.trim()||"",search_scope:searchScope?.value||"ALL",include_summary_changes:!!comparisonSummaryChanges?.checked,
+   sort:appliedComparisonSort,search:comparisonSearch?.value?.trim()||"",search_scope:searchScope?.value||"ALL",include_summary_changes:!!comparisonSummaryChanges?.checked,
    include_concern_changes:!!comparisonConcernChanges?.checked,
   };
   const json=format==="JSON";
@@ -2618,7 +2641,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "이후 "+later.generated_at_utc,"시장 데이터 출처: "+(market_source??"미기록"),
    "적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
     " · 이전 판정 "+(labels[filters.earlier_verdict]??"전체")+" · 이후 판정 "+(labels[filters.later_verdict]??"전체")+
-    " · 검색어 "+(filters.search||"없음")+" · 검색 범위 "+filters.search_scope+" · 요약 포함 "+(filters.include_summary_changes?"예":"아니오")+
+    " · 검색어 "+(filters.search||"없음")+" · 검색 범위 "+filters.search_scope+" · 정렬 "+filters.sort+" · 요약 포함 "+(filters.include_summary_changes?"예":"아니오")+
     " · 우려 포함 "+(filters.include_concern_changes?"예":"아니오")];
   for(const change of changes){
    lines.push("["+change.id+"] "+change.agent+" · "+change.phase+" · "+labels[change.earlier_verdict]+" → "+labels[change.later_verdict]);
