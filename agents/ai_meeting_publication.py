@@ -14,7 +14,8 @@ from urllib.request import build_opener
 
 from agent_research_runtime_v233 import utc_time
 from ai_meeting_runtime import (ANALYSTS, VERDICTS, MeetingError, NoRedirect,
-                                meeting_input_refs, publish_report, validate_statement)
+                                meeting_final_verdict, meeting_input_refs,
+                                publish_report, validate_statement)
 from provider_transport_preflight_v240 import preflight
 from market_source_provenance import with_market_source
 
@@ -77,11 +78,7 @@ def validate_public_report(report, *, bundle=None, now=None):
                     entry['agent'] != agent or entry['phase'] != phase or
                     entry['references'] != expected_refs):
                 raise MeetingError('INVALID_STATEMENT_REF')
-    final = transcript[-1]['verdict']
-    if any(t['verdict'] == 'INSUFFICIENT_DATA' for t in transcript):
-        final = 'INSUFFICIENT_DATA'
-    elif any(t['agent'] == 'GUARDIAN' and t['verdict'] == 'REVIEW_NEEDED' for t in transcript):
-        final = 'REVIEW_NEEDED'
+    final = meeting_final_verdict(transcript)
     if report['final_verdict'] not in VERDICTS or report['final_verdict'] != final:
         raise MeetingError('FINAL_VERDICT_MISMATCH')
     if bundle is not None:
