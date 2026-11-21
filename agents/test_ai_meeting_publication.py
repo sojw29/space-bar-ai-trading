@@ -108,6 +108,19 @@ class PublicationTests(unittest.TestCase):
             report['final_verdict'] = objection
             self.assertEqual(validate_public_report(report, now=NOW)['final_verdict'], objection)
 
+    def test_publication_prefers_missing_data_over_guardian_review(self):
+        report = live_fixture()
+        report['transcript'][2]['verdict'] = 'REVIEW_NEEDED'
+        report['transcript'][-1]['verdict'] = 'INSUFFICIENT_DATA'
+        report['final_verdict'] = 'REVIEW_NEEDED'
+
+        with self.assertRaisesRegex(MeetingError, 'FINAL_VERDICT_MISMATCH'):
+            validate_public_report(report, now=NOW)
+
+        report['final_verdict'] = 'INSUFFICIENT_DATA'
+        validated = validate_public_report(report, now=NOW)
+        self.assertEqual(validated['final_verdict'], 'INSUFFICIENT_DATA')
+
     def test_expiry_boundary_and_future_times(self):
         report = live_fixture()
         source = NOW-timedelta(minutes=10)
