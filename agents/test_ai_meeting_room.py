@@ -24,7 +24,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   let now=Date.parse(input.report.generated_at_utc),requests=0,noServer=false;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-import','ai-meeting-import-pair','ai-meeting-pair-slot-1','ai-meeting-pair-slot-2','ai-meeting-pair-info-1','ai-meeting-pair-info-2','ai-meeting-pair-remove-1','ai-meeting-pair-remove-2','ai-meeting-exit-file-pair','ai-meeting-comparison-import-status','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-search','ai-meeting-comparison-verdict','ai-meeting-comparison-previous-verdict','ai-meeting-comparison-type','ai-meeting-comparison-save-filtered-text','ai-meeting-comparison-save-filtered-json','ai-meeting-comparison-summary-changes','ai-meeting-comparison-concern-changes','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-import','ai-meeting-import-pair','ai-meeting-pair-slot-1','ai-meeting-pair-slot-2','ai-meeting-pair-info-1','ai-meeting-pair-info-2','ai-meeting-pair-remove-1','ai-meeting-pair-remove-2','ai-meeting-exit-file-pair','ai-meeting-comparison-import-status','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-search','ai-meeting-comparison-verdict','ai-meeting-comparison-previous-verdict','ai-meeting-comparison-type','ai-meeting-comparison-save-filtered-text','ai-meeting-comparison-save-filtered-json','ai-meeting-comparison-save-filtered-csv','ai-meeting-comparison-search-scope','ai-meeting-comparison-summary-changes','ai-meeting-comparison-concern-changes','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -491,6 +491,29 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(oldVerdict.value,'ALL');
    assert.equal(changeType.value,'ALL');
    assert.equal(summaryOnly.hidden,true);
+   second.record.transcript[2].concerns=['=SUM(1,2) "M01"'];
+   pairInput.files=[fileFor(second),fileFor(archive)];
+   await pairInput.change();
+   const scope=elements['ai-meeting-comparison-search-scope'];
+   const csvButton=elements['ai-meeting-comparison-save-filtered-csv'];
+   summaryChanges.checked=true;summaryChanges.change();
+   concernChanges.checked=true;concernChanges.change();
+   searchChange.value='[M01]';searchChange.input();
+   assert.match(count.textContent,/발언 변경 1 .*판정 0 · 요약 1 · 우려 0/);
+   assert.equal(evidence.children[2].hidden,true);
+   scope.value='SUMMARY';scope.change();
+   assert.equal(csvButton.disabled,true);
+   scope.value='CONCERNS';scope.change();
+   searchChange.value='M01';searchChange.input();
+   assert.match(count.textContent,/발언 변경 1 .*판정 0 · 요약 0 · 우려 1/);
+   csvButton.click();
+   assert.equal(downloads.at(-1),'spacebar-meeting-filtered-changes.csv');
+   const csv=await savedBlob.text();
+   assert.match(csv,/"M03","GUARDIAN"/);
+   assert.ok(csv.includes("\"'=SUM(1,2) \"\"M01\"\"\""));
+   assert.doesNotMatch(csv,/"M01","ATLAS"/);
+   resetComparison.click();
+   assert.equal(scope.value,'ALL');
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
