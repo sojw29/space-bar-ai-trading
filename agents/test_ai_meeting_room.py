@@ -24,7 +24,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-search'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-search','ai-meeting-agent-count'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -86,6 +86,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    for(const query of ['[M02]','m02']){
     search.value=query;search.input();
     assert.deepEqual(rows.flatMap((row,index)=>row.hidden?[]:[index]),[1,3]);
+    assert.match(elements['ai-meeting-agent-count'].textContent,/원문 1개 · 인용 발언 1개/);
    }
    const review=rows[3];
    assert.match(review.textContent,/인용한 초기 분석: \[M02\] QUANT/);
