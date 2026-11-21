@@ -24,7 +24,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-search','ai-meeting-agent-count'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -90,7 +90,17 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     assert.match(rows[1].textContent,/^원문 · \[M02\]/);
     assert.match(rows[3].textContent,/^인용 발언 · \[M04\]/);
    }
+   const original=elements['ai-meeting-search-original'];
+   assert.equal(original.hidden,false);
+   const filter=elements['ai-meeting-agent-filter'];
+   filter.value='ATLAS';filter.change();
+   assert.equal(rows[1].hidden,true);
+   original.click();
+   assert.equal(rows[1].hidden,false);
+   assert.equal(rows[1].focused,true);
+   assert.equal(search.value,'m02');
    search.value='';search.input();
+   assert.equal(original.hidden,true);
    assert.match(rows[1].textContent,/^\[M02\]/);
    assert.match(rows[3].textContent,/^\[M04\]/);
    const review=rows[3];
