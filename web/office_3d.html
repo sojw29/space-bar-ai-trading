@@ -3128,13 +3128,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     !included||included.has(key+":"+position)?[{category:key,...issue}]:[]));
   if(!entries.length)return;
   const json=format==="JSON";
+  const filters=scope==="visible"?concernViewFilters():null;
   const report={version:"SPACEBAR_MEETING_FINAL_CONCERNS_1",research_only:true,orders_enabled:false,
    earlier,later,execution_mode,market_source,baseline_origin,
-   ...(scope==="visible"?{filters:concernViewFilters()}:{}),
+   ...(filters?{filters}:{}),
    final_concerns:entries};
   const text=[(scope==="picked"?"선택한 최종 우려 ":scope==="visible"?"표시된 최종 우려 ":"최종 우려 ")+entries.length+"건","이전 회의 UTC "+earlier.generated_at_utc,
    "이후 회의 UTC "+later.generated_at_utc,"실행 방식 "+execution_mode,
    "시장 데이터 출처 "+(market_source??"미기록"),"비교 출처 "+baseline_origin,
+   ...(filters?[
+    "우려 유형 "+(finalConcernLabels[filters.type]??"전체"),
+    "검색 범위 "+({all:"전체",text:"우려 문구",earlier:"이전 회의 발언 번호",later:"이후 회의 발언 번호"}[filters.search_scope]),
+    "검색어 "+(filters.search?JSON.stringify(filters.search):"없음"),
+    "선택 우려만 보기 "+(filters.picked_only?"켜짐":"꺼짐"),
+   ]:[]),
    ...entries.map(issue=>finalConcernLabels[issue.category]+" · "+issue.text+
     "\n이전 근거 발언 "+(issue.earlier_statement_ids.join(", ")||"없음")+
     "\n이후 근거 발언 "+(issue.later_statement_ids.join(", ")||"없음"))].join("\n\n");
