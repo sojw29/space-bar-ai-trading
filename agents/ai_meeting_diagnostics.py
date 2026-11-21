@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
-from ai_meeting_runtime import ANALYSTS, SAFE_ERROR_CODES, valid_execution_id
+from ai_meeting_runtime import ANALYSTS, SAFE_ERROR_CODES, meeting_input_refs, valid_execution_id
 from agent_research_runtime_v233 import utc_time
 
 STAGES = {'INPUT', 'CONFIGURATION', 'INFERENCE', 'PUBLICATION', 'COMPLETED'}
@@ -26,6 +26,7 @@ HINTS = {
     'PROVIDER_OUTPUT_TRUNCATED': '출력이 잘려 완료된 회의로 게시하지 않았습니다.',
     'PROVIDER_REFUSED': '모델이 응답을 거절해 회의를 완료하지 않았습니다.',
     'INPUT_OR_VALIDATION_ERROR': '원본 데이터의 최신성·형식과 이전 준비 단계 로그를 확인하세요.',
+    'INVALID_STATEMENT_CITATION': '이 단계의 발언 인용 형식과 허용된 ID를 확인하세요. 예: [M01] 또는 [M01, M02].',
     'FILE_ERROR': '입력·출력 파일과 실행 환경의 접근 권한을 확인하세요.',
 }
 
@@ -80,6 +81,9 @@ def render_status(value, *, expected_execution_id=None, now=None):
              '- 호출 시도: '+str(attempted)+'/7', '- 검증된 응답: '+str(validated)+'/7']
     if code:
         lines += ['- 오류 코드: '+code, '', HINTS.get(code, '관련 단계 로그와 입력·응답 형식을 확인하세요.')]
+    if code == 'INVALID_STATEMENT_CITATION' and attempted:
+        allowed = meeting_input_refs(attempted - 1)
+        lines.append('허용된 발언 ID: ' + (', '.join(allowed) if allowed else '없음'))
     if value['status'] == 'COMPLETED':
         lines += ['', '회의 파일 생성 완료입니다. 최종 공개 검증·Pages 배포 성공은 이후 단계에서 별도로 확인하세요.']
     else:
