@@ -2456,13 +2456,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       "이 기록에 저장된 참조 목록 없음";
      linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\n"+t.summary+
       "\n\n"+context;
-     if(reviews.length){
+     const destinations=phase==="ANALYSIS"?reviews:cited;
+     if(destinations.length){
       const actions=document.createElement("span");
       actions.style.display="block";
-      for(const id of reviews){
+      for(const id of destinations){
        const button=document.createElement("button");
        button.type="button";
-       button.textContent="["+id+"] 상호 검토로 이동";
+       button.textContent="["+id+"] "+(phase==="ANALYSIS"?"상호 검토로 이동":"초기 분석으로 이동");
        button.style.margin="4px";
        button.onclick=()=>{
         if(!canUseRecord())return;
