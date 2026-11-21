@@ -2536,7 +2536,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     "\n판정 규칙 근거 위치: "+(evidence.length?evidence.join(" / "):"해당 없음")+
     "\n근거 표시는 발언 단계와 판정 상태의 연결이며 인과관계 추론이 아닙니다." +
     (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
-   if(evidenceIndices.length){
+   const citedIndices=[final.summary,...final.concerns].flatMap(text=>
+    Array.from(text.matchAll(/\[M0([1-6])\]/g),match=>Number(match[1])-1));
+   const linkedIndices=new Set([...evidenceIndices,...citedIndices]);
+   if(linkedIndices.size){
     const links=document.createElement("span");
     links.style.display="block";
     const restore=document.createElement("button");
@@ -2555,7 +2558,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      applyAgentView();
      evidenceButton?.focus?.();
     };
-    for(const i of evidenceIndices){
+    for(const i of linkedIndices){
      const button=document.createElement("button");
      button.type="button";
      button.textContent="[M"+String(i+1).padStart(2,"0")+"] 발언 보기";
