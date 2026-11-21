@@ -2084,6 +2084,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-pick-concern-type" type="button" style="min-height:44px" disabled>이 유형 모두 선택</button>
   <button id="ai-meeting-unpick-concern-type" type="button" style="min-height:44px" disabled>이 유형 선택 해제</button>
   <button id="ai-meeting-open-picked-concern" type="button" style="min-height:44px" disabled>첫 선택 우려 열기</button>
+  <label>최종 우려 검색 <input id="ai-meeting-concern-search" type="search" maxlength="120" placeholder="우려 문구 또는 발언 번호" style="min-height:44px;max-width:100%"></label>
+  <label style="min-height:44px"><input id="ai-meeting-concern-picked-only" type="checkbox"> 선택 우려만 보기</label>
+  <button id="ai-meeting-concern-reset-view" type="button" style="min-height:44px" disabled>우려 검색 초기화</button>
+  <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
  </div></div>
@@ -2337,6 +2341,53 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let pickedComparisonKey=null;
  let comparisonChanges=[],comparisonDisclosures=[],comparisonOrigin=null,appliedComparisonSort="ORDER";
  const finalConcernTargets=new Map();
+ const concernSearch=document.getElementById("ai-meeting-concern-search");
+ const concernPickedOnly=document.getElementById("ai-meeting-concern-picked-only");
+ const concernResetView=document.getElementById("ai-meeting-concern-reset-view");
+ const concernMatchCount=document.getElementById("ai-meeting-concern-match-count");
+ function visibleConcernIndexes(target){
+  return target.concerns.flatMap((entry,index)=>entry.node.hidden?[]:[index]);
+ }
+ function updateConcernView(){
+  const query=comparisonSearchText(concernSearch?.value??"");
+  const pickedOnly=!!concernPickedOnly?.checked;
+  let count=0,total=0;
+  for(const [key,target] of finalConcernTargets){
+   total+=target.concerns.length;
+   target.concerns.forEach(({node,issue},index)=>{
+    const ids=[...issue.earlier_statement_ids,...issue.later_statement_ids];
+    const match=!query||comparisonSearchText(issue.text).includes(query)||
+     ids.some(id=>id.toLowerCase()===query.replace(/^\[(.*)\]$/,"$1"));
+    node.hidden=!match||(pickedOnly&&!pickedFinalConcerns.has(key+":"+index));
+   });
+   const indexes=visibleConcernIndexes(target);
+   count+=indexes.length;
+   const button=finalConcernButtons[key];
+   if(button)button.disabled=indexes.length===0;
+   indexes.forEach((index,position)=>{
+    const {navigation}=target.concerns[index];
+    if(!navigation)return;
+    navigation.hidden=indexes.length<2;
+    navigation.children[0].textContent=(position+1)+" / "+indexes.length+" · "+finalConcernLabels[key];
+    navigation.children[1].disabled=position===0;
+    navigation.children[2].disabled=position===indexes.length-1;
+   });
+  }
+  for(const target of finalConcernTargets.values())target.sources.hidden=count===0;
+  if(openPickedConcern)openPickedConcern.disabled=![...finalConcernTargets].some(([key,target])=>
+   visibleConcernIndexes(target).some(index=>pickedFinalConcerns.has(key+":"+index)));
+  if(concernMatchCount)concernMatchCount.textContent=query||pickedOnly?
+   (count?"표시된 우려 "+count+" / "+total+"건":"조건에 맞는 최종 우려가 없습니다."):"";
+  if(concernResetView)concernResetView.disabled=!concernSearch?.value&&!pickedOnly;
+ }
+ concernSearch?.addEventListener("input",updateConcernView);
+ concernPickedOnly?.addEventListener("change",updateConcernView);
+ concernResetView?.addEventListener("click",()=>{
+  if(concernSearch)concernSearch.value="";
+  if(concernPickedOnly)concernPickedOnly.checked=false;
+  updateConcernView();
+  concernSearch?.focus?.();
+ });
  const finalConcernPositions=new Map();
  const pickedFinalConcerns=new Set();
  const concernCheckboxes=new Map();
@@ -2360,9 +2411,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const available=comparisonReport?.final_concerns[category]?.length??0;
   if(pickConcernType)pickConcernType.disabled=available===selectedCounts[category];
   if(unpickConcernType)unpickConcernType.disabled=!selectedCounts[category];
-  if(openPickedConcern)openPickedConcern.disabled=count===0;
   if(clearPickedConcerns)clearPickedConcerns.disabled=count===0;
   for(const {button} of pickedConcernExports)if(button)button.disabled=count===0;
+  updateConcernView();
  }
  function setConcernTypeSelection(selected){
   if(!pairedArchives&&!canUseRecord())return;
@@ -2379,7 +2430,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  pickConcernType?.addEventListener("click",()=>setConcernTypeSelection(true));
  unpickConcernType?.addEventListener("click",()=>setConcernTypeSelection(false));
  openPickedConcern?.addEventListener("click",()=>{
-  const first=[...concernCheckboxes.keys()].find(id=>pickedFinalConcerns.has(id));
+  const first=[...finalConcernTargets].flatMap(([key,target])=>
+   visibleConcernIndexes(target).map(index=>key+":"+index)).find(id=>pickedFinalConcerns.has(id));
   if(!first)return;
   const [category,index]=first.split(":");
   openFinalConcern(category,Number(index));
@@ -2738,7 +2790,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     finalConcernTargets.set(key,{sources,concerns});
     for(const [index,issue] of items.entries()){
      const concern=disclosure(label+" · "+issue.text);
-     concerns.push(concern);
+     const entry={node:concern,issue,navigation:null};
+     concerns.push(entry);
      for(const [record,ids,period] of [[older,issue.earlier_statement_ids,"이전"],[newer,issue.later_statement_ids,"이후"]]){
       for(const id of ids)concern.append(statementCard(record,record.transcript[Number(id.slice(1))-1],period));
      }
@@ -2746,6 +2799,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      counts.textContent="원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건";
      if(items.length>1){
       const navigation=document.createElement("div");
+      entry.navigation=navigation;
       navigation.style.display="flex";
       navigation.style.flexWrap="wrap";
       navigation.style.gap="8px";
@@ -2758,7 +2812,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        move.textContent=text;
        move.style.minHeight="44px";
        move.disabled=!items[index+offset];
-       move.addEventListener("click",()=>openFinalConcern(key,index+offset,concern));
+       move.addEventListener("click",()=>{
+        const indexes=visibleConcernIndexes(finalConcernTargets.get(key));
+        openFinalConcern(key,indexes[indexes.indexOf(index)+offset],concern);
+       });
        navigation.append(move);
       }
       concern.append(navigation);
@@ -2821,8 +2878,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function openFinalConcern(key,index,previous){
   if(!pairedArchives&&!canUseRecord())return;
   const target=finalConcernTargets.get(key);
-  const concern=target?.concerns[index];
-  if(!concern)return;
+  const concern=target?.concerns[index]?.node;
+  if(!concern||concern.hidden)return;
   finalConcernPositions.set(key,index);
   if(previous)previous.open=false;
   target.sources.open=true;
@@ -2831,7 +2888,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   concern.scrollIntoView?.({block:"nearest"});
  }
  for(const [key,button] of Object.entries(finalConcernButtons)){
-  button?.addEventListener("click",()=>openFinalConcern(key,finalConcernPositions.get(key)??0));
+  button?.addEventListener("click",()=>{
+   const target=finalConcernTargets.get(key);
+   if(!target)return;
+   const indexes=visibleConcernIndexes(target);
+   const last=finalConcernPositions.get(key);
+   openFinalConcern(key,indexes.includes(last)?last:indexes[0]);
+  });
  }
  function clearComparisonExport(){
   finalConcernTargets.clear();
@@ -2977,6 +3040,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    pickedComparisonKey=selectionKey;
    finalConcernPositions.clear();
    pickedFinalConcerns.clear();
+   if(concernSearch)concernSearch.value="";
+   if(concernPickedOnly)concernPickedOnly.checked=false;
    activePickId=null;
    if(pickedOnlyControl)pickedOnlyControl.checked=false;
   }
