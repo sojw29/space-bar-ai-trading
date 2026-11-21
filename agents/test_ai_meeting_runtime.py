@@ -56,6 +56,29 @@ class MeetingTests(unittest.TestCase):
         self.assertFalse(result['orders_enabled'])
         self.assertEqual(result['trade_authorization'], 'DENIED')
 
+    def test_commander_receives_only_the_highest_priority_prior_evidence(self):
+        for missing in (False, True):
+            with self.subTest(missing=missing):
+                calls = []
+
+                def complete(agent, phase, context):
+                    calls.append(context)
+                    if agent == "GUARDIAN" and phase == "PEER_REVIEW":
+                        return statement("REVIEW_NEEDED")
+                    if missing and agent == "QUANT" and phase == "ANALYSIS":
+                        return statement("INSUFFICIENT_DATA")
+                    return statement()
+
+                fixture = Fixture()
+                fixture.complete = complete
+                result = run_meeting(request(), fixture, clock=lambda: NOW)
+                expected = "INSUFFICIENT_DATA" if missing else "REVIEW_NEEDED"
+                self.assertTrue(all("evidence_priority" not in ctx for ctx in calls[:-1]))
+                self.assertEqual(calls[-1]["evidence_priority"], {
+                    "verdict": expected, "statement_ids": ["M02"] if missing else ["M06"],
+                })
+                self.assertEqual(result["final_verdict"], expected)
+
     def test_invalid_source_stops_before_any_call(self):
         for mutation in ('stale', 'orders', 'different_facts'):
             with self.subTest(mutation=mutation):

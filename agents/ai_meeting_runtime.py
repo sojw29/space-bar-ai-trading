@@ -33,7 +33,8 @@ PHASE_GUIDANCE = {
                    "If the evidence cannot settle a disagreement, retain it as an open concern.",
     "CONCLUSION": "Use both rounds to distinguish shared observations, contested claims "
                   "and unresolved evidence gaps. Attribute disagreements to their agents "
-                  "and state what additional evidence would resolve them.",
+                  "and state what additional evidence would resolve them. If evidence_priority is supplied, "
+                  "explain the cited constraint and what evidence would be needed to address it.",
 }
 SCHEMA = {"type": "object", "additionalProperties": False,
           "properties": {"summary": {"type": "string"},
@@ -175,6 +176,22 @@ def meeting_input_refs(index, *, legacy=False):
     return []
 
 
+def evidence_priority(transcript):
+    """Return the strongest evidence constraint and its supporting statement IDs."""
+    missing = []
+    guardian = []
+    for index, statement in enumerate(transcript, 1):
+        if statement["verdict"] == "INSUFFICIENT_DATA":
+            missing.append(f"M{index:02}")
+        elif statement["agent"] == "GUARDIAN" and statement["verdict"] == "REVIEW_NEEDED":
+            guardian.append(f"M{index:02}")
+    if missing:
+        return {"verdict": "INSUFFICIENT_DATA", "statement_ids": missing}
+    if guardian:
+        return {"verdict": "REVIEW_NEEDED", "statement_ids": guardian}
+    return None
+
+
 def run_meeting(bundle, provider, *, clock=None, progress=None):
     """Injected providers are fixtures; only the concrete transport marks live inference."""
     clock = clock or (lambda: datetime.now(timezone.utc))
@@ -208,17 +225,18 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
         peer_analyses = [analysis for analysis in analyses if analysis["agent"] != agent]
         speak(agent, "PEER_REVIEW", {"facts": facts, "own_analysis": own_analysis,
                                     "peer_analyses": peer_analyses})
-    speak("COMMANDER", "CONCLUSION", {"facts": facts, "discussion": deepcopy(transcript)})
+    conclusion_context = {"facts": facts, "discussion": deepcopy(transcript)}
+    priority = evidence_priority(transcript)
+    if priority is not None:
+        conclusion_context["evidence_priority"] = priority
+    speak("COMMANDER", "CONCLUSION", conclusion_context)
     finished = clock()
     preflight(bundle, dry_run=True, now=finished)
     if finished < started:
         raise MeetingError("CLOCK_MOVED_BACKWARD")
     # Models cannot overrule insufficient evidence or GUARDIAN objections.
-    final = transcript[-1]["verdict"]
-    if any(t["verdict"] == "INSUFFICIENT_DATA" for t in transcript):
-        final = "INSUFFICIENT_DATA"
-    elif any(t["agent"] == "GUARDIAN" and t["verdict"] == "REVIEW_NEEDED" for t in transcript):
-        final = "REVIEW_NEEDED"
+    priority = evidence_priority(transcript)
+    final = priority["verdict"] if priority is not None else transcript[-1]["verdict"]
     live = type(provider) is OpenAIProvider
     return with_market_source(bundle, {"version": "AI_MEETING_1", "status": "COMPLETED",
             "execution_mode": "LIVE_PROVIDER" if live else "OFFLINE_FIXTURE",
