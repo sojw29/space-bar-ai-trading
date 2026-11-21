@@ -2085,6 +2085,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-unpick-concern-type" type="button" style="min-height:44px" disabled>이 유형 선택 해제</button>
   <button id="ai-meeting-open-picked-concern" type="button" style="min-height:44px" disabled>첫 선택 우려 열기</button>
   <label>최종 우려 검색 <input id="ai-meeting-concern-search" type="search" maxlength="120" placeholder="우려 문구 또는 발언 번호" style="min-height:44px;max-width:100%"></label>
+  <button id="ai-meeting-concern-clear-search" type="button" style="min-height:44px" disabled>검색어 지우기</button>
   <label>우려 유형 <select id="ai-meeting-concern-filter-type" style="min-height:44px">
    <option value="all">전체 유형</option><option value="added">새로 기록된 우려</option>
    <option value="continued">이어진 우려</option><option value="not_repeated">재언급되지 않은 우려</option>
@@ -2367,6 +2368,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(concernPickedOnly)concernPickedOnly.checked=false;
  }
  const concernPickedOnly=document.getElementById("ai-meeting-concern-picked-only");
+ const concernClearSearch=document.getElementById("ai-meeting-concern-clear-search");
  const concernResetView=document.getElementById("ai-meeting-concern-reset-view");
  const concernMatchCount=document.getElementById("ai-meeting-concern-match-count");
  const pickVisibleConcerns=document.getElementById("ai-meeting-pick-visible-concerns");
@@ -2437,12 +2439,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(concernMatchCount)concernMatchCount.textContent=filtered?
    (count?"표시된 우려 "+count+" / "+total+"건":"조건에 맞는 최종 우려가 없습니다.")+
    (hiddenPicks?" · 필터로 숨겨진 선택 "+hiddenPicks+"건":""):"";
+  if(concernClearSearch)concernClearSearch.disabled=!concernSearch?.value;
   if(concernResetView)concernResetView.disabled=!filtered&&!concernSearch?.value&&search_scope==="all";
  }
  concernSearch?.addEventListener("input",updateConcernView);
  for(const control of [concernPickedOnly,concernFilterType,concernSearchScope]){
   control?.addEventListener("change",updateConcernView);
  }
+ concernClearSearch?.addEventListener("click",()=>{
+  if(!concernSearch?.value)return;
+  concernSearch.value="";
+  updateConcernView();
+  concernSearch.focus?.();
+ });
  concernResetView?.addEventListener("click",()=>{
   resetConcernFilters();
   updateConcernView();
