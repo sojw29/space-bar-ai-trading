@@ -305,7 +305,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(oldIssue.children[0].textContent,/이후 결론에 재언급되지 않은 우려 · 표본 부족/);
    assert.match(addedIssue.children[1].children[0].textContent,/이후 \[M07\]/);
    assert.match(continuedIssue.children[1].children[0].textContent,/이전 \[M07\]/);
-   assert.match(addedIssue.children[0].textContent,/원문 이전 0건 \/ 이후 1건/);
+   assert.match(addedIssue.children.at(-2).textContent,/원문 이전 0건 \/ 이후 1건/);
    const concernButtons=elements['ai-meeting-final-concern-shortcuts'];
    assert.equal(concernButtons.hidden,false);
    for(const [key,section] of [['added',addedIssue],['continued',continuedIssue],['not_repeated',oldIssue]]){
