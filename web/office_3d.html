@@ -2741,7 +2741,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(comparisonSummary){
    comparisonSummary.textContent="최종 판정 "+labels[older.final_verdict]+" → "+labels[newer.final_verdict]+
     " · 초기 분석 변경 "+analysisChanges.length+"건 · 상호 검토 변경 "+reviewChanges.length+
-    "건 · 새 최종 우려 "+added.length+"건 · "+contentSummary;
+    "건 · 새 최종 우려 "+added.length+"건 · "+contentSummary+
+    (pairedArchives?" · 완료 시각 UTC "+older.generated_at_utc+" → "+newer.generated_at_utc:"");
    comparisonSummary.hidden=false;
   }
   const selectionKey=JSON.stringify(comparisonReport);
@@ -2889,8 +2890,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(first.generated_at_utc===second.generated_at_utc&&first.workflow_execution_id===second.workflow_execution_id){
     throw Error("서로 다른 회의록 두 개를 선택해 주세요.");
    }
-   if(first.execution_mode!==second.execution_mode||first.market_source!==second.market_source){
-    throw Error("실행 방식과 시장 데이터 출처가 같은 회의록을 선택해 주세요.");
+   if(first.execution_mode!==second.execution_mode){
+    throw Error("두 회의록의 실행 방식이 달라요. 실행 방식이 같은 파일을 선택해 주세요.");
+   }
+   if(first.market_source!==second.market_source){
+    throw Error("두 회의록의 시장 데이터 출처가 달라요. 출처가 같은 파일을 선택해 주세요.");
    }
   }
   pairSlots=next;
@@ -2903,7 +2907,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     record?.market_source==="OKX_USDT_PERPETUAL_5M"?"OKX USDT 무기한 5분봉":"시장 데이터 출처 미기록";
    if(info)info.textContent=record?period+slot.name+" · "+record.generated_at_utc+
     " · "+(record.workflow_execution_id??"실행 ID 미기록")+" · "+source+
-    " · 최종 판정 "+labels[record.final_verdict]:"선택한 파일 없음";
+    " · 최종 판정 "+labels[record.final_verdict]+" · 모델 "+record.model+
+    " · 원본 데이터 UTC "+record.source_generated_at_utc:"선택한 파일 없음";
    if(remove)remove.hidden=!slot;
   });
   updatePairReset();
