@@ -24,7 +24,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-import','ai-meeting-comparison-import-status','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -319,6 +319,37 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(evidence.children[3].open,true);
    assert.equal(evidence.children[3].children[1].open,true);
    const chronological=result.textContent;
+   const importer=elements['ai-meeting-comparison-import'];
+   const importStatus=elements['ai-meeting-comparison-import-status'];
+   const archive={version:'SPACEBAR_MEETING_ARCHIVE_1',archived_at_utc:earlier.generated_at_utc,
+    research_only:true,orders_enabled:false,trade_authorization:'DENIED',process_liveness_verified:false,
+    record:{...earlier,workflow_execution_id:earlier.workflow_execution_id??null,market_source:earlier.market_source??null,
+     verdict_counts:{OBSERVATION_ONLY:7,REVIEW_NEEDED:0,INSUFFICIENT_DATA:0},
+     transcript:earlier.transcript.map((statement,index)=>({id:'M0'+(index+1),...statement}))}};
+   async function importFile(value,size=12000){
+    importer.files=[{size,text:async()=>JSON.stringify(value)}];
+    await importer.change();
+   }
+   await importFile(archive);
+   assert.match(importStatus.textContent,/비교 기준으로 불러왔어요/);
+   assert.match(baselineLabel.textContent,/저장한 회의록/);
+   assert.match(result.textContent,/비교 기준 출처: 저장한 회의록 JSON/);
+   saveJson.click();
+   assert.equal(JSON.parse(await savedBlob.text()).baseline_origin,'ARCHIVE_FILE');
+   const fromFile=result.textContent;
+   for(const invalid of [
+    {...archive,orders_enabled:true},
+    {...archive,record:{...archive.record,market_source:'OKX_USDT_PERPETUAL_5M'}},
+    {...archive,record:{...archive.record,final_verdict:'REVIEW_NEEDED'}},
+    {...archive,record:{...archive.record,verdict_counts:{OBSERVATION_ONLY:8,REVIEW_NEEDED:0,INSUFFICIENT_DATA:0}}},
+   ]){
+    await importFile(invalid);
+    assert.match(importStatus.textContent,/기존 비교 기준은 유지했어요/);
+    assert.equal(result.textContent,fromFile);
+   }
+   await importFile(archive,262145);
+   assert.match(importStatus.textContent,/256 KiB/);
+   assert.equal(result.textContent,fromFile);
    elements['ai-meeting-pin-comparison'].click();
    Object.assign(data,earlier);
    await elements['ai-meeting-refresh'].click();
