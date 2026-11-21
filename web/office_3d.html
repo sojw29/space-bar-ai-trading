@@ -2095,6 +2095,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-comparison-select-visible" type="button" style="min-height:44px" disabled>표시된 발언 모두 선택</button>
   <button id="ai-meeting-comparison-clear-picked" type="button" style="min-height:44px" disabled>발언 선택 해제</button>
   <button id="ai-meeting-comparison-save-picked" type="button" style="min-height:44px" disabled>선택 발언 CSV 저장</button>
+  <button id="ai-meeting-comparison-save-picked-text" type="button" style="min-height:44px" disabled>선택 발언 TXT 저장</button>
+  <button id="ai-meeting-comparison-save-picked-json" type="button" style="min-height:44px" disabled>선택 발언 JSON 저장</button>
+  <button id="ai-meeting-comparison-deselect-visible" type="button" style="min-height:44px" disabled>표시된 발언 선택 해제</button>
   <p id="ai-meeting-comparison-picked-count" role="status"></p>
   <p id="ai-meeting-comparison-change-count" role="status"></p>
  </div></div>
@@ -2259,6 +2262,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const selectVisibleChanges=document.getElementById("ai-meeting-comparison-select-visible");
  const clearPickedChanges=document.getElementById("ai-meeting-comparison-clear-picked");
  const savePickedChanges=document.getElementById("ai-meeting-comparison-save-picked");
+ const savePickedText=document.getElementById("ai-meeting-comparison-save-picked-text");
+ const savePickedJson=document.getElementById("ai-meeting-comparison-save-picked-json");
+ const deselectVisibleChanges=document.getElementById("ai-meeting-comparison-deselect-visible");
  const pickedChangeCount=document.getElementById("ai-meeting-comparison-picked-count");
  const pickedChanges=new Set();
  let pickedComparisonKey=null;
@@ -2320,11 +2326,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const visiblePicked=visible.filter(entry=>pickedChanges.has(entry.change.id)).length;
   if(selectVisibleChanges)selectVisibleChanges.disabled=!visible.length||visiblePicked===visible.length;
-  for(const button of [clearPickedChanges,savePickedChanges]){
+  if(deselectVisibleChanges)deselectVisibleChanges.disabled=visiblePicked===0;
+  for(const button of [clearPickedChanges,savePickedChanges,savePickedText,savePickedJson]){
    if(button)button.disabled=!comparisonReport||pickedChanges.size===0;
   }
   if(pickedChangeCount)pickedChangeCount.textContent=comparisonReport?
-   "선택 "+pickedChanges.size+"건 · 현재 표시 "+visiblePicked+"건":"";
+   "선택 "+pickedChanges.size+"건 · 현재 표시 "+visiblePicked+"건"+
+   (pickedChanges.size>visiblePicked?" · 필터로 숨겨진 선택 "+(pickedChanges.size-visiblePicked)+"건":""):"";
   for(const {node,change,pick,title} of comparisonChanges){
    const selected=pickedChanges.has(change.id);
    pick.checked=selected;
@@ -2337,11 +2345,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const {change} of applyComparisonFilters())pickedChanges.add(change.id);
   applyComparisonFilters();
  });
+ deselectVisibleChanges?.addEventListener("click",()=>{
+  if(!pairedArchives&&!canUseRecord())return;
+  for(const {change} of applyComparisonFilters())pickedChanges.delete(change.id);
+  applyComparisonFilters();
+ });
  clearPickedChanges?.addEventListener("click",()=>{
   pickedChanges.clear();
   applyComparisonFilters();
  });
  savePickedChanges?.addEventListener("click",()=>downloadFilteredComparison("CSV",true));
+ savePickedText?.addEventListener("click",()=>downloadFilteredComparison("TXT",true));
+ savePickedJson?.addEventListener("click",()=>downloadFilteredComparison("JSON",true));
  comparisonAgent?.addEventListener("change",applyComparisonFilters);
  comparisonPhase?.addEventListener("change",applyComparisonFilters);
  comparisonSearch?.addEventListener("input",applyComparisonFilters);
@@ -2490,7 +2505,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     pair.append(delta);
    }
    const pickLabel=document.createElement("label");
-   pickLabel.style.display="block";
+   pickLabel.style.display="flex";
+   pickLabel.style.alignItems="center";
+   pickLabel.style.gap="8px";
    pickLabel.style.minHeight="44px";
    const pick=document.createElement("input");
    pick.type="checkbox";
@@ -2689,10 +2706,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   };
   const json=format==="JSON";
   const result={version:"SPACEBAR_MEETING_FILTERED_CHANGES_1",research_only:true,orders_enabled:false,
-   earlier,later,execution_mode,market_source,baseline_origin,filters,statement_changes:changes};
-  const lines=["표시된 회의 발언 변경 · "+changes.length+"건","이전 "+earlier.generated_at_utc,
+   earlier,later,execution_mode,market_source,baseline_origin,
+   ...(picked?{selection:"PICKED",sort:appliedComparisonSort}:{filters}),statement_changes:changes};
+  const lines=[(picked?"선택한":"표시된")+" 회의 발언 변경 · "+changes.length+"건","이전 "+earlier.generated_at_utc,
    "이후 "+later.generated_at_utc,"시장 데이터 출처: "+(market_source??"미기록"),
-   "적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
+   picked?"정렬: "+appliedComparisonSort:"적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
     " · 이전 판정 "+(labels[filters.earlier_verdict]??"전체")+" · 이후 판정 "+(labels[filters.later_verdict]??"전체")+
     " · 검색어 "+(filters.search||"없음")+" · 검색 범위 "+filters.search_scope+" · 정렬 "+filters.sort+" · 요약 포함 "+(filters.include_summary_changes?"예":"아니오")+
     " · 우려 포함 "+(filters.include_concern_changes?"예":"아니오")];
