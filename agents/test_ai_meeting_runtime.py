@@ -88,7 +88,9 @@ class MeetingTests(unittest.TestCase):
     def test_citations_are_limited_to_statement_ids_supplied_in_each_round(self):
         for failure_phase, citation in (("ANALYSIS", "M01"), ("PEER_REVIEW", "M04"),
                                         ("PEER_REVIEW", "M01, M04"), ("CONCLUSION", "M07"),
-                                        ("CONCLUSION", "M02, M99"), (None, None)):
+                                        ("CONCLUSION", "M02, M99"),
+                                        ("PEER_REVIEW", "M01; M04"), ("PEER_REVIEW", "M01,"),
+                                        ("CONCLUSION", "M01 M02"), (None, None)):
             with self.subTest(phase=failure_phase):
                 fixture = Fixture()
 
