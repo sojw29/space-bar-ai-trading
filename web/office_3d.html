@@ -2101,6 +2101,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <label style="min-height:44px"><input id="ai-meeting-comparison-picked-only" type="checkbox" aria-controls="ai-meeting-comparison-evidence"> 선택 발언만 보기</label>
   <button id="ai-meeting-comparison-clear-hidden" type="button" style="min-height:44px" disabled>숨겨진 선택 해제</button>
   <button id="ai-meeting-comparison-jump-picked" type="button" style="min-height:44px" disabled>첫 선택 발언 열기</button>
+  <button id="ai-meeting-comparison-prev-picked" type="button" style="min-height:44px" disabled>이전 선택 발언</button>
+  <button id="ai-meeting-comparison-next-picked" type="button" style="min-height:44px" disabled>다음 선택 발언</button>
+  <p id="ai-meeting-comparison-picked-position" role="status" hidden></p>
   <p id="ai-meeting-comparison-picked-count" role="status"></p>
   <p id="ai-meeting-comparison-change-count" role="status"></p>
  </div></div>
@@ -2271,6 +2274,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const pickedOnlyControl=document.getElementById("ai-meeting-comparison-picked-only");
  const clearHiddenPicks=document.getElementById("ai-meeting-comparison-clear-hidden");
  const jumpToPick=document.getElementById("ai-meeting-comparison-jump-picked");
+ const previousPick=document.getElementById("ai-meeting-comparison-prev-picked");
+ const nextPick=document.getElementById("ai-meeting-comparison-next-picked");
+ const pickedPosition=document.getElementById("ai-meeting-comparison-picked-position");
+ let activePickId=null;
  const pickedChangeCount=document.getElementById("ai-meeting-comparison-picked-count");
  const pickedChanges=new Set();
  let pickedComparisonKey=null;
@@ -2332,12 +2339,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    " · 우려 "+visible.filter(entry=>entry.concernsChanged).length:
    contentView?"조건에 맞는 발언 변경 없음":"조건에 맞는 판정 변경 없음";
   if(comparisonToggle){
-   const kind=contentView?"발언 변경":"판정 변경";
+   const kind=pickedOnly?"선택 발언":contentView?"발언 변경":"판정 변경";
    comparisonToggle.disabled=visible.length===0;
    comparisonToggle.textContent=visible.length&&visible.every(({node})=>node.open)?
     "표시된 "+kind+" 접기":"표시된 "+kind+" 펼치기";
   }
-  const visiblePicked=visible.filter(entry=>pickedChanges.has(entry.change.id)).length;
+  const selected=visible.filter(entry=>pickedChanges.has(entry.change.id));
+  const visiblePicked=selected.length;
+  const position=selected.findIndex(({change})=>change.id===activePickId);
+  if(comparisonChanges.length&&position<0)activePickId=null;
+  if(previousPick)previousPick.disabled=position<=0;
+  if(nextPick)nextPick.disabled=position<0||position===visiblePicked-1;
+  if(pickedPosition){
+   pickedPosition.hidden=position<0;
+   pickedPosition.textContent=position<0?"":(position+1)+" / "+visiblePicked+" · "+activePickId;
+  }
   if(selectVisibleChanges)selectVisibleChanges.disabled=!visible.length||visiblePicked===visible.length;
   if(clearHiddenPicks)clearHiddenPicks.disabled=!comparisonReport||pickedChanges.size===visiblePicked;
   if(jumpToPick)jumpToPick.disabled=visiblePicked===0;
@@ -2348,9 +2364,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(pickedChangeCount)pickedChangeCount.textContent=comparisonReport?
    "선택 "+pickedChanges.size+"건 · 현재 표시 "+visiblePicked+"건"+
    (pickedChanges.size>visiblePicked?" · 필터로 숨겨진 선택 "+(pickedChanges.size-visiblePicked)+"건":""):"";
-  for(const {node,change,pick,title} of comparisonChanges){
+  for(const {node,change,pick,title,backToPicks} of comparisonChanges){
    const selected=pickedChanges.has(change.id);
    pick.checked=selected;
+   backToPicks.hidden=!selected;
    node.children[0].textContent=(selected?"선택됨 · ":"")+title;
   }
   return visible;
@@ -2372,14 +2389,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const id of pickedChanges)if(!visibleIds.has(id))pickedChanges.delete(id);
   applyComparisonFilters();
  });
- jumpToPick?.addEventListener("click",()=>{
+ function navigatePicked(offset){
   if(!pairedArchives&&!canUseRecord())return;
-  const entry=applyComparisonFilters().find(({change})=>pickedChanges.has(change.id));
-  if(!entry)return;
+  const selected=applyComparisonFilters().filter(({change})=>pickedChanges.has(change.id));
+  const current=selected.findIndex(({change})=>change.id===activePickId);
+  const entry=selected[offset===0?0:current+offset];
+  if(!entry||offset!==0&&current<0)return;
+  activePickId=entry.change.id;
   entry.node.open=true;
-  entry.node.children[0].focus?.();
+  applyComparisonFilters();
+  entry.node.children[0].focus?.({preventScroll:true});
   entry.node.scrollIntoView?.({block:"nearest"});
- });
+ }
+ jumpToPick?.addEventListener("click",()=>navigatePicked(0));
+ previousPick?.addEventListener("click",()=>navigatePicked(-1));
+ nextPick?.addEventListener("click",()=>navigatePicked(1));
  clearPickedChanges?.addEventListener("click",()=>{
   pickedChanges.clear();
   applyComparisonFilters();
@@ -2545,7 +2569,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const pickText=document.createElement("span");
    pickText.textContent=" ["+change.id+"] 선택";
    pickLabel.append(pick,pickText);
-   pair.append(pickLabel);
+   const backToPicks=document.createElement("button");
+   backToPicks.type="button";
+   backToPicks.textContent="선택 발언 이동 버튼으로 돌아가기";
+   backToPicks.style.minHeight="44px";
+   backToPicks.addEventListener("click",()=>{
+    const target=nextPick&&!nextPick.disabled?nextPick:previousPick&&!previousPick.disabled?previousPick:jumpToPick;
+    target?.focus?.({preventScroll:true});
+    target?.scrollIntoView?.({block:"nearest"});
+   });
+   pair.append(backToPicks,pickLabel);
    pick.addEventListener("change",()=>{
     if(!pairedArchives&&!canUseRecord())return;
     if(pick.checked)pickedChanges.add(change.id);
@@ -2559,7 +2592,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     CONCERNS:[...left.concerns,...right.concerns].join("\n").toLowerCase(),
    };
    searchText.ALL=[searchText.ID,searchText.SUMMARY,searchText.CONCERNS].join("\n");
-   comparisonChanges.push({node:pair,change,pick,title,statement:{...right,verdict:newVerdict},verdictChanged,summaryChanged,concernsChanged,searchText});
+   comparisonChanges.push({node:pair,change,pick,title,backToPicks,statement:{...right,verdict:newVerdict},verdictChanged,summaryChanged,concernsChanged,searchText});
    groups.push(pair);
   }
   const categories=[
@@ -2707,6 +2740,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(selectionKey!==pickedComparisonKey){
    pickedChanges.clear();
    pickedComparisonKey=selectionKey;
+   activePickId=null;
    if(pickedOnlyControl)pickedOnlyControl.checked=false;
   }
   renderComparisonEvidence(older,newer,pairedArchives?null:current,expanded);
