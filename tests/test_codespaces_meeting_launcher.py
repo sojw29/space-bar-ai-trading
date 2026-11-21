@@ -1,5 +1,6 @@
 """Exercise launcher argument handling without starting a server or model."""
 import json
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import shutil
@@ -88,3 +89,48 @@ class CodespacesMeetingLauncherTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIsNone(captured)
                 self.assertIn('unrecognized or unsafe', result.stderr)
+
+    def test_real_python_rejects_invalid_sessions_before_starting_server(self):
+        # Exercise the full Bash -> Python chain, with only the health probe stubbed.
+        # Invalid snapshots must exit during argument validation, before any bind.
+        with tempfile.TemporaryDirectory(prefix='meeting launcher ') as folder:
+            root = Path(folder)
+            binaries = root / 'bin'
+            binaries.mkdir()
+            (binaries / 'curl').write_text('#!/bin/sh\nexit 1\n')
+            (binaries / 'curl').chmod(0o755)
+            (binaries / 'python').symlink_to(sys.executable)
+            env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ.get('PATH', ''))
+            env.pop('PYTHONPATH', None)
+            session = root / 'session with spaces'
+            session.mkdir()
+            status = session / 'workflow_status.json'
+            now = datetime.now(timezone.utc)
+            base = dict(version='MEETING_WORKFLOW_STATUS_1', event='WORKFLOW_FINISHED',
+                        workflow_stage='SETUP', status='READY_NO_MODEL_CALLS',
+                        execution_id='a'*32, updated_at_utc=now.isoformat())
+            cases = {
+                'missing': None,
+                'malformed': '{',
+                'stale': json.dumps(dict(base, updated_at_utc=(now-timedelta(minutes=10)).isoformat())),
+                'future': json.dumps(dict(base, updated_at_utc=(now+timedelta(minutes=10)).isoformat())),
+                'invalid identity': json.dumps(dict(base, execution_id='not-an-execution')),
+            }
+            for label, content in cases.items():
+                with self.subTest(label=label):
+                    if content is None:
+                        status.unlink(missing_ok=True)
+                    else:
+                        status.write_text(content)
+                    result = subprocess.run(
+                        [shutil.which('bash'), str(ROOT / '.devcontainer' / 'start-room.sh'),
+                         '--meeting-session', str(session)], cwd='/', env=env,
+                        capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn('Meeting session requires a valid recent workflow_status.json', result.stderr)
+                    self.assertNotIn('Traceback', result.stderr)
+                    self.assertNotIn('Local paper-only API:', result.stdout)
+                    if content is None:
+                        self.assertFalse(status.exists())
+                    else:
+                        self.assertEqual(status.read_text(), content)
