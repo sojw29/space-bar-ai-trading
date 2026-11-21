@@ -81,7 +81,10 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(elements['ai-meeting-rows'].children[4].focused,true);
   }
   if(mode==='peer-citation'){
-   elements['ai-meeting-rows'].children[3].click();
+   const review=elements['ai-meeting-rows'].children[3];
+   assert.match(review.textContent,/인용한 초기 분석: \[M02\] QUANT/);
+   assert.doesNotMatch(review.textContent,/인용한 초기 분석:.*\[M01\]/);
+   review.click();
    const linked=elements['ai-meeting-linked'];
    assert.equal(linked.hidden,false);
    assert.match(linked.textContent,/상호 검토에서 인용한 초기 분석 \(1건\)\n\[M02\] QUANT/);
