@@ -2393,6 +2393,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function updateConcernView(){
   const {search,type,search_scope,picked_only}=concernViewFilters();
+  if(concernSearch)concernSearch.placeholder={
+   all:"우려 문구 또는 발언 번호",
+   text:"우려 문구 입력",
+   earlier:"이전 회의 발언 번호 (예: M04)",
+   later:"이후 회의 발언 번호 (예: M07)",
+  }[search_scope];
   const query=comparisonSearchText(search);
   const evidenceQuery=query.replace(/^\[(.*)\]$/,"$1");
   const filtered=!!query||type!=="all"||picked_only;
