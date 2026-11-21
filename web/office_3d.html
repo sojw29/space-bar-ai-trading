@@ -2181,11 +2181,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  searchOriginal?.addEventListener("click",()=>{
   if(!canUseRecord()||!searchedOriginal)return;
-  const {node}=searchedOriginal;
+  const {node,agent,phase,verdict}=searchedOriginal;
   if(node.hidden){
-   if(agentFilter)agentFilter.value="ALL";
-   if(phaseFilter)phaseFilter.value="ALL";
-   if(verdictFilter)verdictFilter.value="ALL";
+   for(const [filter,value] of [[agentFilter,agent],[phaseFilter,phase],[verdictFilter,verdict]]){
+    if(filter&&filter.value!==value)filter.value="ALL";
+   }
    applyAgentView();
   }
   focusStatement(node);
