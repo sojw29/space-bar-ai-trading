@@ -2417,6 +2417,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    count+=indexes.length;
    const button=finalConcernButtons[key];
    if(button)button.disabled=indexes.length===0;
+   updateFinalConcernShortcut(key,indexes);
    indexes.forEach((index,position)=>{
     const {navigation}=target.concerns[index];
     if(!navigation)return;
@@ -2836,11 +2837,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const categories=Object.entries(finalConcernLabels).map(([key,label])=>({key,label,items:comparisonReport.final_concerns[key],button:finalConcernButtons[key]}));
   if(finalConcernShortcuts)finalConcernShortcuts.hidden=!categories.some(({items})=>items.length);
-  for(const {key,items,button} of categories){
-   if(!button)continue;
-   updateFinalConcernShortcut(key);
-   button.disabled=items.length===0;
-  }
   if(categories.some(({items})=>items.length)){
    const sources=disclosure("우려 사항이 기록된 원문");
    for(const {key,label,items,button} of categories){
@@ -2933,13 +2929,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   comparisonEvidence.replaceChildren(...groups);
   comparisonEvidence.hidden=groups.length===0;
   applyComparisonFilters();
+  updateConcernView();
  }
- function updateFinalConcernShortcut(key){
+ function updateFinalConcernShortcut(key,indexes=visibleConcernIndexes(finalConcernTargets.get(key))){
   const button=finalConcernButtons[key];
-  const count=comparisonReport?.final_concerns[key]?.length??0;
-  const index=finalConcernPositions.get(key);
+  const count=indexes.length;
+  const position=indexes.indexOf(finalConcernPositions.get(key));
   if(button)button.textContent=finalConcernLabels[key]+" "+count+"건"+
-   (count>1&&index!==undefined?" · "+(index+1)+"번째부터 보기":"");
+   (count>1&&position>=0?" · "+(position+1)+"번째부터 보기":"");
  }
  function openFinalConcern(key,index,previous){
   if(!pairedArchives&&!canUseRecord())return;

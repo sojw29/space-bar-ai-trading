@@ -386,6 +386,8 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    concernSearch.value='[ m04 ]';concernSearch.input();
    assert.equal(oldIssue.hidden,false);
    assert.equal(addedIssue.hidden,true);
+   assert.match(elements['ai-meeting-final-concern-added'].textContent,/0건$/);
+   assert.match(elements['ai-meeting-final-concern-not_repeated'].textContent,/1건$/);
    const concernTypeFilter=elements['ai-meeting-concern-filter-type'];
    const concernScope=elements['ai-meeting-concern-search-scope'];
     concernSearch.value='[M07]';
