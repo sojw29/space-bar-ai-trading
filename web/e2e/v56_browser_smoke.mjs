@@ -597,6 +597,8 @@ async function smoke(){
    await evidence.getByText("우려 사항이 기록된 원문",{exact:true}).click();
    assert.match(await evidence.locator("details").last().textContent(),/Check volume history/);
   }
+  const expectedBeforeExpiry=viewport.width===390?2:1;
+  assert.equal(transcriptCalls,expectedBeforeExpiry);
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
   // A validated historical transcript must fail closed if its source expires.
@@ -612,12 +614,13 @@ async function smoke(){
    document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,
    "expired transcript must be cleared");
+  assert.equal(await meetingPage.locator("#ai-meeting-comparison-evidence").isVisible(),false);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected",
    "expired transcript must not remain validated");
   assert.match(await meetingPage.locator("#ai-meeting-status").textContent(),/회의 원본 오래됨 또는 시각 오류/);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
-  assert.equal(transcriptCalls,2,"foreground expiry must fetch exactly once");
+  assert.equal(transcriptCalls,expectedBeforeExpiry+1,"foreground expiry must fetch exactly once");
   await meetingPage.evaluate(()=>{Date.now=window.__meetingRealNow;delete window.__meetingRealNow});
   // Refresh after expiry must restore a validated transcript.
   // Verify a real user click reloads the completed meeting rather than
@@ -632,13 +635,13 @@ async function smoke(){
    "refresh after expiry must restore the complete meeting conclusion");
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"none");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
-  assert.equal(transcriptCalls,3,"manual refresh must fetch exactly once");
+  assert.equal(transcriptCalls,expectedBeforeExpiry+2,"manual refresh must fetch exactly once");
   // Exercise the actual handler used by Safari's back/forward cache restore.
   await meetingPage.evaluate(()=>window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true})));
   await meetingPage.waitForFunction(()=>
    document.querySelector("#ai-meeting-status")?.getAttribute("data-connection")==="validated"&&
    document.querySelector("#ai-meeting-rows")?.getAttribute("aria-busy")==="false");
-  assert.equal(transcriptCalls,4,"cached page restoration must refresh exactly once");
+  assert.equal(transcriptCalls,expectedBeforeExpiry+3,"cached page restoration must refresh exactly once");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),7);
 
   assert.equal(await meetingPage.locator("#ai-meeting-refresh").isDisabled(),false);
@@ -653,7 +656,7 @@ async function smoke(){
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-connection"),"disconnected");
   assert.equal(await meetingPage.locator("#ai-meeting-rows p").count(),0,"failed reload must clear stale meeting rows");
-  assert.equal(transcriptCalls,5);
+  assert.equal(transcriptCalls,expectedBeforeExpiry+4);
   assert.equal(await meetingPage.locator("#ai-meeting-status").getAttribute("data-reason"),"request-failed");
   assert.equal(await meetingPage.locator("#ai-meeting-rows").getAttribute("aria-busy"),"false");
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/요청 실패/);
