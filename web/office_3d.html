@@ -2174,10 +2174,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const searchStatus=id?" · 원문 "+originalCount+"개 · 인용 발언 "+(count-originalCount)+"개":query?" · 검색 적용":"";
   if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+searchStatus+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
- function focusStatement(node){
+ function openStatement(node){
   node.tabIndex=-1;
   node.focus?.({preventScroll:true});
   node.scrollIntoView?.({block:"nearest"});
+  node.click?.();
  }
  function revealStatement(entry){
   if(!entry.node.hidden)return;
@@ -2193,7 +2194,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  searchOriginal?.addEventListener("click",()=>{
   if(!canUseRecord()||!searchedOriginal)return;
   revealStatement(searchedOriginal);
-  focusStatement(searchedOriginal.node);
+  openStatement(searchedOriginal.node);
  });
  agentFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
  phaseFilter?.addEventListener("change",()=>{if(canUseRecord())applyAgentView();});
@@ -2470,7 +2471,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         const entry=renderedStatements[Number(id.slice(1))-1];
         if(!entry)return;
         revealStatement(entry);
-        focusStatement(entry.node);
+        openStatement(entry.node);
        };
        actions.append?.(button);
       }
@@ -2661,7 +2662,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        restore.hidden=false;
        revealStatement(entry);
       }
-      focusStatement(entry.node);
+      openStatement(entry.node);
      };
      links.append?.(button);
     }
