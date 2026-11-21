@@ -2447,8 +2447,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      if(cited.length)sections.push("상호 검토에서 인용한 초기 분석 ("+cited.length+"건)\n"+cited.map(formatSource).join("\n\n"));
      if(remaining.length)sections.push((cited.length?"그 외 검토에 제공된 발언":"검토에 제공된 발언")+
       " ("+remaining.length+"건)\n"+remaining.map(formatSource).join("\n\n"));
+     const reviews=reviewsByAnalysis.get(statementId)??[];
      if(phase==="ANALYSIS"){
-      const reviews=reviewsByAnalysis.get(statementId)??[];
       sections.push("독립 분석 단계 · 제공된 앞선 발언 없음");
       if(reviews.length)sections.push("이 분석을 인용한 상호 검토 ("+reviews.length+"건)\n"+reviews.map(formatSource).join("\n\n"));
      }
@@ -2456,6 +2456,25 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       "이 기록에 저장된 참조 목록 없음";
      linked.textContent="선택 발언 ["+statementId+"] "+t.agent+" · "+labels[t.verdict]+"\n"+t.summary+
       "\n\n"+context;
+     if(reviews.length){
+      const actions=document.createElement("span");
+      actions.style.display="block";
+      for(const id of reviews){
+       const button=document.createElement("button");
+       button.type="button";
+       button.textContent="["+id+"] 상호 검토로 이동";
+       button.style.margin="4px";
+       button.onclick=()=>{
+        if(!canUseRecord())return;
+        const entry=renderedStatements[Number(id.slice(1))-1];
+        if(!entry)return;
+        revealStatement(entry);
+        focusStatement(entry.node);
+       };
+       actions.append?.(button);
+      }
+      linked.append?.(actions);
+     }
      linked.hidden=false;
     };
     item.addEventListener?.("click",showLinked);
