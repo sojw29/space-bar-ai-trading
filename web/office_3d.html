@@ -2041,13 +2041,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:8px">
    <div>
     <label for="ai-meeting-pair-slot-1">비교 파일 1</label>
-    <input id="ai-meeting-pair-slot-1" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
+    <input id="ai-meeting-pair-slot-1" aria-describedby="ai-meeting-pair-info-1" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
     <p id="ai-meeting-pair-info-1" style="overflow-wrap:anywhere">선택한 파일 없음</p>
     <button id="ai-meeting-pair-remove-1" type="button" style="min-height:44px" hidden>파일 1 제외</button>
    </div>
    <div>
     <label for="ai-meeting-pair-slot-2">비교 파일 2</label>
-    <input id="ai-meeting-pair-slot-2" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
+    <input id="ai-meeting-pair-slot-2" aria-describedby="ai-meeting-pair-info-2" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
     <p id="ai-meeting-pair-info-2" style="overflow-wrap:anywhere">선택한 파일 없음</p>
     <button id="ai-meeting-pair-remove-2" type="button" style="min-height:44px" hidden>파일 2 제외</button>
    </div>
@@ -2561,7 +2561,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   pairedArchives=first&&second?[first,second]:null;
   pairSlotControls.forEach(({info,remove},index)=>{
    const slot=pairSlots[index],record=slot?.record;
-   if(info)info.textContent=record?slot.name+" · "+record.generated_at_utc+
+   const period=pairedArchives?(first.generated_at_utc===second.generated_at_utc?
+    "완료 시각 동일":(index===0)===(first.generated_at_utc<second.generated_at_utc)?"이전 회의":"이후 회의")+" · ":"";
+   if(info)info.textContent=record?period+slot.name+" · "+record.generated_at_utc+
     " · "+(record.workflow_execution_id??"실행 ID 미기록"):"선택한 파일 없음";
    if(remove)remove.hidden=!slot;
   });
