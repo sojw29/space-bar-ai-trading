@@ -598,13 +598,23 @@ async function smoke(){
    assert.equal(await grid.evaluate(node=>node.scrollWidth<=node.clientWidth+1),true);
    await change.getByRole("button",{name:"[M02] 현재 회의에서 열기",exact:true}).click();
    assert.match(await meetingPage.locator("#ai-meeting-linked").textContent(),/^선택 발언 \[M02\] QUANT/);
+   await meetingPage.locator("#ai-meeting-return-comparison").click();
+   assert.equal(await meetingPage.locator("#ai-meeting-linked").isVisible(),false);
+   assert.equal(await change.getByRole("button",{name:"[M02] 현재 회의에서 열기",exact:true})
+    .evaluate(node=>node===document.activeElement),true);
+   await meetingPage.locator("#ai-meeting-refresh").click();
+   await meetingPage.locator("#ai-meeting-comparison-summary").waitFor();
+   assert.equal(await change.evaluate(node=>node.open),true);
+   await meetingPage.locator("#ai-meeting-comparison-reset-filters").click();
+   assert.equal(await meetingPage.locator("#ai-meeting-comparison-agent").inputValue(),"ALL");
+   assert.match(await meetingPage.locator("#ai-meeting-comparison-baseline").textContent(),/고정한 비교 기준/);
    await evidence.getByText("우려 사항이 기록된 원문",{exact:true}).click();
    const concern=evidence.getByText("새로 기록된 우려 · Check volume history",{exact:true});
    await concern.click();
    assert.equal(await concern.evaluate(node=>node.parentElement.open),true);
    assert.match(await concern.locator("..").textContent(),/이후 \[M07\] COMMANDER/);
   }
-  const expectedBeforeExpiry=viewport.width===390?2:1;
+  const expectedBeforeExpiry=viewport.width===390?3:1;
   assert.equal(transcriptCalls,expectedBeforeExpiry);
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
