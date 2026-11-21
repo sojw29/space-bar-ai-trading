@@ -2029,6 +2029,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  <summary>회의 간 변화 비교</summary>
  <button id="ai-meeting-pin-comparison" type="button">이 회의를 비교 기준으로 지정</button>
  <button id="ai-meeting-clear-comparison" type="button" hidden>비교 기준 지우기</button>
+ <button id="ai-meeting-save-comparison" type="button" disabled>비교 결과 TXT 저장</button>
+ <p id="ai-meeting-comparison-save-status" role="status"></p>
  <p id="ai-meeting-comparison-result" role="status" style="white-space:pre-wrap"></p>
 </details>
 <p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
@@ -2119,20 +2121,31 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const exportText=document.getElementById("ai-meeting-export-text"),exportStatus=document.getElementById("ai-meeting-export-status");
  const exportJson=document.getElementById("ai-meeting-export-json");
  let exportRecord=null;
- function downloadRecord(format){
-  const button=format==="JSON"?exportJson:exportText;
-  if(!button||button.disabled||!canUseRecord()||exportRecord===null)return;
+ function saveMeetingFile(content,filename,type){
   let url=null,anchor=null;
   try{
-   const content=format==="JSON"?JSON.stringify({version:"SPACEBAR_MEETING_ARCHIVE_1",archived_at_utc:new Date().toISOString(),
+   url=URL.createObjectURL(new Blob([content],{type}));
+   anchor=document.createElement("a");
+   anchor.href=url;
+   anchor.download=filename;
+   document.body.appendChild(anchor);
+   anchor.click();
+  }finally{
+   anchor?.remove();
+   if(url!==null)setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+ }
+ function downloadRecord(format){
+  const json=format==="JSON",button=json?exportJson:exportText;
+  if(!button||button.disabled||!canUseRecord()||exportRecord===null)return;
+  try{
+   const content=json?JSON.stringify({version:"SPACEBAR_MEETING_ARCHIVE_1",archived_at_utc:new Date().toISOString(),
     research_only:true,orders_enabled:false,trade_authorization:"DENIED",process_liveness_verified:false,
     record:exportRecord.record},null,2)+"\n":exportRecord.text;
-   url=URL.createObjectURL(new Blob([content],{type:format==="JSON"?"application/json;charset=utf-8":"text/plain;charset=utf-8"}));
-   anchor=document.createElement("a");anchor.href=url;anchor.download=format==="JSON"?exportRecord.filename.replace(/[.]txt$/,".json"):exportRecord.filename;
-   document.body.appendChild(anchor);anchor.click();
+   const filename=json?exportRecord.filename.replace(/[.]txt$/,".json"):exportRecord.filename;
+   saveMeetingFile(content,filename,json?"application/json;charset=utf-8":"text/plain;charset=utf-8");
    if(exportStatus)exportStatus.textContent="전체 회의 "+format+" 저장을 요청했습니다 · 다운로드 완료 여부는 브라우저에서 확인해 주세요.";
   }catch(_){if(exportStatus)exportStatus.textContent=format+" 저장을 시작하지 못했습니다 · 브라우저의 다운로드 지원과 설정을 확인해 주세요.";}
-  finally{anchor?.remove();if(url!==null)setTimeout(()=>URL.revokeObjectURL(url),1000);}
  }
  exportText?.addEventListener("click",()=>downloadRecord("TXT"));
  exportJson?.addEventListener("click",()=>downloadRecord("JSON"));
@@ -2145,7 +2158,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const comparisonResult=document.getElementById("ai-meeting-comparison-result");
  const pinComparison=document.getElementById("ai-meeting-pin-comparison");
  const clearComparison=document.getElementById("ai-meeting-clear-comparison");
+ const saveComparison=document.getElementById("ai-meeting-save-comparison");
+ const comparisonSaveStatus=document.getElementById("ai-meeting-comparison-save-status");
  let comparisonBaseline=null;
+ function statementShortcut(statement,label){
+  const button=document.createElement("button");
+  button.type="button";
+  button.style.margin="4px";
+  button.textContent="["+statement.id+"] "+label;
+  button.addEventListener("click",()=>{
+   if(!canUseRecord())return;
+   const entry=renderedStatements[Number(statement.id.slice(1))-1];
+   if(!entry)return;
+   revealStatement(entry);
+   openStatement(entry.node);
+  });
+  return button;
+ }
  function renderOpinions(record){
   const reviews=record.transcript.slice(3,6);
   const cards=reviews.map((review,index)=>{
@@ -2154,6 +2183,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    card.style.whiteSpace="pre-wrap";
    card.textContent=review.agent+"\n["+initial.id+"] "+labels[initial.verdict]+" · "+initial.summary+
     "\n["+review.id+"] "+labels[review.verdict]+" · "+review.summary;
+   card.append(statementShortcut(initial,"초기 분석 보기"),statementShortcut(review,"상호 검토 보기"));
    return card;
   });
   opinionCards?.replaceChildren(...cards);
@@ -2178,18 +2208,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const row=document.createElement("p");
    row.textContent=text;
    for(const source of sources){
-    const button=document.createElement("button");
-    button.type="button";
-    button.style.margin="4px";
-    button.textContent="["+source.id+"] "+source.agent;
-    button.addEventListener("click",()=>{
-     if(!canUseRecord())return;
-     const entry=renderedStatements[Number(source.id.slice(1))-1];
-     if(!entry)return;
-     revealStatement(entry);
-     openStatement(entry.node);
-    });
-    row.append(button);
+    const phase=source.phase==="ANALYSIS"?"초기 분석":source.phase==="PEER_REVIEW"?"상호 검토":"최종 결론";
+    row.append(statementShortcut(source,source.agent+" · "+phase));
    }
    return row;
   }
@@ -2202,6 +2222,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(issues)issues.hidden=false;
  }
  function renderComparison(){
+  if(saveComparison)saveComparison.disabled=true;
+  if(comparisonSaveStatus)comparisonSaveStatus.textContent="";
   const current=exportRecord?.record;
   if(!comparisonResult||!current)return;
   if(clearComparison)clearComparison.hidden=!comparisonBaseline;
@@ -2219,20 +2241,32 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    comparisonResult.textContent="같은 실행 방식과 시장 데이터 출처의 회의만 비교할 수 있어요.";
    return;
   }
-  const before=baseline.transcript[6].concerns;
-  const after=current.transcript[6].concerns;
-  const difference=(left,right)=>[...new Set(left)].filter(concern=>!right.includes(concern)).join(" / ")||"없음";
-  const changed=current.transcript.slice(3,6).flatMap((review,index)=>{
-   const old=baseline.transcript[index+3];
+  const [older,newer]=baseline.generated_at_utc<=current.generated_at_utc?[baseline,current]:[current,baseline];
+  const before=older.transcript[6].concerns;
+  const after=newer.transcript[6].concerns;
+  const format=concerns=>[...new Set(concerns)].join(" / ")||"없음";
+  const changed=newer.transcript.slice(3,6).flatMap((review,index)=>{
+   const old=older.transcript[index+3];
    return old.verdict===review.verdict?[]:[review.agent+" "+labels[old.verdict]+" → "+labels[review.verdict]];
   });
-  comparisonResult.textContent="기준 "+describe(baseline)+"\n현재 "+describe(current)+
-   "\n최종 판정: "+labels[baseline.final_verdict]+" → "+labels[current.final_verdict]+
+  comparisonResult.textContent="이전 "+describe(older)+"\n이후 "+describe(newer)+
+   "\n최종 판정: "+labels[older.final_verdict]+" → "+labels[newer.final_verdict]+
    "\n에이전트 상호 검토 판정 변경: "+(changed.join(" / ")||"없음")+
-   "\n새로 기록된 최종 우려: "+difference(after,before)+
-   "\n현재 결론에 재언급되지 않은 우려: "+difference(before,after)+
+   "\n새로 기록된 최종 우려: "+format(after.filter(concern=>!before.includes(concern)))+
+   "\n두 결론에 모두 기록된 우려: "+format(after.filter(concern=>before.includes(concern)))+
+   "\n이후 결론에 재언급되지 않은 우려: "+format(before.filter(concern=>!after.includes(concern)))+
    "\n우려 사항은 동일한 문구를 기준으로 비교합니다.";
+  if(saveComparison)saveComparison.disabled=false;
  }
+ saveComparison?.addEventListener("click",()=>{
+  if(saveComparison.disabled||!canUseRecord()||!comparisonResult)return;
+  try{
+   saveMeetingFile(comparisonResult.textContent+"\n","spacebar-meeting-comparison.txt","text/plain;charset=utf-8");
+   if(comparisonSaveStatus)comparisonSaveStatus.textContent="비교 결과 TXT 저장을 요청했습니다.";
+  }catch(_){
+   if(comparisonSaveStatus)comparisonSaveStatus.textContent="비교 결과 TXT 저장을 시작하지 못했습니다.";
+  }
+ });
  pinComparison?.addEventListener("click",()=>{
   if(!canUseRecord()||!exportRecord?.record)return;
   comparisonBaseline=exportRecord.record;
@@ -2448,7 +2482,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   event.preventDefault();
   dismissLinked();
  });
- function clearDecision(){for(const panel of [opinions,issues,comparison]){if(panel)panel.hidden=true;}exportRecord=null;if(exportText)exportText.disabled=true;if(exportStatus)exportStatus.textContent="";if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;if(showConclusion)showConclusion.disabled=true;}
+ function clearDecision(){if(saveComparison)saveComparison.disabled=true;for(const panel of [opinions,issues,comparison]){if(panel)panel.hidden=true;}exportRecord=null;if(exportText)exportText.disabled=true;if(exportStatus)exportStatus.textContent="";if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;if(showConclusion)showConclusion.disabled=true;}
  function setConnection(state,reason,provenance=""){
   if(state!=="validated")verifiedRecordId=null;
   if(typeof CustomEvent==="function")document.dispatchEvent(new CustomEvent("spacebar:transcript-view",{detail:{state,execution_id:verifiedRecordId,provenance:state==="validated"?provenance:null}}));
