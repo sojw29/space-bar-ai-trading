@@ -196,6 +196,12 @@ def evidence_priority(transcript):
     return None
 
 
+def meeting_final_verdict(transcript):
+    """Resolve the verdict of a complete, validated transcript."""
+    priority = evidence_priority(transcript)
+    return priority["verdict"] if priority is not None else transcript[-1]["verdict"]
+
+
 def run_meeting(bundle, provider, *, clock=None, progress=None):
     """Injected providers are fixtures; only the concrete transport marks live inference."""
     clock = clock or (lambda: datetime.now(timezone.utc))
@@ -249,8 +255,7 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
     if finished < started:
         raise MeetingError("CLOCK_MOVED_BACKWARD")
     # Models cannot overrule insufficient evidence or GUARDIAN objections.
-    priority = evidence_priority(transcript)
-    final = priority["verdict"] if priority is not None else transcript[-1]["verdict"]
+    final = meeting_final_verdict(transcript)
     live = type(provider) is OpenAIProvider
     return with_market_source(bundle, {"version": "AI_MEETING_1", "status": "COMPLETED",
             "execution_mode": "LIVE_PROVIDER" if live else "OFFLINE_FIXTURE",
