@@ -2027,12 +2027,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 </details>
 <details id="ai-meeting-comparison" hidden>
  <summary>회의 간 변화 비교</summary>
- <button id="ai-meeting-pin-comparison" type="button">이 회의를 비교 기준으로 지정</button>
- <button id="ai-meeting-clear-comparison" type="button" hidden>비교 기준 지우기</button>
- <button id="ai-meeting-save-comparison" type="button" disabled>비교 결과 TXT 저장</button>
- <button id="ai-meeting-save-comparison-json" type="button" disabled>비교 결과 JSON 저장</button>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:8px;margin:8px 0">
+ <button id="ai-meeting-pin-comparison" type="button" style="min-height:44px;white-space:normal">이 회의를 비교 기준으로 지정</button>
+ <button id="ai-meeting-clear-comparison" type="button" style="min-height:44px;white-space:normal" hidden>비교 기준 지우기</button>
+ <button id="ai-meeting-save-comparison" type="button" style="min-height:44px;white-space:normal" disabled>비교 결과 TXT 저장</button>
+ <button id="ai-meeting-save-comparison-json" type="button" style="min-height:44px;white-space:normal" disabled>비교 결과 JSON 저장</button>
+ </div>
+ <p id="ai-meeting-comparison-summary" role="status" hidden></p>
+ <div id="ai-meeting-comparison-evidence" hidden></div>
  <p id="ai-meeting-comparison-save-status" role="status"></p>
- <p id="ai-meeting-comparison-result" role="status" style="white-space:pre-wrap"></p>
+ <p id="ai-meeting-comparison-result" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></p>
 </details>
 <p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
 <button id="ai-meeting-prev-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>이전 발언</button>
@@ -2157,6 +2161,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const issueRows=document.getElementById("ai-meeting-issue-rows");
  const comparison=document.getElementById("ai-meeting-comparison");
  const comparisonResult=document.getElementById("ai-meeting-comparison-result");
+ const comparisonSummary=document.getElementById("ai-meeting-comparison-summary");
+ const comparisonEvidence=document.getElementById("ai-meeting-comparison-evidence");
  const pinComparison=document.getElementById("ai-meeting-pin-comparison");
  const clearComparison=document.getElementById("ai-meeting-clear-comparison");
  const saveComparison=document.getElementById("ai-meeting-save-comparison");
@@ -2223,8 +2229,62 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   issueRows.replaceChildren(...rows);
   if(issues)issues.hidden=false;
  }
+ function renderComparisonEvidence(older,newer,current){
+  if(!comparisonEvidence)return;
+  function disclosure(title){
+   const section=document.createElement("details");
+   const heading=document.createElement("summary");
+   heading.textContent=title;
+   section.append(heading);
+   return section;
+  }
+  function statementCard(record,statement,period){
+   const card=document.createElement("div");
+   card.style.whiteSpace="pre-wrap";
+   card.style.overflowWrap="anywhere";
+   card.style.padding="8px";
+   const text=document.createElement("p");
+   text.textContent=period+" ["+statement.id+"] "+statement.agent+" · "+labels[statement.verdict]+
+    "\n"+statement.summary+(statement.concerns.length?"\n우려: "+statement.concerns.join(" / "):"");
+   card.append(text);
+   if(record===current)card.append(statementShortcut(statement,"현재 회의에서 열기"));
+   return card;
+  }
+  const groups=[];
+  for(let i=0;i<7;i++){
+   const left=older.transcript[i],right=newer.transcript[i];
+   const oldVerdict=i===6?older.final_verdict:left.verdict;
+   const newVerdict=i===6?newer.final_verdict:right.verdict;
+   if(oldVerdict===newVerdict)continue;
+   const phase=i<3?"초기 분석":i<6?"상호 검토":"최종 결론";
+   const pair=disclosure(right.agent+" · "+phase+" · "+labels[oldVerdict]+" → "+labels[newVerdict]);
+   const grid=document.createElement("div");
+   grid.style.display="grid";
+   grid.style.gridTemplateColumns="repeat(auto-fit,minmax(min(100%,240px),1fr))";
+   grid.style.gap="8px";
+   grid.append(statementCard(older,left,"이전"),statementCard(newer,right,"이후"));
+   pair.append(grid);
+   groups.push(pair);
+  }
+  const concerns=Object.values(comparisonReport.final_concerns).flat();
+  const earlierIds=new Set(concerns.flatMap(issue=>issue.earlier_statement_ids));
+  const laterIds=new Set(concerns.flatMap(issue=>issue.later_statement_ids));
+  if(earlierIds.size||laterIds.size){
+   const sources=disclosure("우려 사항이 기록된 원문");
+   for(const [record,ids,period] of [[older,earlierIds,"이전"],[newer,laterIds,"이후"]]){
+    for(const statement of record.transcript){
+     if(ids.has(statement.id))sources.append(statementCard(record,statement,period));
+    }
+   }
+   groups.push(sources);
+  }
+  comparisonEvidence.replaceChildren(...groups);
+  comparisonEvidence.hidden=groups.length===0;
+ }
  function clearComparisonExport(){
   comparisonReport=null;
+  if(comparisonSummary){comparisonSummary.textContent="";comparisonSummary.hidden=true;}
+  if(comparisonEvidence){comparisonEvidence.replaceChildren();comparisonEvidence.hidden=true;}
   if(saveComparison)saveComparison.disabled=true;
   if(saveComparisonJson)saveComparisonJson.disabled=true;
  }
@@ -2292,6 +2352,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "\n두 결론에 모두 기록된 우려: "+showIssues(continued)+
    "\n이후 결론에 재언급되지 않은 우려: "+showIssues(notRepeated)+
    "\n우려 사항은 동일한 문구를 기준으로 비교합니다.";
+  if(comparisonSummary){
+   comparisonSummary.textContent="최종 판정 "+labels[older.final_verdict]+" → "+labels[newer.final_verdict]+
+    " · 초기 분석 변경 "+analysisChanges.length+"건 · 상호 검토 변경 "+reviewChanges.length+
+    "건 · 새 최종 우려 "+added.length+"건";
+   comparisonSummary.hidden=false;
+  }
+  renderComparisonEvidence(older,newer,current);
   if(saveComparison)saveComparison.disabled=false;
   if(saveComparisonJson)saveComparisonJson.disabled=false;
  }
