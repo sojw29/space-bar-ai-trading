@@ -608,6 +608,17 @@ async function smoke(){
    await meetingPage.locator("#ai-meeting-comparison-reset-filters").click();
    assert.equal(await meetingPage.locator("#ai-meeting-comparison-agent").inputValue(),"ALL");
    assert.match(await meetingPage.locator("#ai-meeting-comparison-baseline").textContent(),/고정한 비교 기준/);
+   const archive={version:"SPACEBAR_MEETING_ARCHIVE_1",archived_at_utc:finished,research_only:true,
+    orders_enabled:false,trade_authorization:"DENIED",process_liveness_verified:false,
+    record:{...transcript,verdict_counts:{OBSERVATION_ONLY:7,REVIEW_NEEDED:0,INSUFFICIENT_DATA:0},
+     transcript:transcript.transcript.map((statement,index)=>({id:"M0"+(index+1),...statement}))}};
+   await meetingPage.locator("#ai-meeting-comparison-import").setInputFiles({
+    name:"saved-meeting.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify(archive)),
+   });
+   await meetingPage.waitForFunction(()=>document.querySelector("#ai-meeting-comparison-import-status")
+    ?.textContent.includes("비교 기준으로 불러왔어요"));
+   assert.match(await meetingPage.locator("#ai-meeting-comparison-baseline").textContent(),/저장한 회의록/);
+   assert.equal(await meetingPage.locator("#ai-meeting-save-comparison-json").isEnabled(),true);
    await evidence.getByText("우려 사항이 기록된 원문",{exact:true}).click();
    const concern=evidence.getByText("새로 기록된 우려 · Check volume history",{exact:true});
    await concern.click();

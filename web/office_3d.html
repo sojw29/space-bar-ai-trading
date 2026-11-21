@@ -2033,6 +2033,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  <button id="ai-meeting-save-comparison" type="button" style="min-height:44px;white-space:normal" disabled>비교 결과 TXT 저장</button>
  <button id="ai-meeting-save-comparison-json" type="button" style="min-height:44px;white-space:normal" disabled>비교 결과 JSON 저장</button>
  </div>
+ <div style="margin:8px 0">
+  <label for="ai-meeting-comparison-import">저장한 회의록을 비교 기준으로 불러오기</label>
+  <input id="ai-meeting-comparison-import" type="file" accept=".json,application/json" style="display:block;max-width:100%;min-height:44px">
+  <p id="ai-meeting-comparison-import-status" role="status"></p>
+ </div>
  <p id="ai-meeting-comparison-baseline" role="note" hidden></p>
  <p id="ai-meeting-comparison-summary" role="status" hidden></p>
  <div id="ai-meeting-comparison-filters" hidden><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:8px;margin:8px 0">
@@ -2178,6 +2183,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const issueRows=document.getElementById("ai-meeting-issue-rows");
  const comparison=document.getElementById("ai-meeting-comparison");
  const comparisonResult=document.getElementById("ai-meeting-comparison-result");
+ const importComparison=document.getElementById("ai-meeting-comparison-import");
+ const importComparisonStatus=document.getElementById("ai-meeting-comparison-import-status");
  const comparisonBaselineLabel=document.getElementById("ai-meeting-comparison-baseline");
  const returnComparison=document.getElementById("ai-meeting-return-comparison");
  const comparisonSummary=document.getElementById("ai-meeting-comparison-summary");
@@ -2228,7 +2235,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const saveComparison=document.getElementById("ai-meeting-save-comparison");
  const saveComparisonJson=document.getElementById("ai-meeting-save-comparison-json");
  const comparisonSaveStatus=document.getElementById("ai-meeting-comparison-save-status");
- let comparisonBaseline=null,comparisonReport=null;
+ let comparisonBaseline=null,comparisonReport=null,comparisonBaselineOrigin=null,comparisonImportRevision=0;
  function statementShortcut(statement,label,fromComparison=false){
   const button=document.createElement("button");
   button.type="button";
@@ -2374,7 +2381,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(comparisonBaselineLabel){
    comparisonBaselineLabel.hidden=!comparisonBaseline;
    comparisonBaselineLabel.textContent=comparisonBaseline?
-    "고정한 비교 기준 · "+comparisonBaseline.generated_at_utc+" · "+
+    "고정한 비교 기준 · "+(comparisonBaselineOrigin==="ARCHIVE_FILE"?"저장한 회의록 · ":"")+comparisonBaseline.generated_at_utc+" · "+
     (comparisonBaseline.workflow_execution_id??"실행 ID 미기록"):"";
   }
   if(!comparisonBaseline){
@@ -2414,7 +2421,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const notRepeated=[...new Set(before)].filter(concern=>!after.includes(concern)).map(issue);
   comparisonReport={
    version:"SPACEBAR_MEETING_COMPARISON_1",research_only:true,orders_enabled:false,
-   execution_mode:older.execution_mode,market_source:older.market_source,
+   execution_mode:older.execution_mode,market_source:older.market_source,baseline_origin:comparisonBaselineOrigin,
    earlier:metadata(older),later:metadata(newer),
    analysis_changes:analysisChanges,peer_review_changes:reviewChanges,
    final_concerns:{added,continued,not_repeated:notRepeated},
@@ -2427,6 +2434,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   comparisonResult.textContent="이전 "+describe(older)+" · "+sourceDescription(older)+
    "\n이후 "+describe(newer)+" · "+sourceDescription(newer)+
    "\n시장 데이터 출처: "+(older.market_source??"미기록")+
+   (comparisonBaselineOrigin==="ARCHIVE_FILE"?"\n비교 기준 출처: 저장한 회의록 JSON":"")+
    "\n최종 판정: "+labels[older.final_verdict]+" → "+labels[newer.final_verdict]+
    "\n에이전트 초기 분석 판정 변경: "+showChanges(analysisChanges)+
    "\n에이전트 상호 검토 판정 변경: "+showChanges(reviewChanges)+
@@ -2458,13 +2466,86 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  saveComparison?.addEventListener("click",()=>downloadComparison("TXT"));
  saveComparisonJson?.addEventListener("click",()=>downloadComparison("JSON"));
+ function readComparisonArchive(archive){
+  const requireValid=condition=>{if(!condition)throw Error("회의록 JSON 형식이나 내용이 올바르지 않아요.");};
+  requireValid(archive?.version==="SPACEBAR_MEETING_ARCHIVE_1"&&archive.research_only===true&&
+   archive.orders_enabled===false&&archive.trade_authorization==="DENIED"&&archive.process_liveness_verified===false);
+  const record=archive.record;
+  requireValid(record&&["OFFLINE_FIXTURE","LIVE_PROVIDER"].includes(record.execution_mode)&&
+   record.model_inference_performed===(record.execution_mode==="LIVE_PROVIDER")&&
+   [null,"BYBIT_USDT_PERPETUAL_5M","OKX_USDT_PERPETUAL_5M"].includes(record.market_source)&&
+   (record.workflow_execution_id===null||typeof record.workflow_execution_id==="string"&&/^[a-f0-9]{32}$/.test(record.workflow_execution_id)));
+  const textWithin=(value,max)=>typeof value==="string"&&value.trim()&&value.length<=max;
+  const parseUtc=value=>{
+   requireValid(typeof value==="string"&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(value));
+   const time=Date.parse(value);
+   requireValid(Number.isFinite(time)&&new Date(time).toISOString().slice(0,19)===value.slice(0,19));
+   return time;
+  };
+  const source=parseUtc(record.source_generated_at_utc),started=parseUtc(record.started_at_utc);
+  const finished=parseUtc(record.generated_at_utc),archived=parseUtc(archive.archived_at_utc);
+  requireValid(source<=started&&started<=finished&&finished<=archived&&archived<=Date.now());
+  requireValid(textWithin(record.model,120)&&Array.isArray(record.transcript)&&record.transcript.length===7);
+  const agents=["ATLAS","QUANT","GUARDIAN"];
+  const counts={OBSERVATION_ONLY:0,REVIEW_NEEDED:0,INSUFFICIENT_DATA:0};
+  const transcript=record.transcript.map((statement,index)=>{
+   const id="M0"+(index+1),agent=index===6?"COMMANDER":agents[index%3];
+   const phase=index<3?"ANALYSIS":index<6?"PEER_REVIEW":"CONCLUSION";
+   requireValid(statement?.id===id&&statement.agent===agent&&statement.phase===phase&&
+    typeof statement.verdict==="string"&&Object.hasOwn(counts,statement.verdict)&&textWithin(statement.summary,1600)&&
+    Array.isArray(statement.concerns)&&statement.concerns.length<=8&&statement.concerns.every(concern=>textWithin(concern,400)));
+   counts[statement.verdict]++;
+   return {id,agent,phase,verdict:statement.verdict,summary:statement.summary,concerns:[...statement.concerns]};
+  });
+  requireValid(record.verdict_counts&&Object.keys(record.verdict_counts).length===3&&
+   Object.keys(counts).every(key=>counts[key]===record.verdict_counts[key]));
+  const final=counts.INSUFFICIENT_DATA?"INSUFFICIENT_DATA":
+   transcript.some(statement=>statement.agent==="GUARDIAN"&&statement.verdict==="REVIEW_NEEDED")?"REVIEW_NEEDED":transcript[6].verdict;
+  requireValid(record.final_verdict===final);
+  return {
+   execution_mode:record.execution_mode,market_source:record.market_source,workflow_execution_id:record.workflow_execution_id,
+   source_generated_at_utc:new Date(source).toISOString(),generated_at_utc:new Date(finished).toISOString(),
+   model:record.model,final_verdict:final,verdict_counts:counts,transcript,
+  };
+ }
+ importComparison?.addEventListener("change",async()=>{
+  const file=importComparison.files?.[0];
+  importComparison.value="";
+  if(!file||!importComparisonStatus||!canUseRecord()||!exportRecord?.record)return;
+  const revision=++comparisonImportRevision,current=exportRecord.record;
+  importComparisonStatus.textContent="저장한 회의록을 확인하고 있어요.";
+  try{
+   if(file.size>262144)throw Error("256 KiB 이하의 회의록 JSON을 선택해 주세요.");
+   const raw=await file.text();
+   if(revision!==comparisonImportRevision)return;
+   if(!canUseRecord()||exportRecord?.record!==current)throw Error("현재 회의록을 다시 연 뒤 불러와 주세요.");
+   let archive;
+   try{archive=JSON.parse(raw);}catch(_){throw Error("올바른 JSON 파일을 선택해 주세요.");}
+   const baseline=readComparisonArchive(archive);
+   if(baseline.execution_mode!==current.execution_mode||baseline.market_source!==current.market_source){
+    throw Error("현재 회의와 실행 방식 및 시장 데이터 출처가 같은 회의록을 선택해 주세요.");
+   }
+   comparisonBaseline=baseline;
+   comparisonBaselineOrigin="ARCHIVE_FILE";
+   renderComparison();
+   importComparisonStatus.textContent="저장한 회의록을 비교 기준으로 불러왔어요.";
+  }catch(error){
+   if(revision===comparisonImportRevision)importComparisonStatus.textContent=error.message+" 기존 비교 기준은 유지했어요.";
+  }
+ });
  pinComparison?.addEventListener("click",()=>{
   if(!canUseRecord()||!exportRecord?.record)return;
+  comparisonImportRevision++;
+  if(importComparisonStatus)importComparisonStatus.textContent="";
   comparisonBaseline=exportRecord.record;
+  comparisonBaselineOrigin="VIEWED_RECORD";
   renderComparison();
  });
  clearComparison?.addEventListener("click",()=>{
+  comparisonImportRevision++;
+  if(importComparisonStatus)importComparisonStatus.textContent="";
   comparisonBaseline=null;
+  comparisonBaselineOrigin=null;
   renderComparison();
  });
  const linked=document.getElementById("ai-meeting-linked");
