@@ -2665,12 +2665,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const sources=disclosure("우려 사항이 기록된 원문");
    for(const {key,label,items,button} of categories){
     for(const issue of items){
-     const concern=disclosure(label+" · "+issue.text+
-      " · 원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건");
+     const concern=disclosure(label+" · "+issue.text);
      if(!finalConcernTargets.has(key))finalConcernTargets.set(key,{sources,concern});
      for(const [record,ids,period] of [[older,issue.earlier_statement_ids,"이전"],[newer,issue.later_statement_ids,"이후"]]){
       for(const id of ids)concern.append(statementCard(record,record.transcript[Number(id.slice(1))-1],period));
      }
+     const counts=document.createElement("p");
+     counts.textContent="원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건";
+     concern.append(counts);
      const back=document.createElement("button");
      back.type="button";
      back.textContent="최종 우려 바로 가기로 돌아가기";
