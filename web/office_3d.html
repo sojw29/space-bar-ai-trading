@@ -2061,6 +2061,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  </div>
  <p id="ai-meeting-comparison-baseline" role="note" hidden></p>
  <p id="ai-meeting-comparison-summary" tabindex="-1" role="status" hidden></p>
+ <div id="ai-meeting-comparison-quick-filters" role="group" aria-label="회의 발언 변경 바로 보기" hidden><div style="display:flex;flex-wrap:wrap;gap:8px">
+  <button id="ai-meeting-comparison-quick-ANY_CHANGE" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>모든 변경</button>
+  <button id="ai-meeting-comparison-quick-VERDICT" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>판정 변경</button>
+  <button id="ai-meeting-comparison-quick-SUMMARY" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>요약 변경</button>
+  <button id="ai-meeting-comparison-quick-CONCERNS" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>우려 변경</button>
+ </div></div>
  <div id="ai-meeting-comparison-filters" hidden><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:8px;margin:8px 0">
   <label>변경 에이전트
    <select id="ai-meeting-comparison-agent" style="display:block;width:100%;min-height:44px" aria-controls="ai-meeting-comparison-evidence">
@@ -2255,6 +2261,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const comparisonBaselineLabel=document.getElementById("ai-meeting-comparison-baseline");
  const returnComparison=document.getElementById("ai-meeting-return-comparison");
  const comparisonSummary=document.getElementById("ai-meeting-comparison-summary");
+ const quickFilters=document.getElementById("ai-meeting-comparison-quick-filters");
+ const quickFilterButtons=new Map([
+  ["ANY_CHANGE",{label:"모든 변경",button:document.getElementById("ai-meeting-comparison-quick-ANY_CHANGE")}],
+  ["VERDICT",{label:"판정 변경",button:document.getElementById("ai-meeting-comparison-quick-VERDICT")}],
+  ["SUMMARY",{label:"요약 변경",button:document.getElementById("ai-meeting-comparison-quick-SUMMARY")}],
+  ["CONCERNS",{label:"우려 변경",button:document.getElementById("ai-meeting-comparison-quick-CONCERNS")}],
+ ]);
  const comparisonEvidence=document.getElementById("ai-meeting-comparison-evidence");
  const comparisonFilters=document.getElementById("ai-meeting-comparison-filters");
  const comparisonAgent=document.getElementById("ai-meeting-comparison-agent");
@@ -2435,22 +2448,32 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  for(const control of [comparisonVerdict,previousComparisonVerdict,comparisonType,comparisonSummaryChanges,comparisonConcernChanges,searchScope,comparisonSort]){
   control?.addEventListener("change",applyComparisonFilters);
  }
- comparisonReset?.addEventListener("click",()=>{
-  if(!pairedArchives&&!canUseRecord())return;
+ function resetComparisonFilters(type="ALL"){
   if(comparisonAgent)comparisonAgent.value="ALL";
   if(comparisonPhase)comparisonPhase.value="ALL";
   if(comparisonVerdict)comparisonVerdict.value="ALL";
   if(previousComparisonVerdict)previousComparisonVerdict.value="ALL";
-  if(comparisonType)comparisonType.value="ALL";
+  if(comparisonType)comparisonType.value=type;
   if(comparisonSearch)comparisonSearch.value="";
   if(searchScope)searchScope.value="ALL";
-  if(comparisonSort)comparisonSort.value="ORDER";
+  if(comparisonSort&&type==="ALL")comparisonSort.value="ORDER";
   if(pickedOnlyControl)pickedOnlyControl.checked=false;
   if(comparisonSummaryChanges)comparisonSummaryChanges.checked=false;
   if(comparisonConcernChanges)comparisonConcernChanges.checked=false;
   applyComparisonFilters();
+ }
+ comparisonReset?.addEventListener("click",()=>{
+  if(!pairedArchives&&!canUseRecord())return;
+  resetComparisonFilters();
   comparisonAgent?.focus?.();
  });
+ for(const [type,{button}] of quickFilterButtons){
+  button?.addEventListener("click",()=>{
+   if(!comparisonReport||button.disabled||(!pairedArchives&&!canUseRecord()))return;
+   resetComparisonFilters(type);
+   comparisonType?.focus?.();
+  });
+ }
  comparisonToggle?.addEventListener("click",()=>{
   if(!pairedArchives&&!canUseRecord())return;
   const visible=applyComparisonFilters();
@@ -2646,6 +2669,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   comparisonDisclosures=[];
   applyComparisonFilters();
   if(comparisonSummary){comparisonSummary.textContent="";comparisonSummary.hidden=true;}
+  if(quickFilters)quickFilters.hidden=true;
   if(comparisonEvidence){comparisonEvidence.replaceChildren();comparisonEvidence.hidden=true;}
   if(saveComparison)saveComparison.disabled=true;
   if(saveComparisonJson)saveComparisonJson.disabled=true;
@@ -2751,8 +2775,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "\n이후 결론에 재언급되지 않은 우려: "+showIssues(notRepeated)+
    "\n"+contentSummary+(contentDetails.length?"\n"+contentDetails.join("\n"):"")+
    "\n우려 사항은 동일한 문구를 기준으로 비교합니다.";
+  const quickCounts={
+   ANY_CHANGE:statementChanges.length,
+   VERDICT:statementChanges.filter(change=>change.earlier_verdict!==change.later_verdict).length,
+   SUMMARY:summaryCount,
+   CONCERNS:concernCount,
+  };
+  if(quickFilters)quickFilters.hidden=quickCounts.ANY_CHANGE===0;
+  for(const [type,{label,button}] of quickFilterButtons){
+   if(!button)continue;
+   button.textContent=label+" "+quickCounts[type]+"건";
+   button.disabled=quickCounts[type]===0;
+  }
   if(comparisonSummary){
-   comparisonSummary.textContent="최종 판정 "+labels[older.final_verdict]+" → "+labels[newer.final_verdict]+
+   comparisonSummary.textContent=(quickCounts.ANY_CHANGE===0?"발언 변경 없음 · ":"")+"최종 판정 "+labels[older.final_verdict]+" → "+labels[newer.final_verdict]+
     " · 초기 분석 변경 "+analysisChanges.length+"건 · 상호 검토 변경 "+reviewChanges.length+
     "건 · 새 최종 우려 "+added.length+"건 · "+contentSummary+
     (pairedArchives?" · 완료 시각 UTC "+older.generated_at_utc+" → "+newer.generated_at_utc:"");
