@@ -630,12 +630,20 @@ async function smoke(){
     transcript:displayedTranscript.transcript.map((statement,index)=>({id:"M0"+(index+1),...statement})),
    }};
    const file=(name,value)=>({name,mimeType:"application/json",buffer:Buffer.from(JSON.stringify(value))});
-   await meetingPage.locator("#ai-meeting-import-pair").setInputFiles([
-    file("later-meeting.json",laterArchive),file("earlier-meeting.json",archive),
-   ]);
+   await meetingPage.locator("#ai-meeting-pair-slot-1").setInputFiles(file("later-meeting.json",laterArchive));
+   await meetingPage.getByText(/later-meeting.json ·/).waitFor();
+   assert.equal(await meetingPage.locator("#ai-meeting-exit-file-pair").isVisible(),false);
+   await meetingPage.locator("#ai-meeting-pair-slot-2").setInputFiles(file("earlier-meeting.json",archive));
    await meetingPage.locator("#ai-meeting-exit-file-pair").waitFor();
    assert.match(await meetingPage.locator("#ai-meeting-comparison-result").textContent(),/저장한 회의록 JSON 두 개/);
    assert.equal(await evidence.getByRole("button",{name:"[M02] 현재 회의에서 열기",exact:true}).count(),0);
+   await meetingPage.locator("#ai-meeting-pair-remove-2").click();
+   assert.match(await meetingPage.locator("#ai-meeting-pair-info-1").textContent(),/later-meeting.json/);
+   assert.equal(await meetingPage.locator("#ai-meeting-pair-info-2").textContent(),"선택한 파일 없음");
+   await meetingPage.locator("#ai-meeting-import-pair").setInputFiles([
+    file("quick-later.json",laterArchive),file("quick-earlier.json",archive),
+   ]);
+   await meetingPage.getByText(/quick-earlier.json ·/).waitFor();
    await meetingPage.locator("#ai-meeting-exit-file-pair").click();
    assert.match(await meetingPage.locator("#ai-meeting-comparison-baseline").textContent(),/저장한 회의록/);
   }
