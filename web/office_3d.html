@@ -2098,6 +2098,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-comparison-save-picked-text" type="button" style="min-height:44px" disabled>선택 발언 TXT 저장</button>
   <button id="ai-meeting-comparison-save-picked-json" type="button" style="min-height:44px" disabled>선택 발언 JSON 저장</button>
   <button id="ai-meeting-comparison-deselect-visible" type="button" style="min-height:44px" disabled>표시된 발언 선택 해제</button>
+  <label style="min-height:44px"><input id="ai-meeting-comparison-picked-only" type="checkbox" aria-controls="ai-meeting-comparison-evidence"> 선택 발언만 보기</label>
+  <button id="ai-meeting-comparison-clear-hidden" type="button" style="min-height:44px" disabled>숨겨진 선택 해제</button>
+  <button id="ai-meeting-comparison-jump-picked" type="button" style="min-height:44px" disabled>첫 선택 발언 열기</button>
   <p id="ai-meeting-comparison-picked-count" role="status"></p>
   <p id="ai-meeting-comparison-change-count" role="status"></p>
  </div></div>
@@ -2265,6 +2268,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const savePickedText=document.getElementById("ai-meeting-comparison-save-picked-text");
  const savePickedJson=document.getElementById("ai-meeting-comparison-save-picked-json");
  const deselectVisibleChanges=document.getElementById("ai-meeting-comparison-deselect-visible");
+ const pickedOnlyControl=document.getElementById("ai-meeting-comparison-picked-only");
+ const clearHiddenPicks=document.getElementById("ai-meeting-comparison-clear-hidden");
+ const jumpToPick=document.getElementById("ai-meeting-comparison-jump-picked");
  const pickedChangeCount=document.getElementById("ai-meeting-comparison-picked-count");
  const pickedChanges=new Set();
  let pickedComparisonKey=null;
@@ -2299,8 +2305,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(type==="CONCERNS")return concernsChanged;
    return verdictChanged||(summaries&&summaryChanged)||(concerns&&concernsChanged);
   };
+  const pickedOnly=!!pickedOnlyControl?.checked;
   const visible=comparisonChanges.filter(entry=>{
    const {node,statement,change,searchText}=entry;
+   if(pickedOnly){
+    node.hidden=!pickedChanges.has(change.id);
+    return !node.hidden;
+   }
    const exactId=(scope==="ALL"||scope==="ID")&&idQuery;
    const matches=!search||(exactId?statement.id.toLowerCase()===(idQuery[1]??idQuery[2]):searchText[scope].includes(search));
    node.hidden=!inScope(entry)||(agent!=="ALL"&&statement.agent!==agent)||(phase!=="ALL"&&statement.phase!==phase)||
@@ -2310,9 +2321,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
   const contentView=type==="SUMMARY"||type==="CONCERNS"||(type==="ALL"&&(summaries||concerns));
   if(comparisonFilters)comparisonFilters.hidden=comparisonChanges.length===0;
-  if(comparisonReset)comparisonReset.disabled=agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&previousVerdict==="ALL"&&type==="ALL"&&scope==="ALL"&&!search&&!summaries&&!concerns&&(comparisonSort?.value||"ORDER")==="ORDER";
+  if(comparisonReset)comparisonReset.disabled=agent==="ALL"&&phase==="ALL"&&verdict==="ALL"&&previousVerdict==="ALL"&&type==="ALL"&&scope==="ALL"&&!search&&!summaries&&!concerns&&!pickedOnly&&(comparisonSort?.value||"ORDER")==="ORDER";
   for(const button of [saveFilteredText,saveFilteredJson,saveFilteredCsv]){if(button)button.disabled=visible.length===0;}
-  if(comparisonChangeCount)comparisonChangeCount.textContent=visible.length?
+  if(comparisonChangeCount)comparisonChangeCount.textContent=pickedOnly?
+   (visible.length?"선택 발언 "+visible.length+"건":"선택한 발언이 없습니다. 선택 발언만 보기를 해제해 발언을 고르세요."):
+   visible.length?
    (contentView?"발언 변경 ":"판정 변경 ")+visible.length+" / "+comparisonChanges.filter(inScope).length+"건"+
    " · 판정 "+visible.filter(entry=>entry.verdictChanged).length+
    " · 요약 "+visible.filter(entry=>entry.summaryChanged).length+
@@ -2326,6 +2339,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const visiblePicked=visible.filter(entry=>pickedChanges.has(entry.change.id)).length;
   if(selectVisibleChanges)selectVisibleChanges.disabled=!visible.length||visiblePicked===visible.length;
+  if(clearHiddenPicks)clearHiddenPicks.disabled=!comparisonReport||pickedChanges.size===visiblePicked;
+  if(jumpToPick)jumpToPick.disabled=visiblePicked===0;
   if(deselectVisibleChanges)deselectVisibleChanges.disabled=visiblePicked===0;
   for(const button of [clearPickedChanges,savePickedChanges,savePickedText,savePickedJson]){
    if(button)button.disabled=!comparisonReport||pickedChanges.size===0;
@@ -2350,6 +2365,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const {change} of applyComparisonFilters())pickedChanges.delete(change.id);
   applyComparisonFilters();
  });
+ pickedOnlyControl?.addEventListener("change",applyComparisonFilters);
+ clearHiddenPicks?.addEventListener("click",()=>{
+  if(!pairedArchives&&!canUseRecord())return;
+  const visibleIds=new Set(applyComparisonFilters().map(({change})=>change.id));
+  for(const id of pickedChanges)if(!visibleIds.has(id))pickedChanges.delete(id);
+  applyComparisonFilters();
+ });
+ jumpToPick?.addEventListener("click",()=>{
+  if(!pairedArchives&&!canUseRecord())return;
+  const entry=applyComparisonFilters().find(({change})=>pickedChanges.has(change.id));
+  if(!entry)return;
+  entry.node.open=true;
+  entry.node.children[0].focus?.();
+  entry.node.scrollIntoView?.({block:"nearest"});
+ });
  clearPickedChanges?.addEventListener("click",()=>{
   pickedChanges.clear();
   applyComparisonFilters();
@@ -2373,6 +2403,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(comparisonSearch)comparisonSearch.value="";
   if(searchScope)searchScope.value="ALL";
   if(comparisonSort)comparisonSort.value="ORDER";
+  if(pickedOnlyControl)pickedOnlyControl.checked=false;
   if(comparisonSummaryChanges)comparisonSummaryChanges.checked=false;
   if(comparisonConcernChanges)comparisonConcernChanges.checked=false;
   applyComparisonFilters();
@@ -2676,6 +2707,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(selectionKey!==pickedComparisonKey){
    pickedChanges.clear();
    pickedComparisonKey=selectionKey;
+   if(pickedOnlyControl)pickedOnlyControl.checked=false;
   }
   renderComparisonEvidence(older,newer,pairedArchives?null:current,expanded);
   if(saveComparison)saveComparison.disabled=false;
@@ -2698,7 +2730,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const changes=(picked?comparisonChanges.filter(entry=>pickedChanges.has(entry.change.id)):visible).map(entry=>entry.change);
   if(!changes.length)return;
   const {earlier,later,execution_mode,market_source,baseline_origin}=comparisonReport;
-  const filters={
+  const filters=pickedOnlyControl?.checked?{selection:"PICKED",sort:appliedComparisonSort}:{
    agent:comparisonAgent?.value||"ALL",phase:comparisonPhase?.value||"ALL",type:comparisonType?.value||"ALL",
    earlier_verdict:previousComparisonVerdict?.value||"ALL",later_verdict:comparisonVerdict?.value||"ALL",
    sort:appliedComparisonSort,search:comparisonSearch?.value?.trim()||"",search_scope:searchScope?.value||"ALL",include_summary_changes:!!comparisonSummaryChanges?.checked,
@@ -2710,7 +2742,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    ...(picked?{selection:"PICKED",sort:appliedComparisonSort}:{filters}),statement_changes:changes};
   const lines=[(picked?"선택한":"표시된")+" 회의 발언 변경 · "+changes.length+"건","이전 "+earlier.generated_at_utc,
    "이후 "+later.generated_at_utc,"시장 데이터 출처: "+(market_source??"미기록"),
-   picked?"정렬: "+appliedComparisonSort:"적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
+   (picked||filters.selection==="PICKED")?"선택 발언 보기 · 정렬: "+appliedComparisonSort:"적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
     " · 이전 판정 "+(labels[filters.earlier_verdict]??"전체")+" · 이후 판정 "+(labels[filters.later_verdict]??"전체")+
     " · 검색어 "+(filters.search||"없음")+" · 검색 범위 "+filters.search_scope+" · 정렬 "+filters.sort+" · 요약 포함 "+(filters.include_summary_changes?"예":"아니오")+
     " · 우려 포함 "+(filters.include_concern_changes?"예":"아니오")];
