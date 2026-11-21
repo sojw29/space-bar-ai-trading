@@ -553,9 +553,10 @@ async function smoke(){
   await meetingPage.setViewportSize(viewport);
   await serveThree(meetingPage);
   let transcriptCalls=0;
+  let displayedTranscript=transcript;
   await meetingPage.route("**/api/v1/meeting/transcript",route=>{
    transcriptCalls++;
-   return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(transcript)});
+   return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(displayedTranscript)});
   });
   await meetingPage.goto(base+"/office3d",{waitUntil:"domcontentloaded"});
   await meetingPage.locator('#stage[data-render-ready="true"]').waitFor({timeout:35000});
@@ -572,6 +573,30 @@ async function smoke(){
   assert.match(await meetingPage.locator("#ai-meeting-rows p").last().textContent(),/COMMANDER/);
   assert.match(await meetingPage.locator("#ai-meeting-connection-label").textContent(),/검증된 완료 기록 · 오프라인 테스트 · AI 실행 아님/);
   assert.equal(transcriptCalls,1);
+  if(viewport.width===390){
+   await meetingPage.locator("#ai-meeting-comparison > summary").click();
+   const pin=meetingPage.locator("#ai-meeting-pin-comparison");
+   assert.ok((await pin.boundingBox()).height>=44);
+   await pin.click();
+   displayedTranscript=structuredClone(transcript);
+   displayedTranscript.generated_at_utc=new Date(Date.parse(finished)+1000).toISOString();
+   displayedTranscript.transcript[1].verdict="REVIEW_NEEDED";
+   displayedTranscript.transcript[1].summary="Updated QUANT evidence";
+   displayedTranscript.transcript[6].concerns=["Check volume history"];
+   await meetingPage.locator("#ai-meeting-refresh").click();
+   await meetingPage.locator("#ai-meeting-comparison-summary").waitFor();
+   assert.match(await meetingPage.locator("#ai-meeting-comparison-summary").textContent(),/초기 분석 변경 1건/);
+   const evidence=meetingPage.locator("#ai-meeting-comparison-evidence");
+   const change=evidence.locator("details").first();
+   await change.locator("summary").click();
+   assert.match(await change.textContent(),/Updated QUANT evidence/);
+   const grid=change.locator("div").first();
+   assert.equal(await grid.evaluate(node=>node.scrollWidth<=node.clientWidth+1),true);
+   await change.getByRole("button",{name:"[M02] 현재 회의에서 열기",exact:true}).click();
+   assert.match(await meetingPage.locator("#ai-meeting-linked").textContent(),/^선택 발언 \[M02\] QUANT/);
+   await evidence.getByText("우려 사항이 기록된 원문",{exact:true}).click();
+   assert.match(await evidence.locator("details").last().textContent(),/Check volume history/);
+  }
   const label=viewport.width<500?"mobile":"desktop";
   await meetingPage.screenshot({path:path.join(output,"meeting-"+label+".png"),fullPage:true});
   // A validated historical transcript must fail closed if its source expires.
