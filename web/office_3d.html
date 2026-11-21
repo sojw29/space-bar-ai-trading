@@ -2747,13 +2747,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(saveComparison)saveComparison.disabled=false;
   if(saveComparisonJson)saveComparisonJson.disabled=false;
  }
+ function comparisonFilename(scope,format,count){
+  const stamp=record=>new Date(record.generated_at_utc).toISOString().replace(/[:.]/g,"-");
+  const {earlier,later}=comparisonReport;
+  const rows=count===undefined?"":"-"+count+"-rows";
+  return "spacebar-meeting-"+scope+"-"+stamp(earlier)+"_to_"+stamp(later)+rows+"."+format.toLowerCase();
+ }
  function downloadComparison(format){
   if(!comparisonReport||(!pairedArchives&&!canUseRecord())||!comparisonResult)return;
   const json=format==="JSON";
   try{
    const content=json?JSON.stringify(comparisonReport,null,2):comparisonResult.textContent;
-   saveMeetingFile(content+"\n","spacebar-meeting-comparison."+format.toLowerCase(),json?"application/json;charset=utf-8":"text/plain;charset=utf-8");
-   if(comparisonSaveStatus)comparisonSaveStatus.textContent="비교 결과 "+format+" 저장을 요청했습니다.";
+   const filename=comparisonFilename("comparison",format);
+   saveMeetingFile(content+"\n",filename,json?"application/json;charset=utf-8":"text/plain;charset=utf-8");
+   if(comparisonSaveStatus)comparisonSaveStatus.textContent="저장 요청: "+filename;
   }catch(_){
    if(comparisonSaveStatus)comparisonSaveStatus.textContent="비교 결과 "+format+" 저장을 시작하지 못했습니다.";
   }
@@ -2774,9 +2781,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const result={version:"SPACEBAR_MEETING_FILTERED_CHANGES_1",research_only:true,orders_enabled:false,
    earlier,later,execution_mode,market_source,baseline_origin,
    ...(picked?{selection:"PICKED",sort:appliedComparisonSort}:{filters}),statement_changes:changes};
-  const lines=[(picked?"선택한":"표시된")+" 회의 발언 변경 · "+changes.length+"건","이전 "+earlier.generated_at_utc,
+  const selectedView=picked||filters.selection==="PICKED";
+  const source=baseline_origin==="ARCHIVE_PAIR"?"저장한 회의록 JSON 두 개":
+   baseline_origin==="ARCHIVE_FILE"?"저장한 회의록 JSON과 현재 회의":"고정한 회의와 현재 회의";
+  const lines=[(selectedView?"선택한":"표시된")+" 회의 발언 변경 · "+changes.length+"건","이전 "+earlier.generated_at_utc,
    "이후 "+later.generated_at_utc,"시장 데이터 출처: "+(market_source??"미기록"),
-   (picked||filters.selection==="PICKED")?"선택 발언 보기 · 정렬: "+appliedComparisonSort:"적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
+   "비교 출처: "+source,
+   selectedView?"선택 발언 보기 · 정렬: "+appliedComparisonSort:"적용 필터: 에이전트 "+filters.agent+" · 단계 "+filters.phase+" · 유형 "+filters.type+
     " · 이전 판정 "+(labels[filters.earlier_verdict]??"전체")+" · 이후 판정 "+(labels[filters.later_verdict]??"전체")+
     " · 검색어 "+(filters.search||"없음")+" · 검색 범위 "+filters.search_scope+" · 정렬 "+filters.sort+" · 요약 포함 "+(filters.include_summary_changes?"예":"아니오")+
     " · 우려 포함 "+(filters.include_concern_changes?"예":"아니오")];
@@ -2804,9 +2815,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     content="\uFEFF"+rows.map(row=>row.map(cell).join(",")).join("\r\n")+"\r\n";
     mime="text/csv;charset=utf-8";
    }
-   const filename=picked?"spacebar-meeting-picked-changes":"spacebar-meeting-filtered-changes";
-   saveMeetingFile(content,filename+"."+format.toLowerCase(),mime);
-   if(comparisonSaveStatus)comparisonSaveStatus.textContent=(picked?"선택 발언 ":"표시된 발언 ")+format+" 저장을 요청했습니다.";
+   const filename=comparisonFilename(selectedView?"picked-changes":"filtered-changes",format,changes.length);
+   saveMeetingFile(content,filename,mime);
+   if(comparisonSaveStatus)comparisonSaveStatus.textContent="저장 요청: "+filename;
   }catch(_){
    if(comparisonSaveStatus)comparisonSaveStatus.textContent=(picked?"선택 발언 ":"표시된 발언 ")+format+" 저장을 시작하지 못했습니다.";
   }
