@@ -58,6 +58,7 @@ SAFE_ERROR_CODES = frozenset({
     'PROVIDER_REQUEST_FAILED', 'PROVIDER_RESPONSE_INVALID', 'PROVIDER_RESPONSE_TOO_LARGE',
     'PROVIDER_OUTPUT_TRUNCATED', 'PROVIDER_REFUSED', 'PROVIDER_INCOMPLETE_OR_REFUSED',
     'INVALID_STATEMENT', 'INVALID_SUMMARY', 'INVALID_CONCERNS', 'INVALID_VERDICT',
+    'INVALID_STATEMENT_CITATION',
     'CLOCK_MOVED_BACKWARD',
     'INVALID_EXECUTION_ID',
     'PROVIDER_CONNECTION_INTERRUPTED',
@@ -114,6 +115,7 @@ class OpenAIProvider:
                   "Use only supplied observations. Expose uncertainty and disagreements. "
                   "Do not recommend trades, position sizes, leverage, orders or forecast returns. "
                   "Do not claim independent data access, learning or verification. "
+                  "Write statement citations in brackets, for example [M01], using only IDs supplied for this stage. "
                   "Return JSON matching the schema. A verdict is research status only.")
         payload = {"model": self.model, "store": False, "max_completion_tokens": 2000,
                    "messages": [{"role": "system", "content": system},
@@ -214,6 +216,10 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
             progress({'agent': agent, 'phase': phase, 'event': 'CALL_STARTED',
                       'attempted_calls': len(transcript)+1, 'validated_responses': len(transcript)})
         result = validate_statement(provider.complete(agent, phase, deepcopy(context)))
+        allowed_ids = set(meeting_input_refs(len(transcript)))
+        for text in (result["summary"], *result["concerns"]):
+            if not set(re.findall(r"\[(M[0-9]+)\]", text)).issubset(allowed_ids):
+                raise MeetingError("INVALID_STATEMENT_CITATION")
         transcript.append({"agent": agent, "phase": phase, **result})
         if progress:
             progress({'agent': agent, 'phase': phase, 'event': 'RESPONSE_VALIDATED',
