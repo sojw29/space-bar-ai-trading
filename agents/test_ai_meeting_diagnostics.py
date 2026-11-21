@@ -25,6 +25,23 @@ def current_bundle():
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_citation_failure_summary_identifies_round_and_allowed_ids(self):
+        for attempted, agent, phase, allowed in (
+                (1, 'ATLAS', 'ANALYSIS', '없음'),
+                (4, 'ATLAS', 'PEER_REVIEW', 'M01, M02, M03'),
+                (7, 'COMMANDER', 'CONCLUSION', 'M01, M02, M03, M04, M05, M06')):
+            with self.subTest(phase=phase):
+                diagnostic = {
+                    'version': 'MEETING_DIAGNOSTICS_2', 'status': 'FAILED', 'stage': 'INFERENCE',
+                    'agent': agent, 'phase': phase, 'attempted_calls': attempted,
+                    'validated_responses': attempted - 1, 'error_code': 'INVALID_STATEMENT_CITATION',
+                    'execution_id': 'a' * 32, 'started_at_utc': NOW.isoformat(),
+                    'updated_at_utc': NOW.isoformat(),
+                }
+                summary = render_status(diagnostic, now=NOW)
+                self.assertIn(f'{agent} / {phase}', summary)
+                self.assertIn(f'허용된 발언 ID: {allowed}\n', summary)
+
     def test_progress_counts_validated_responses_separately_from_attempts(self):
         events = []
         run_meeting(request(), Fixture(), clock=lambda: NOW, progress=events.append)
