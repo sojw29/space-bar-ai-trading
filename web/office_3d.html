@@ -2017,6 +2017,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 <p>위 규칙 집계와 별도인 완료 기록입니다. 자동 학습·상시 실행·매매 승인을 뜻하지 않습니다.</p>
 <p id="ai-meeting-decision" role="note" style="white-space:pre-wrap;padding:10px;border-left:3px solid #547c9a;background:#152941" hidden></p>
 <p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
+<button id="ai-meeting-prev-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>이전 발언</button>
+<button id="ai-meeting-next-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>다음 발언</button>
 <button id="ai-meeting-close-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>상세 닫기</button>
 <div id="ai-meeting-timeline" aria-label="회의 판단 타임라인" hidden></div>
 <p id="ai-meeting-verdict-counts" role="note" aria-label="전체 회의 검토 상태별 발언 수" style="padding:8px;background:#152941" hidden></p>
@@ -2121,6 +2123,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  exportJson?.addEventListener("click",()=>downloadRecord("JSON"));
  const linked=document.getElementById("ai-meeting-linked");
  const closeLinked=document.getElementById("ai-meeting-close-linked");
+ const prevLinked=document.getElementById("ai-meeting-prev-linked");
+ const nextLinked=document.getElementById("ai-meeting-next-linked");
  const timeline=document.getElementById("ai-meeting-timeline");
  const shortcut=document.getElementById("ai-meeting-shortcut");
  const completedRecord=document.getElementById("meeting-progress-open-record");
@@ -2174,6 +2178,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }
   }
   if(activeStatement?.hidden)clearLinked();
+  else updateLinkedNavigation();
   const searchStatus=id?" · 원문 "+originalCount+"개 · 인용 발언 "+(count-originalCount)+"개":query?" · 검색 적용":"";
   if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+searchStatus+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
@@ -2277,16 +2282,38 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
  }
  let linkedTrigger=null;
+ function adjacentStatement(offset){
+  if(!activeStatement)return null;
+  const visible=renderedStatements.filter(entry=>!entry.node.hidden);
+  const index=visible.findIndex(entry=>entry.node===activeStatement);
+  return index<0?null:visible[index+offset]?.node??null;
+ }
+ function updateLinkedNavigation(){
+  for(const [button,offset] of [[prevLinked,-1],[nextLinked,1]]){
+   if(!button)continue;
+   button.hidden=!activeStatement;
+   button.disabled=!adjacentStatement(offset);
+  }
+ }
+ for(const [button,offset] of [[prevLinked,-1],[nextLinked,1]]){
+  button?.addEventListener("click",()=>{
+   if(!canUseRecord())return;
+   const target=adjacentStatement(offset);
+   if(target)openStatement(target);
+  });
+ }
  function showLinkedPanel(trigger){
   linkedTrigger=trigger;
   linked.hidden=false;
   if(closeLinked)closeLinked.hidden=false;
+  updateLinkedNavigation();
  }
  function clearLinked(){
   selectStatement(null);
   linkedTrigger=null;
   if(linked){linked.textContent="";linked.hidden=true;}
   if(closeLinked)closeLinked.hidden=true;
+  updateLinkedNavigation();
  }
  function dismissLinked(){
   const trigger=linkedTrigger;
@@ -2296,7 +2323,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  closeLinked?.addEventListener("click",dismissLinked);
  document.addEventListener("keydown",event=>{
   if(event.key!=="Escape"||event.defaultPrevented||!linkedTrigger||linked?.hidden)return;
-  if(event.target!==linkedTrigger&&event.target!==closeLinked&&!linked?.contains?.(event.target))return;
+  if(![linkedTrigger,closeLinked,prevLinked,nextLinked].includes(event.target)&&!linked?.contains?.(event.target))return;
   event.preventDefault();
   dismissLinked();
  });
