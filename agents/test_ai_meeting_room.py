@@ -20,11 +20,11 @@ class MeetingRoomTests(unittest.TestCase):
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 (async()=>{
- for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','citations','malformed','timer','foreground','rollback','text-only']){
+ for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','citations','peer-citation','malformed','timer','foreground','rollback','text-only']){
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -39,9 +39,10 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    data.transcript[6].summary='분석 [M02], 검토 [M05]';
    data.transcript[6].concerns=['중복 인용 [M02]'];
   }
+  if(mode==='peer-citation')data.transcript[3].summary='QUANT 분석 [M02] 인용';
   if(mode==='malformed')data.transcript[0].summary=null;
   if(mode==='text-only')data.transcript[0].summary='<img src=x onerror=alert(1)>';
-  const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:()=>({style:{},children:[],append(...x){this.children.push(...x)},focus(){this.focused=true},scrollIntoView(){this.scrolled=true},set innerHTML(_){throw Error('unsafe HTML sink')}})};
+  const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:()=>({style:{},children:[],addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},focus(){this.focused=true},scrollIntoView(){this.scrolled=true},set innerHTML(_){throw Error('unsafe HTML sink')}})};
   vm.runInNewContext(input.script,{document,Date:class extends Date{static now(){return now}},setInterval:fn=>timers.push(fn),fetch:async()=>{requests++;return {ok:mode!=='missing',text:async()=>JSON.stringify(data)}}});
   await new Promise(setImmediate);
   if(['missing','orders','stale','partial','invalid-final','malformed'].includes(mode)){
@@ -78,6 +79,13 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.deepEqual(buttons.map(button=>button.textContent),['[M02] 발언 보기','[M05] 발언 보기','이전 발언 보기 복원']);
    buttons[1].onclick();
    assert.equal(elements['ai-meeting-rows'].children[4].focused,true);
+  }
+  if(mode==='peer-citation'){
+   elements['ai-meeting-rows'].children[3].click();
+   const linked=elements['ai-meeting-linked'];
+   assert.equal(linked.hidden,false);
+   assert.match(linked.textContent,/상호 검토에서 인용한 초기 분석 \(1건\)\n\[M02\] QUANT/);
+   assert.match(linked.textContent,/그 외 검토에 제공된 발언 \(2건\)\n\[M01\] ATLAS/);
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
