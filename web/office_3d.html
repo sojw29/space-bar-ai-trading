@@ -2432,8 +2432,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const target of finalConcernTargets.values())target.sources.hidden=count===0;
   const visiblePicks=visibleConcernIds().filter(id=>pickedFinalConcerns.has(id)).length;
   if(openPickedConcern)openPickedConcern.disabled=visiblePicks===0;
-  if(pickVisibleConcerns)pickVisibleConcerns.disabled=count===visiblePicks;
-  if(unpickVisibleConcerns)unpickVisibleConcerns.disabled=visiblePicks===0;
+  const remainingPicks=count-visiblePicks;
+  if(pickVisibleConcerns){
+   pickVisibleConcerns.disabled=remainingPicks===0;
+   pickVisibleConcerns.textContent="표시된 우려 모두 선택"+(remainingPicks?" ("+remainingPicks+"건 추가)":"");
+  }
+  if(unpickVisibleConcerns){
+   unpickVisibleConcerns.disabled=visiblePicks===0;
+   unpickVisibleConcerns.textContent="표시된 우려 선택 해제"+(visiblePicks?" ("+visiblePicks+"건)":"");
+  }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
   const hiddenPicks=pickedFinalConcerns.size-visiblePicks;
   if(concernMatchCount)concernMatchCount.textContent=filtered?
