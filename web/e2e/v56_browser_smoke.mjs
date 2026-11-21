@@ -624,6 +624,20 @@ async function smoke(){
    await concern.click();
    assert.equal(await concern.evaluate(node=>node.parentElement.open),true);
    assert.match(await concern.locator("..").textContent(),/이후 \[M07\] COMMANDER/);
+   const laterArchive={...archive,archived_at_utc:displayedTranscript.generated_at_utc,record:{
+    ...archive.record,generated_at_utc:displayedTranscript.generated_at_utc,
+    verdict_counts:{OBSERVATION_ONLY:6,REVIEW_NEEDED:1,INSUFFICIENT_DATA:0},
+    transcript:displayedTranscript.transcript.map((statement,index)=>({id:"M0"+(index+1),...statement})),
+   }};
+   const file=(name,value)=>({name,mimeType:"application/json",buffer:Buffer.from(JSON.stringify(value))});
+   await meetingPage.locator("#ai-meeting-import-pair").setInputFiles([
+    file("later-meeting.json",laterArchive),file("earlier-meeting.json",archive),
+   ]);
+   await meetingPage.locator("#ai-meeting-exit-file-pair").waitFor();
+   assert.match(await meetingPage.locator("#ai-meeting-comparison-result").textContent(),/저장한 회의록 JSON 두 개/);
+   assert.equal(await evidence.getByRole("button",{name:"[M02] 현재 회의에서 열기",exact:true}).count(),0);
+   await meetingPage.locator("#ai-meeting-exit-file-pair").click();
+   assert.match(await meetingPage.locator("#ai-meeting-comparison-baseline").textContent(),/저장한 회의록/);
   }
   const expectedBeforeExpiry=viewport.width===390?3:1;
   assert.equal(transcriptCalls,expectedBeforeExpiry);
