@@ -61,6 +61,13 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(target.hidden,false);
    assert.equal(target.focused,true);
    assert.equal(target.scrolled,true);
+   const restore=elements['ai-meeting-decision'].children[0].children[1];
+   assert.equal(restore.hidden,false);
+   restore.onclick();
+   assert.equal(filter.value,'ATLAS');
+   assert.equal(target.hidden,true);
+   assert.equal(restore.hidden,true);
+   assert.equal(button.focused,true);
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){

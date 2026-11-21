@@ -2539,6 +2539,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(evidenceIndices.length){
     const links=document.createElement("span");
     links.style.display="block";
+    const restore=document.createElement("button");
+    restore.type="button";
+    restore.textContent="이전 발언 보기 복원";
+    restore.style.margin="4px";
+    restore.hidden=true;
+    const filters=[agentFilter,phaseFilter,verdictFilter,statementSearch].filter(Boolean);
+    let previousView=null;
+    let evidenceButton=null;
+    restore.onclick=()=>{
+     if(!previousView||!canUseRecord())return;
+     filters.forEach((filter,index)=>{filter.value=previousView[index];});
+     previousView=null;
+     restore.hidden=true;
+     applyAgentView();
+     evidenceButton?.focus?.();
+    };
     for(const i of evidenceIndices){
      const button=document.createElement("button");
      button.type="button";
@@ -2549,6 +2565,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       const entry=renderedStatements[i];
       if(!entry)return;
       if(entry.node.hidden){
+       previousView=filters.map(filter=>filter.value);
+       evidenceButton=button;
+       restore.hidden=false;
        if(agentFilter)agentFilter.value="ALL";
        if(phaseFilter)phaseFilter.value="ALL";
        if(verdictFilter)verdictFilter.value="ALL";
@@ -2561,6 +2580,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      };
      links.append?.(button);
     }
+    links.append?.(restore);
     decision.append?.(links);
    }
    decision.hidden=false;
