@@ -357,7 +357,11 @@ def main():
         location = diagnostic['stage']
         if code == 'INVALID_STATEMENT_CITATION':
             location += ' · ' + diagnostic['agent'] + ' / ' + diagnostic['phase']
-        parser.exit(1, 'Meeting not published: '+code+' (stage '+location+').\n')
+        message = 'Meeting not published: '+code+' (stage '+location+').\n'
+        if code == 'INVALID_STATEMENT_CITATION':
+            allowed = meeting_input_refs(diagnostic['attempted_calls'] - 1)
+            message += 'Allowed statement IDs: ' + (', '.join(allowed) if allowed else 'none') + '.\n'
+        parser.exit(1, message)
 
 
 if __name__ == "__main__":
