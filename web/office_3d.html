@@ -2316,6 +2316,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let pickedComparisonKey=null;
  let comparisonChanges=[],comparisonDisclosures=[],comparisonOrigin=null,appliedComparisonSort="ORDER";
  const finalConcernTargets=new Map();
+ const finalConcernPositions=new Map();
  function orderComparisonChanges(){
   const sort=comparisonSort?.value||"ORDER";
   if(!comparisonChanges.length||sort===appliedComparisonSort)return;
@@ -2664,20 +2665,42 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(categories.some(({items})=>items.length)){
    const sources=disclosure("우려 사항이 기록된 원문");
    for(const {key,label,items,button} of categories){
-    for(const issue of items){
+    const concerns=[];
+    finalConcernTargets.set(key,{sources,concerns});
+    for(const [index,issue] of items.entries()){
      const concern=disclosure(label+" · "+issue.text);
-     if(!finalConcernTargets.has(key))finalConcernTargets.set(key,{sources,concern});
+     concerns.push(concern);
      for(const [record,ids,period] of [[older,issue.earlier_statement_ids,"이전"],[newer,issue.later_statement_ids,"이후"]]){
       for(const id of ids)concern.append(statementCard(record,record.transcript[Number(id.slice(1))-1],period));
      }
      const counts=document.createElement("p");
      counts.textContent="원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건";
+     if(items.length>1){
+      const navigation=document.createElement("div");
+      navigation.style.display="flex";
+      navigation.style.flexWrap="wrap";
+      navigation.style.gap="8px";
+      const position=document.createElement("p");
+      position.textContent=(index+1)+" / "+items.length+" · "+label;
+      navigation.append(position);
+      for(const [offset,text] of [[-1,"이전 우려"],[1,"다음 우려"]]){
+       const move=document.createElement("button");
+       move.type="button";
+       move.textContent=text;
+       move.style.minHeight="44px";
+       move.disabled=!items[index+offset];
+       move.addEventListener("click",()=>openFinalConcern(key,index+offset,concern));
+       navigation.append(move);
+      }
+      concern.append(navigation);
+     }
      concern.append(counts);
      const back=document.createElement("button");
      back.type="button";
      back.textContent="최종 우려 바로 가기로 돌아가기";
      back.style.minHeight="44px";
      back.addEventListener("click",()=>{
+      finalConcernPositions.set(key,index);
       button?.focus?.({preventScroll:true});
       button?.scrollIntoView?.({block:"nearest"});
      });
@@ -2691,17 +2714,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   comparisonEvidence.hidden=groups.length===0;
   applyComparisonFilters();
  }
+ function openFinalConcern(key,index,previous){
+  if(!pairedArchives&&!canUseRecord())return;
+  const target=finalConcernTargets.get(key);
+  const concern=target?.concerns[index];
+  if(!concern)return;
+  finalConcernPositions.set(key,index);
+  if(previous)previous.open=false;
+  target.sources.open=true;
+  concern.open=true;
+  concern.children[0].focus?.({preventScroll:true});
+  concern.scrollIntoView?.({block:"nearest"});
+ }
  for(const [key,button] of Object.entries(finalConcernButtons)){
-  button?.addEventListener("click",()=>{
-   if(!pairedArchives&&!canUseRecord())return;
-   const target=finalConcernTargets.get(key);
-   if(!target)return;
-   const {sources,concern}=target;
-   sources.open=true;
-   concern.open=true;
-   concern.children[0].focus?.({preventScroll:true});
-   concern.scrollIntoView?.({block:"nearest"});
-  });
+  button?.addEventListener("click",()=>openFinalConcern(key,finalConcernPositions.get(key)??0));
  }
  function clearComparisonExport(){
   finalConcernTargets.clear();
@@ -2843,6 +2869,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(selectionKey!==pickedComparisonKey){
    pickedChanges.clear();
    pickedComparisonKey=selectionKey;
+   finalConcernPositions.clear();
    activePickId=null;
    if(pickedOnlyControl)pickedOnlyControl.checked=false;
   }
