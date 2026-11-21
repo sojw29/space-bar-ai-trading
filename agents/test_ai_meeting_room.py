@@ -24,7 +24,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision'])elements[id]={children:[],disabled:false,addEventListener(){},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -37,7 +37,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   if(mode==='malformed')data.transcript[0].summary=null;
   if(mode==='text-only')data.transcript[0].summary='<img src=x onerror=alert(1)>';
-  const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:()=>({style:{},set innerHTML(_){throw Error('unsafe HTML sink')}})};
+  const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:()=>({style:{},children:[],append(...x){this.children.push(...x)},focus(){this.focused=true},scrollIntoView(){this.scrolled=true},set innerHTML(_){throw Error('unsafe HTML sink')}})};
   vm.runInNewContext(input.script,{document,Date:class extends Date{static now(){return now}},setInterval:fn=>timers.push(fn),fetch:async()=>{requests++;return {ok:mode!=='missing',text:async()=>JSON.stringify(data)}}});
   await new Promise(setImmediate);
   if(['missing','orders','stale','partial','invalid-final','malformed'].includes(mode)){
@@ -51,6 +51,16 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const decision=elements['ai-meeting-decision'].textContent;
    assert.match(decision,/판정 규칙 근거 위치: \[M07\] COMMANDER · 자료 부족/);
    assert.doesNotMatch(decision,/\[M06\] GUARDIAN · 추가 검토/);
+   const filter=elements['ai-meeting-agent-filter'];
+   filter.value='ATLAS';filter.change();
+   const target=elements['ai-meeting-rows'].children[6];
+   assert.equal(target.hidden,true);
+   const button=elements['ai-meeting-decision'].children[0].children[0];
+   assert.equal(button.textContent,'[M07] 발언 보기');
+   button.onclick();
+   assert.equal(target.hidden,false);
+   assert.equal(target.focused,true);
+   assert.equal(target.scrolled,true);
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
