@@ -354,7 +354,10 @@ def main():
                 save_diagnostic()
             except OSError:
                 pass
-        parser.exit(1, 'Meeting not published: '+code+' (stage '+diagnostic['stage']+').\n')
+        location = diagnostic['stage']
+        if code == 'INVALID_STATEMENT_CITATION':
+            location += ' · ' + diagnostic['agent'] + ' / ' + diagnostic['phase']
+        parser.exit(1, 'Meeting not published: '+code+' (stage '+location+').\n')
 
 
 if __name__ == "__main__":
