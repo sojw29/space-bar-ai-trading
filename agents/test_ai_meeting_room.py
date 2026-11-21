@@ -24,7 +24,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   let now=Date.parse(input.report.generated_at_utc),requests=0,noServer=false;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-import','ai-meeting-import-pair','ai-meeting-pair-slot-1','ai-meeting-pair-slot-2','ai-meeting-pair-info-1','ai-meeting-pair-info-2','ai-meeting-pair-remove-1','ai-meeting-pair-remove-2','ai-meeting-exit-file-pair','ai-meeting-comparison-import-status','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-search','ai-meeting-comparison-verdict','ai-meeting-comparison-previous-verdict','ai-meeting-comparison-type','ai-meeting-comparison-save-filtered-text','ai-meeting-comparison-save-filtered-json','ai-meeting-comparison-save-filtered-csv','ai-meeting-comparison-search-scope','ai-meeting-comparison-summary-changes','ai-meeting-comparison-concern-changes','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision','ai-meeting-agent-filter','ai-meeting-linked','ai-meeting-close-linked','ai-meeting-prev-linked','ai-meeting-next-linked','ai-meeting-search','ai-meeting-agent-count','ai-meeting-search-original','ai-meeting-phase-filter','ai-meeting-opinions','ai-meeting-opinion-cards','ai-meeting-opinion-agreement','ai-meeting-issues','ai-meeting-issue-rows','ai-meeting-comparison','ai-meeting-comparison-result','ai-meeting-comparison-summary','ai-meeting-comparison-baseline','ai-meeting-comparison-import','ai-meeting-import-pair','ai-meeting-pair-slot-1','ai-meeting-pair-slot-2','ai-meeting-pair-info-1','ai-meeting-pair-info-2','ai-meeting-pair-remove-1','ai-meeting-pair-remove-2','ai-meeting-exit-file-pair','ai-meeting-comparison-import-status','ai-meeting-comparison-reset-filters','ai-meeting-return-comparison','ai-meeting-comparison-evidence','ai-meeting-comparison-filters','ai-meeting-comparison-agent','ai-meeting-comparison-search','ai-meeting-comparison-verdict','ai-meeting-comparison-previous-verdict','ai-meeting-comparison-type','ai-meeting-comparison-save-filtered-text','ai-meeting-comparison-save-filtered-json','ai-meeting-comparison-save-filtered-csv','ai-meeting-comparison-search-scope','ai-meeting-comparison-sort','ai-meeting-comparison-summary-changes','ai-meeting-comparison-concern-changes','ai-meeting-comparison-phase','ai-meeting-comparison-toggle-changes','ai-meeting-comparison-change-count','ai-meeting-pin-comparison','ai-meeting-clear-comparison','ai-meeting-save-comparison','ai-meeting-save-comparison-json','ai-meeting-comparison-save-status'])elements[id]={children:[],disabled:false,addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -234,6 +234,24 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(overview.textContent,/초기 분석 변경 1건 · 상호 검토 변경 1건 · 새 최종 우려 1건/);
    assert.equal(evidence.hidden,false);
    const [analysisChange,peerChange,finalChange,concernSources]=evidence.children;
+   evidence.insertBefore=function(node,before){
+    if(node===before)return;
+    this.children=this.children.filter(child=>child!==node);
+    this.children.splice(before?this.children.indexOf(before):this.children.length,0,node);
+   };
+   Object.defineProperty(evidence,'firstChild',{get(){return this.children[0]??null}});
+   const sort=elements['ai-meeting-comparison-sort'];
+   analysisChange.open=true;
+   sort.value='REVERSE';sort.change();
+   assert.equal(evidence.children[0],finalChange);
+   assert.equal(evidence.children[2],analysisChange);
+   assert.equal(analysisChange.open,true);
+   sort.value='CONCERNS';sort.change();
+   assert.equal(evidence.children[0],finalChange);
+   sort.value='VERDICT';sort.change();
+   assert.equal(evidence.children[0],analysisChange);
+   sort.value='ORDER';sort.change();
+   analysisChange.open=false;
    const filterAgent=elements['ai-meeting-comparison-agent'];
    const filterPhase=elements['ai-meeting-comparison-phase'];
    const toggle=elements['ai-meeting-comparison-toggle-changes'];
@@ -514,6 +532,14 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.doesNotMatch(csv,/"M01","ATLAS"/);
    resetComparison.click();
    assert.equal(scope.value,'ALL');
+   sort.value='REVERSE';sort.change();
+   visibleJson.click();
+   const ordered=JSON.parse(await savedBlob.text());
+   assert.equal(ordered.filters.sort,'REVERSE');
+   assert.deepEqual(ordered.statement_changes.map(change=>change.id),['M07','M04','M02']);
+   assert.match(evidence.children[0].children[0].textContent,/COMMANDER/);
+   resetComparison.click();
+   assert.equal(sort.value,'ORDER');
   }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
