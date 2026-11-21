@@ -530,6 +530,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(secondConcern.open,true);
    assert.match(secondNav.children[0].textContent,/2 \/ 2/);
    assert.equal(secondNav.children[2].disabled,true);
+   assert.match(addedShortcut.textContent,/2번째부터 보기/);
    secondConcern.children.at(-1).click();
    secondConcern.open=false;
    addedShortcut.click();
