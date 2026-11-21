@@ -85,6 +85,28 @@ class MeetingTests(unittest.TestCase):
                 })
                 self.assertEqual(result["final_verdict"], expected)
 
+    def test_citations_are_limited_to_statement_ids_supplied_in_each_round(self):
+        for failure_phase, citation in (("ANALYSIS", "M01"), ("PEER_REVIEW", "M04"),
+                                        ("CONCLUSION", "M07"), (None, None)):
+            with self.subTest(phase=failure_phase):
+                fixture = Fixture()
+
+                def complete(agent, phase, context):
+                    result = statement()
+                    if phase == failure_phase:
+                        result["concerns"] = [f"잘못된 참조 [{citation}]"]
+                    elif phase != "ANALYSIS":
+                        result["summary"] = "검토 근거 [M01]" if phase == "PEER_REVIEW" else "결론 근거 [M06]"
+                    return result
+
+                fixture.complete = complete
+                if failure_phase:
+                    with self.assertRaisesRegex(MeetingError, "^INVALID_STATEMENT_CITATION$"):
+                        run_meeting(request(), fixture, clock=lambda: NOW)
+                else:
+                    result = run_meeting(request(), fixture, clock=lambda: NOW)
+                    self.assertEqual(result["call_count"], 7)
+
     def test_invalid_source_stops_before_any_call(self):
         for mutation in ('stale', 'orders', 'different_facts'):
             with self.subTest(mutation=mutation):
