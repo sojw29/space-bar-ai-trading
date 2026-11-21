@@ -2517,8 +2517,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(missingCount){
     blockers.push("자료 부족 발언 "+missingCount+"건");
     d.transcript.forEach((t,i)=>{if(t.verdict==="INSUFFICIENT_DATA")evidence.push("[M"+String(i+1).padStart(2,"0")+"] "+t.agent+" · 자료 부족");});
-   }
-   if(d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")){
+   }else if(d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")){
     blockers.push("GUARDIAN 추가 검토 요청");
     d.transcript.forEach((t,i)=>{if(t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")evidence.push("[M"+String(i+1).padStart(2,"0")+"] GUARDIAN · 추가 검토");});
    }

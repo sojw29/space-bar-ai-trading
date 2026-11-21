@@ -20,16 +20,21 @@ class MeetingRoomTests(unittest.TestCase):
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
 (async()=>{
- for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','malformed','timer','foreground','rollback','text-only']){
+ for(const mode of ['fixture','live','missing','orders','stale','partial','invalid-final','guardian-review','missing-priority','malformed','timer','foreground','rollback','text-only']){
   let now=Date.parse(input.report.generated_at_utc),requests=0;
   const data=structuredClone(input.report),events={},timers=[],elements={};
   data.version='AI_MEETING_TRANSCRIPT_VIEW_1';
-  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh'])elements[id]={children:[],disabled:false,addEventListener(){},replaceChildren(...x){this.children=x}};
+  for(const id of ['ai-meeting-status','ai-meeting-rows','ai-meeting-refresh','ai-meeting-decision'])elements[id]={children:[],disabled:false,addEventListener(){},replaceChildren(...x){this.children=x}};
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
   if(mode==='partial')data.transcript.pop();
   if(mode==='invalid-final')data.final_verdict='INSUFFICIENT_DATA';
+  if(['guardian-review','missing-priority'].includes(mode)){
+   data.transcript[5].verdict='REVIEW_NEEDED';
+   data.final_verdict='REVIEW_NEEDED';
+   if(mode==='missing-priority')data.transcript[6].verdict=data.final_verdict='INSUFFICIENT_DATA';
+  }
   if(mode==='malformed')data.transcript[0].summary=null;
   if(mode==='text-only')data.transcript[0].summary='<img src=x onerror=alert(1)>';
   const document={hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:()=>({style:{},set innerHTML(_){throw Error('unsafe HTML sink')}})};
@@ -41,6 +46,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   assert.equal(elements['ai-meeting-rows'].children.length,7,mode);
   assert.match(elements['ai-meeting-status'].textContent,mode==='live'?/모델 API 실행 완료 기록/:/실제 AI 실행 아님/);
+  if(mode==='guardian-review')assert.match(elements['ai-meeting-decision'].textContent,/판정 규칙 근거 위치: \[M06\] GUARDIAN/);
+  if(mode==='missing-priority'){
+   const decision=elements['ai-meeting-decision'].textContent;
+   assert.match(decision,/판정 규칙 근거 위치: \[M07\] COMMANDER · 자료 부족/);
+   assert.doesNotMatch(decision,/\[M06\] GUARDIAN · 추가 검토/);
+  }
   if(mode==='text-only')assert.ok(elements['ai-meeting-rows'].children[0].textContent.includes('<img'));
   if(['timer','foreground','rollback'].includes(mode)){
    now=Date.parse(data.source_generated_at_utc)+8*3600000;
