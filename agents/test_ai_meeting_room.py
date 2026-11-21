@@ -87,7 +87,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     search.value=query;search.input();
     assert.deepEqual(rows.flatMap((row,index)=>row.hidden?[]:[index]),[1,3]);
     assert.match(elements['ai-meeting-agent-count'].textContent,/원문 1개 · 인용 발언 1개/);
+    assert.match(rows[1].textContent,/^원문 · \[M02\]/);
+    assert.match(rows[3].textContent,/^인용 발언 · \[M04\]/);
    }
+   search.value='';search.input();
+   assert.match(rows[1].textContent,/^\[M02\]/);
+   assert.match(rows[3].textContent,/^\[M04\]/);
    const review=rows[3];
    assert.match(review.textContent,/인용한 초기 분석: \[M02\] QUANT/);
    assert.doesNotMatch(review.textContent,/인용한 초기 분석:.*\[M01\]/);
