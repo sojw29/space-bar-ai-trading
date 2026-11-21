@@ -2085,6 +2085,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-unpick-concern-type" type="button" style="min-height:44px" disabled>이 유형 선택 해제</button>
   <button id="ai-meeting-open-picked-concern" type="button" style="min-height:44px" disabled>첫 선택 우려 열기</button>
   <label>최종 우려 검색 <input id="ai-meeting-concern-search" type="search" maxlength="120" placeholder="우려 문구 또는 발언 번호" style="min-height:44px;max-width:100%"></label>
+  <label>우려 유형 <select id="ai-meeting-concern-filter-type" style="min-height:44px">
+   <option value="all">전체 유형</option><option value="added">새로 기록된 우려</option>
+   <option value="continued">이어진 우려</option><option value="not_repeated">재언급되지 않은 우려</option>
+  </select></label>
+  <label>우려 검색 범위 <select id="ai-meeting-concern-search-scope" style="min-height:44px">
+   <option value="all">전체</option><option value="text">우려 문구</option>
+   <option value="earlier">이전 회의 발언 번호</option><option value="later">이후 회의 발언 번호</option>
+  </select></label>
   <label style="min-height:44px"><input id="ai-meeting-concern-picked-only" type="checkbox"> 선택 우려만 보기</label>
   <button id="ai-meeting-concern-reset-view" type="button" style="min-height:44px" disabled>우려 검색 초기화</button>
   <button id="ai-meeting-pick-visible-concerns" type="button" style="min-height:44px" disabled>표시된 우려 모두 선택</button>
@@ -2346,6 +2354,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let comparisonChanges=[],comparisonDisclosures=[],comparisonOrigin=null,appliedComparisonSort="ORDER";
  const finalConcernTargets=new Map();
  const concernSearch=document.getElementById("ai-meeting-concern-search");
+ const concernFilterType=document.getElementById("ai-meeting-concern-filter-type");
+ const concernSearchScope=document.getElementById("ai-meeting-concern-search-scope");
+ function concernViewFilters(){
+  return {search:concernSearch?.value?.trim()??"",type:concernFilterType?.value||"all",
+   search_scope:concernSearchScope?.value||"all",picked_only:!!concernPickedOnly?.checked};
+ }
+ function resetConcernFilters(){
+  if(concernSearch)concernSearch.value="";
+  if(concernFilterType)concernFilterType.value="all";
+  if(concernSearchScope)concernSearchScope.value="all";
+  if(concernPickedOnly)concernPickedOnly.checked=false;
+ }
  const concernPickedOnly=document.getElementById("ai-meeting-concern-picked-only");
  const concernResetView=document.getElementById("ai-meeting-concern-reset-view");
  const concernMatchCount=document.getElementById("ai-meeting-concern-match-count");
@@ -2372,16 +2392,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return target.concerns.flatMap((entry,index)=>entry.node.hidden?[]:[index]);
  }
  function updateConcernView(){
-  const query=comparisonSearchText(concernSearch?.value??"");
-  const pickedOnly=!!concernPickedOnly?.checked;
+  const {search,type,search_scope,picked_only}=concernViewFilters();
+  const query=comparisonSearchText(search);
+  const evidenceQuery=query.replace(/^\[(.*)\]$/,"$1");
+  const filtered=!!query||type!=="all"||picked_only;
   let count=0,total=0;
   for(const [key,target] of finalConcernTargets){
    total+=target.concerns.length;
    target.concerns.forEach(({node,issue},index)=>{
-    const ids=[...issue.earlier_statement_ids,...issue.later_statement_ids];
-    const match=!query||comparisonSearchText(issue.text).includes(query)||
-     ids.some(id=>id.toLowerCase()===query.replace(/^\[(.*)\]$/,"$1"));
-    node.hidden=!match||(pickedOnly&&!pickedFinalConcerns.has(key+":"+index));
+    const matchesId=ids=>ids.some(id=>id.toLowerCase()===evidenceQuery);
+    const match=!query||
+     ((search_scope==="all"||search_scope==="text")&&comparisonSearchText(issue.text).includes(query))||
+     ((search_scope==="all"||search_scope==="earlier")&&matchesId(issue.earlier_statement_ids))||
+     ((search_scope==="all"||search_scope==="later")&&matchesId(issue.later_statement_ids));
+    node.hidden=!match||(type!=="all"&&type!==key)||(picked_only&&!pickedFinalConcerns.has(key+":"+index));
    });
    const indexes=visibleConcernIndexes(target);
    count+=indexes.length;
@@ -2403,16 +2427,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(unpickVisibleConcerns)unpickVisibleConcerns.disabled=visiblePicks===0;
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
   const hiddenPicks=pickedFinalConcerns.size-visiblePicks;
-  if(concernMatchCount)concernMatchCount.textContent=query||pickedOnly?
+  if(concernMatchCount)concernMatchCount.textContent=filtered?
    (count?"표시된 우려 "+count+" / "+total+"건":"조건에 맞는 최종 우려가 없습니다.")+
    (hiddenPicks?" · 필터로 숨겨진 선택 "+hiddenPicks+"건":""):"";
-  if(concernResetView)concernResetView.disabled=!concernSearch?.value&&!pickedOnly;
+  if(concernResetView)concernResetView.disabled=!filtered&&!concernSearch?.value&&search_scope==="all";
  }
  concernSearch?.addEventListener("input",updateConcernView);
- concernPickedOnly?.addEventListener("change",updateConcernView);
+ for(const control of [concernPickedOnly,concernFilterType,concernSearchScope]){
+  control?.addEventListener("change",updateConcernView);
+ }
  concernResetView?.addEventListener("click",()=>{
-  if(concernSearch)concernSearch.value="";
-  if(concernPickedOnly)concernPickedOnly.checked=false;
+  resetConcernFilters();
   updateConcernView();
   concernSearch?.focus?.();
  });
@@ -3076,8 +3101,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    pickedComparisonKey=selectionKey;
    finalConcernPositions.clear();
    pickedFinalConcerns.clear();
-   if(concernSearch)concernSearch.value="";
-   if(concernPickedOnly)concernPickedOnly.checked=false;
+   resetConcernFilters();
    activePickId=null;
    if(pickedOnlyControl)pickedOnlyControl.checked=false;
   }
@@ -3103,7 +3127,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const json=format==="JSON";
   const report={version:"SPACEBAR_MEETING_FINAL_CONCERNS_1",research_only:true,orders_enabled:false,
    earlier,later,execution_mode,market_source,baseline_origin,
-   ...(scope==="visible"?{filters:{search:concernSearch?.value?.trim()??"",picked_only:!!concernPickedOnly?.checked}}:{}),
+   ...(scope==="visible"?{filters:concernViewFilters()}:{}),
    final_concerns:entries};
   const text=[(scope==="picked"?"선택한 최종 우려 ":scope==="visible"?"표시된 최종 우려 ":"최종 우려 ")+entries.length+"건","이전 회의 UTC "+earlier.generated_at_utc,
    "이후 회의 UTC "+later.generated_at_utc,"실행 방식 "+execution_mode,
