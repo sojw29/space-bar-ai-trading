@@ -124,6 +124,14 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(linked.textContent,/그 외 검토에 제공된 발언 \(2건\)\n\[M01\] ATLAS/);
    rows[1].click();
    assert.match(linked.textContent,/이 분석을 인용한 상호 검토 \(1건\)\n\[M04\] ATLAS/);
+   const reviewJump=linked.children[0].children[0];
+   assert.equal(reviewJump.textContent,'[M04] 상호 검토로 이동');
+   phase.value='ANALYSIS';phase.change();
+   assert.equal(review.hidden,true);
+   reviewJump.onclick();
+   assert.equal(review.hidden,false);
+   assert.equal(review.focused,true);
+   assert.equal(review.scrolled,true);
    rows[0].click();
    assert.doesNotMatch(linked.textContent,/이 분석을 인용한 상호 검토/);
   }
