@@ -383,7 +383,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(concernPicks[0].checked,false);
    assert.equal(concernPicks[1].checked,true);
    clearConcerns.click();
-   concernSearch.value='[M04]';concernSearch.input();
+   concernSearch.value='[ m04 ]';concernSearch.input();
    assert.equal(oldIssue.hidden,false);
    assert.equal(addedIssue.hidden,true);
    const concernTypeFilter=elements['ai-meeting-concern-filter-type'];
