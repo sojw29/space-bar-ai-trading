@@ -2033,6 +2033,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  <button id="ai-meeting-save-comparison" type="button" style="min-height:44px;white-space:normal" disabled>비교 결과 TXT 저장</button>
  <button id="ai-meeting-save-comparison-json" type="button" style="min-height:44px;white-space:normal" disabled>비교 결과 JSON 저장</button>
  </div>
+ <p id="ai-meeting-comparison-baseline" role="note" hidden></p>
  <p id="ai-meeting-comparison-summary" role="status" hidden></p>
  <div id="ai-meeting-comparison-filters" hidden><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:8px;margin:8px 0">
   <label>변경 에이전트
@@ -2046,6 +2047,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    </select>
   </label>
   <button id="ai-meeting-comparison-toggle-changes" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence">표시된 판정 변경 펼치기</button>
+  <button id="ai-meeting-comparison-reset-filters" type="button" style="min-height:44px" disabled>비교 필터 초기화</button>
   <p id="ai-meeting-comparison-change-count" role="status"></p>
  </div></div>
  <div id="ai-meeting-comparison-evidence" hidden></div>
@@ -2053,6 +2055,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  <p id="ai-meeting-comparison-result" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></p>
 </details>
 <p id="ai-meeting-linked" role="note" style="white-space:pre-wrap;padding:10px;background:#152941" hidden></p>
+<button id="ai-meeting-return-comparison" type="button" aria-controls="ai-meeting-comparison" style="min-height:44px;margin:4px 0" hidden>비교 근거로 돌아가기</button>
 <button id="ai-meeting-prev-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>이전 발언</button>
 <button id="ai-meeting-next-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>다음 발언</button>
 <button id="ai-meeting-close-linked" type="button" aria-controls="ai-meeting-linked" style="padding:7px;margin:4px 0" hidden>상세 닫기</button>
@@ -2175,14 +2178,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const issueRows=document.getElementById("ai-meeting-issue-rows");
  const comparison=document.getElementById("ai-meeting-comparison");
  const comparisonResult=document.getElementById("ai-meeting-comparison-result");
+ const comparisonBaselineLabel=document.getElementById("ai-meeting-comparison-baseline");
+ const returnComparison=document.getElementById("ai-meeting-return-comparison");
  const comparisonSummary=document.getElementById("ai-meeting-comparison-summary");
  const comparisonEvidence=document.getElementById("ai-meeting-comparison-evidence");
  const comparisonFilters=document.getElementById("ai-meeting-comparison-filters");
  const comparisonAgent=document.getElementById("ai-meeting-comparison-agent");
  const comparisonPhase=document.getElementById("ai-meeting-comparison-phase");
  const comparisonToggle=document.getElementById("ai-meeting-comparison-toggle-changes");
+ const comparisonReset=document.getElementById("ai-meeting-comparison-reset-filters");
  const comparisonChangeCount=document.getElementById("ai-meeting-comparison-change-count");
- let comparisonChanges=[];
+ let comparisonChanges=[],comparisonDisclosures=[],comparisonOrigin=null;
  function applyComparisonFilters(){
   const agent=comparisonAgent?.value||"ALL",phase=comparisonPhase?.value||"ALL";
   const visible=comparisonChanges.filter(({node,statement})=>{
@@ -2190,6 +2196,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    return !node.hidden;
   });
   if(comparisonFilters)comparisonFilters.hidden=comparisonChanges.length===0;
+  if(comparisonReset)comparisonReset.disabled=agent==="ALL"&&phase==="ALL";
   if(comparisonChangeCount)comparisonChangeCount.textContent=visible.length?
    "판정 변경 "+visible.length+" / "+comparisonChanges.length+"건":"조건에 맞는 판정 변경 없음";
   if(comparisonToggle){
@@ -2201,6 +2208,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  comparisonAgent?.addEventListener("change",applyComparisonFilters);
  comparisonPhase?.addEventListener("change",applyComparisonFilters);
+ comparisonReset?.addEventListener("click",()=>{
+  if(!canUseRecord())return;
+  if(comparisonAgent)comparisonAgent.value="ALL";
+  if(comparisonPhase)comparisonPhase.value="ALL";
+  applyComparisonFilters();
+  comparisonAgent?.focus?.();
+ });
  comparisonToggle?.addEventListener("click",()=>{
   if(!canUseRecord())return;
   const visible=applyComparisonFilters();
@@ -2215,7 +2229,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const saveComparisonJson=document.getElementById("ai-meeting-save-comparison-json");
  const comparisonSaveStatus=document.getElementById("ai-meeting-comparison-save-status");
  let comparisonBaseline=null,comparisonReport=null;
- function statementShortcut(statement,label){
+ function statementShortcut(statement,label,fromComparison=false){
   const button=document.createElement("button");
   button.type="button";
   button.style.margin="4px";
@@ -2225,6 +2239,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const entry=renderedStatements[Number(statement.id.slice(1))-1];
    if(!entry)return;
    revealStatement(entry);
+   if(fromComparison)comparisonOrigin=button;
    openStatement(entry.node);
   });
   return button;
@@ -2275,13 +2290,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   issueRows.replaceChildren(...rows);
   if(issues)issues.hidden=false;
  }
- function renderComparisonEvidence(older,newer,current){
+ function renderComparisonEvidence(older,newer,current,expanded){
   if(!comparisonEvidence)return;
   function disclosure(title){
    const section=document.createElement("details");
    const heading=document.createElement("summary");
    heading.textContent=title;
    section.append(heading);
+   section.open=expanded?.[comparisonDisclosures.length]===true;
+   comparisonDisclosures.push(section);
    return section;
   }
   function statementCard(record,statement,period){
@@ -2293,7 +2310,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    text.textContent=period+" ["+statement.id+"] "+statement.agent+" · "+labels[statement.verdict]+
     "\n"+statement.summary+(statement.concerns.length?"\n우려: "+statement.concerns.join(" / "):"");
    card.append(text);
-   if(record===current)card.append(statementShortcut(statement,"현재 회의에서 열기"));
+   if(record===current)card.append(statementShortcut(statement,"현재 회의에서 열기",true));
    return card;
   }
   const groups=[];
@@ -2338,19 +2355,28 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function clearComparisonExport(){
   comparisonReport=null;
+  comparisonOrigin=null;
+  if(returnComparison)returnComparison.hidden=true;
   comparisonChanges=[];
+  comparisonDisclosures=[];
   applyComparisonFilters();
   if(comparisonSummary){comparisonSummary.textContent="";comparisonSummary.hidden=true;}
   if(comparisonEvidence){comparisonEvidence.replaceChildren();comparisonEvidence.hidden=true;}
   if(saveComparison)saveComparison.disabled=true;
   if(saveComparisonJson)saveComparisonJson.disabled=true;
  }
- function renderComparison(){
+ function renderComparison(expanded){
   clearComparisonExport();
   if(comparisonSaveStatus)comparisonSaveStatus.textContent="";
   const current=exportRecord?.record;
   if(!comparisonResult||!current)return;
   if(clearComparison)clearComparison.hidden=!comparisonBaseline;
+  if(comparisonBaselineLabel){
+   comparisonBaselineLabel.hidden=!comparisonBaseline;
+   comparisonBaselineLabel.textContent=comparisonBaseline?
+    "고정한 비교 기준 · "+comparisonBaseline.generated_at_utc+" · "+
+    (comparisonBaseline.workflow_execution_id??"실행 ID 미기록"):"";
+  }
   if(!comparisonBaseline){
    comparisonResult.textContent="비교 기준을 지정한 뒤 다른 완료 회의 기록을 열어 주세요.";
    return;
@@ -2415,7 +2441,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     "건 · 새 최종 우려 "+added.length+"건";
    comparisonSummary.hidden=false;
   }
-  renderComparisonEvidence(older,newer,current);
+  renderComparisonEvidence(older,newer,current,expanded);
   if(saveComparison)saveComparison.disabled=false;
   if(saveComparisonJson)saveComparisonJson.disabled=false;
  }
@@ -2626,11 +2652,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   linkedTrigger=trigger;
   linked.hidden=false;
   if(closeLinked)closeLinked.hidden=false;
+  if(returnComparison)returnComparison.hidden=!comparisonOrigin;
   updateLinkedNavigation();
  }
  function clearLinked(){
   selectStatement(null);
   linkedTrigger=null;
+  comparisonOrigin=null;
+  if(returnComparison)returnComparison.hidden=true;
   if(linked){linked.textContent="";linked.hidden=true;}
   if(closeLinked)closeLinked.hidden=true;
   updateLinkedNavigation();
@@ -2641,9 +2670,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   trigger?.focus?.();
  }
  closeLinked?.addEventListener("click",dismissLinked);
+ returnComparison?.addEventListener("click",()=>{
+  if(!canUseRecord()||!comparisonOrigin)return;
+  const origin=comparisonOrigin;
+  clearLinked();
+  origin.focus?.({preventScroll:true});
+  origin.scrollIntoView?.({block:"nearest"});
+ });
  document.addEventListener("keydown",event=>{
   if(event.key!=="Escape"||event.defaultPrevented||!linkedTrigger||linked?.hidden)return;
-  if(![linkedTrigger,closeLinked,prevLinked,nextLinked].includes(event.target)&&!linked?.contains?.(event.target))return;
+  if(![linkedTrigger,closeLinked,prevLinked,nextLinked,returnComparison].includes(event.target)&&!linked?.contains?.(event.target))return;
   event.preventDefault();
   dismissLinked();
  });
@@ -2709,6 +2745,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const retainedView=preserveView===true&&validatedViewKey!==null?{
    key:validatedViewKey,agent:agentFilter?.value,phase:phaseFilter?.value,verdict:verdictFilter?.value,
    query:typeof statementSearch?.value==="string"?statementSearch.value.slice(0,120):""
+  }:null;
+  const retainedComparison=validatedViewKey&&comparisonBaseline&&comparisonReport?{
+   key:validatedViewKey,baseline:comparisonBaseline,expanded:comparisonDisclosures.map(node=>node.open)
   }:null;
   const readEpoch=networkEpoch;pendingSelectionReload=false;
   loading=true;refreshButton.disabled=true;rows.setAttribute?.("aria-busy","true");
@@ -3100,7 +3139,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   status.title="검증된 완료 기록입니다. 자동으로 거래하거나 AI 에이전트를 실행하지 않습니다.";setConnection("validated","none",d.execution_mode);
   if(opinionCards)renderOpinions(exportRecord.record);
   if(issueRows)renderIssues(exportRecord.record);
-  if(comparison){comparison.hidden=false;renderComparison();}
+  if(comparison){
+   comparison.hidden=false;
+   const samePair=retainedComparison?.key===validatedViewKey&&retainedComparison?.baseline===comparisonBaseline;
+   renderComparison(samePair?retainedComparison.expanded:undefined);
+  }
   validSince=source;validUntil=source+8*3600000;expire();
  }catch(error){if(offline||readEpoch!==networkEpoch)return;rows.replaceChildren();clearAgentView();clearDecision();clearLinked();clearTimeline();validSince=null;validUntil=null;status.textContent="회의 미연결: "+(error&&error.name==="AbortError"?"응답 시간 초과 (다시 확인 가능)":error&&typeof error.message==="string"&&error.message.trim()?error.message:"회의 기록을 가져오지 못했습니다 (다시 확인 가능)");status.title="회의 데이터는 표시되지 않습니다. 다시 확인 버튼으로 재시도할 수 있습니다.";setConnection("disconnected","request-failed");}
  finally{if(timeout!==null)clearTimeout(timeout);if(activeController===controller)activeController=null;loading=false;refreshButton.disabled=offline;rows.setAttribute?.("aria-busy","false");if(pendingSelectionReload&&!offline&&!document.hidden){pendingSelectionReload=false;loadMeeting();}}
@@ -3111,7 +3154,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  // Skip hidden tabs and overlapping requests; failed/stale responses fail closed.
  setInterval(()=>{
   const active=document.activeElement,editing=active&&[agentFilter,phaseFilter,verdictFilter,statementSearch].includes(active);
-  if(!offline&&!document.hidden&&!loading&&!editing)loadMeeting(true);
+  const reviewing=active&&(comparison?.contains?.(active)||active===returnComparison||
+   (comparisonOrigin&&(active===linkedTrigger||linked?.contains?.(active))));
+  if(!offline&&!document.hidden&&!loading&&!editing&&!reviewing)loadMeeting(true);
  },60000);
 })();
 </script>
