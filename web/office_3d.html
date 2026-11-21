@@ -2372,17 +2372,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    return card;
   }
   const groups=[];
-  for(let i=0;i<7;i++){
-   const left=older.transcript[i],right=newer.transcript[i];
-   const oldVerdict=i===6?older.final_verdict:left.verdict;
-   const newVerdict=i===6?newer.final_verdict:right.verdict;
-   const verdictChanged=oldVerdict!==newVerdict;
-   const summaryChanged=left.summary!==right.summary;
-   const concernsChanged=JSON.stringify([...new Set(left.concerns)].sort())!==JSON.stringify([...new Set(right.concerns)].sort());
-   if(!verdictChanged&&!summaryChanged&&!concernsChanged)continue;
-   const phase=i<3?"초기 분석":i<6?"상호 검토":"최종 결론";
-   const changeLabel=verdictChanged?labels[oldVerdict]+" → "+labels[newVerdict]:
-    [summaryChanged?"요약 변경":"",concernsChanged?"우려 변경":""].filter(Boolean).join(" · ");
+  for(const change of comparisonReport.statement_changes){
+   const index=Number(change.id.slice(1))-1;
+   const left=older.transcript[index],right=newer.transcript[index];
+   const {earlier_verdict:oldVerdict,later_verdict:newVerdict,summary,concerns_added,concerns_removed}=change;
+   const verdictChanged=oldVerdict!==newVerdict,summaryChanged=summary!==null;
+   const concernsChanged=concerns_added.length>0||concerns_removed.length>0;
+   const phase=index<3?"초기 분석":index<6?"상호 검토":"최종 결론";
+   const changeLabel=[verdictChanged?labels[oldVerdict]+" → "+labels[newVerdict]:"",
+    summaryChanged?"요약 변경":"",concernsChanged?"우려 변경":""].filter(Boolean).join(" · ");
    const pair=disclosure(right.agent+" · "+phase+" · "+changeLabel);
    const grid=document.createElement("div");
    grid.style.display="grid";
@@ -2390,6 +2388,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    grid.style.gap="8px";
    grid.append(statementCard(older,left,"이전"),statementCard(newer,right,"이후"));
    pair.append(grid);
+   if(concernsChanged){
+    const delta=document.createElement("p");
+    delta.style.whiteSpace="pre-wrap";
+    delta.style.overflowWrap="anywhere";
+    delta.textContent="추가된 우려: "+(concerns_added.join(" / ")||"없음")+
+     "\n빠진 우려: "+(concerns_removed.join(" / ")||"없음");
+    pair.append(delta);
+   }
    pair.addEventListener("toggle",applyComparisonFilters);
    const searchText=[right.id,left.summary,right.summary,...left.concerns,...right.concerns].join("\n").toLowerCase();
    comparisonChanges.push({node:pair,statement:{...right,verdict:newVerdict},verdictChanged,summaryChanged,concernsChanged,searchText});
@@ -2483,11 +2489,32 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const added=[...new Set(after)].filter(concern=>!before.includes(concern)).map(issue);
   const continued=[...new Set(after)].filter(concern=>before.includes(concern)).map(issue);
   const notRepeated=[...new Set(before)].filter(concern=>!after.includes(concern)).map(issue);
+  const statementChanges=newer.transcript.flatMap((right,index)=>{
+   const left=older.transcript[index];
+   const earlierVerdict=index===6?older.final_verdict:left.verdict;
+   const laterVerdict=index===6?newer.final_verdict:right.verdict;
+   const summary=left.summary===right.summary?null:{earlier:left.summary,later:right.summary};
+   const added=[...new Set(right.concerns)].filter(concern=>!left.concerns.includes(concern));
+   const removed=[...new Set(left.concerns)].filter(concern=>!right.concerns.includes(concern));
+   if(earlierVerdict===laterVerdict&&!summary&&!added.length&&!removed.length)return [];
+   return [{id:right.id,agent:right.agent,phase:right.phase,earlier_verdict:earlierVerdict,
+    later_verdict:laterVerdict,summary,concerns_added:added,concerns_removed:removed}];
+  });
+  const summaryCount=statementChanges.filter(change=>change.summary!==null).length;
+  const concernCount=statementChanges.filter(change=>change.concerns_added.length||change.concerns_removed.length).length;
+  const contentSummary="요약 변경 "+summaryCount+"건 · 발언별 우려 변경 "+concernCount+"건";
+  const contentDetails=statementChanges.flatMap(change=>{
+   const details=[];
+   if(change.summary)details.push("요약 변경");
+   if(change.concerns_added.length)details.push("우려 추가: "+change.concerns_added.join(" / "));
+   if(change.concerns_removed.length)details.push("우려 제외: "+change.concerns_removed.join(" / "));
+   return details.length?["["+change.id+"] "+change.agent+" · "+details.join(" · ")]:[];
+  });
   comparisonReport={
    version:"SPACEBAR_MEETING_COMPARISON_1",research_only:true,orders_enabled:false,
    execution_mode:older.execution_mode,market_source:older.market_source,baseline_origin:origin,
    earlier:metadata(older),later:metadata(newer),
-   analysis_changes:analysisChanges,peer_review_changes:reviewChanges,
+   analysis_changes:analysisChanges,peer_review_changes:reviewChanges,statement_changes:statementChanges,
    final_concerns:{added,continued,not_repeated:notRepeated},
   };
   const showChanges=items=>items.map(change=>change.agent+" "+labels[change.earlier]+" → "+labels[change.later]).join(" / ")||"없음";
@@ -2506,11 +2533,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "\n새로 기록된 최종 우려: "+showIssues(added)+
    "\n두 결론에 모두 기록된 우려: "+showIssues(continued)+
    "\n이후 결론에 재언급되지 않은 우려: "+showIssues(notRepeated)+
+   "\n"+contentSummary+(contentDetails.length?"\n"+contentDetails.join("\n"):"")+
    "\n우려 사항은 동일한 문구를 기준으로 비교합니다.";
   if(comparisonSummary){
    comparisonSummary.textContent="최종 판정 "+labels[older.final_verdict]+" → "+labels[newer.final_verdict]+
     " · 초기 분석 변경 "+analysisChanges.length+"건 · 상호 검토 변경 "+reviewChanges.length+
-    "건 · 새 최종 우려 "+added.length+"건";
+    "건 · 새 최종 우려 "+added.length+"건 · "+contentSummary;
    comparisonSummary.hidden=false;
   }
   renderComparisonEvidence(older,newer,pairedArchives?null:current,expanded);
