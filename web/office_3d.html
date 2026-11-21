@@ -2067,6 +2067,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-comparison-quick-SUMMARY" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>요약 변경</button>
   <button id="ai-meeting-comparison-quick-CONCERNS" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>우려 변경</button>
  </div></div>
+ <div id="ai-meeting-final-concern-shortcuts" role="group" aria-label="최종 우려 원문 바로 보기" hidden><div style="display:flex;flex-wrap:wrap;gap:8px">
+  <button id="ai-meeting-final-concern-added" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>새로 기록된 우려</button>
+  <button id="ai-meeting-final-concern-continued" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>이어진 우려</button>
+  <button id="ai-meeting-final-concern-not_repeated" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>재언급되지 않은 우려</button>
+ </div></div>
  <div id="ai-meeting-comparison-filters" hidden><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:8px;margin:8px 0">
   <label>변경 에이전트
    <select id="ai-meeting-comparison-agent" style="display:block;width:100%;min-height:44px" aria-controls="ai-meeting-comparison-evidence">
@@ -2262,6 +2267,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const returnComparison=document.getElementById("ai-meeting-return-comparison");
  const comparisonSummary=document.getElementById("ai-meeting-comparison-summary");
  const quickFilters=document.getElementById("ai-meeting-comparison-quick-filters");
+ const finalConcernShortcuts=document.getElementById("ai-meeting-final-concern-shortcuts");
+ const finalConcernButtons={
+  added:document.getElementById("ai-meeting-final-concern-added"),
+  continued:document.getElementById("ai-meeting-final-concern-continued"),
+  not_repeated:document.getElementById("ai-meeting-final-concern-not_repeated"),
+ };
  const quickFilterButtons=new Map([
   ["ANY_CHANGE",{label:"모든 변경",button:document.getElementById("ai-meeting-comparison-quick-ANY_CHANGE")}],
   ["VERDICT",{label:"판정 변경",button:document.getElementById("ai-meeting-comparison-quick-VERDICT")}],
@@ -2304,6 +2315,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const pickedChanges=new Set();
  let pickedComparisonKey=null;
  let comparisonChanges=[],comparisonDisclosures=[],comparisonOrigin=null,appliedComparisonSort="ORDER";
+ const finalConcernTargets=new Map();
  function orderComparisonChanges(){
   const sort=comparisonSort?.value||"ORDER";
   if(!comparisonChanges.length||sort===appliedComparisonSort)return;
@@ -2639,18 +2651,35 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    groups.push(pair);
   }
   const categories=[
-   ["새로 기록된 우려",comparisonReport.final_concerns.added],
-   ["이어진 우려",comparisonReport.final_concerns.continued],
-   ["이후 결론에 재언급되지 않은 우려",comparisonReport.final_concerns.not_repeated],
-  ];
-  if(categories.some(([,items])=>items.length)){
+   ["added","새로 기록된 우려"],
+   ["continued","이어진 우려"],
+   ["not_repeated","이후 결론에 재언급되지 않은 우려"],
+  ].map(([key,label])=>({key,label,items:comparisonReport.final_concerns[key],button:finalConcernButtons[key]}));
+  if(finalConcernShortcuts)finalConcernShortcuts.hidden=!categories.some(({items})=>items.length);
+  for(const {label,items,button} of categories){
+   if(!button)continue;
+   button.textContent=label+" "+items.length+"건";
+   button.disabled=items.length===0;
+  }
+  if(categories.some(({items})=>items.length)){
    const sources=disclosure("우려 사항이 기록된 원문");
-   for(const [category,items] of categories){
+   for(const {key,label,items,button} of categories){
     for(const issue of items){
-     const concern=disclosure(category+" · "+issue.text);
+     const concern=disclosure(label+" · "+issue.text+
+      " · 원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건");
+     if(!finalConcernTargets.has(key))finalConcernTargets.set(key,{sources,concern});
      for(const [record,ids,period] of [[older,issue.earlier_statement_ids,"이전"],[newer,issue.later_statement_ids,"이후"]]){
       for(const id of ids)concern.append(statementCard(record,record.transcript[Number(id.slice(1))-1],period));
      }
+     const back=document.createElement("button");
+     back.type="button";
+     back.textContent="최종 우려 바로 가기로 돌아가기";
+     back.style.minHeight="44px";
+     back.addEventListener("click",()=>{
+      button?.focus?.({preventScroll:true});
+      button?.scrollIntoView?.({block:"nearest"});
+     });
+     concern.append(back);
      sources.append(concern);
     }
    }
@@ -2660,7 +2689,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   comparisonEvidence.hidden=groups.length===0;
   applyComparisonFilters();
  }
+ for(const [key,button] of Object.entries(finalConcernButtons)){
+  button?.addEventListener("click",()=>{
+   if(!pairedArchives&&!canUseRecord())return;
+   const target=finalConcernTargets.get(key);
+   if(!target)return;
+   const {sources,concern}=target;
+   sources.open=true;
+   concern.open=true;
+   concern.children[0].focus?.({preventScroll:true});
+   concern.scrollIntoView?.({block:"nearest"});
+  });
+ }
  function clearComparisonExport(){
+  finalConcernTargets.clear();
+  if(finalConcernShortcuts)finalConcernShortcuts.hidden=true;
   comparisonReport=null;
   comparisonOrigin=null;
   if(returnComparison)returnComparison.hidden=true;
