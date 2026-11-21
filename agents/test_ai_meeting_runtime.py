@@ -85,6 +85,22 @@ class MeetingTests(unittest.TestCase):
                 })
                 self.assertEqual(result["final_verdict"], expected)
 
+    def test_commander_can_identify_missing_data_after_guardian_requests_review(self):
+        def complete(agent, phase, context):
+            if (agent, phase) == ("GUARDIAN", "PEER_REVIEW"):
+                return statement("REVIEW_NEEDED")
+            if agent == "COMMANDER":
+                self.assertEqual(context["evidence_priority"], {
+                    "verdict": "REVIEW_NEEDED", "statement_ids": ["M06"],
+                })
+                return statement("INSUFFICIENT_DATA")
+            return statement()
+
+        fixture = Fixture()
+        fixture.complete = complete
+        result = run_meeting(request(), fixture, clock=lambda: NOW)
+        self.assertEqual(result["final_verdict"], "INSUFFICIENT_DATA")
+
     def test_citations_are_limited_to_statement_ids_supplied_in_each_round(self):
         for failure_phase, citation in (("ANALYSIS", "[M01]"), ("PEER_REVIEW", "[M04]"),
                                         ("PEER_REVIEW", "[M01, M04]"), ("CONCLUSION", "[M07]"),
