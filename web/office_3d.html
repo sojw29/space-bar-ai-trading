@@ -2261,7 +2261,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   panel.scrollIntoView?.({block:"start",behavior:"auto"});
  });
  function clearTimeline(){if(timeline){timeline.replaceChildren();timeline.hidden=true;}}
- function clearLinked(){if(linked){linked.textContent="";linked.hidden=true;}}
+ let activeStatement=null;
+ function selectStatement(node){
+  if(activeStatement){
+   activeStatement.style.outline="";
+   activeStatement.setAttribute?.("aria-current","false");
+  }
+  activeStatement=node;
+  if(node){
+   node.style.outline="2px solid #80c8a8";
+   node.setAttribute?.("aria-current","true");
+  }
+ }
+ function clearLinked(){selectStatement(null);if(linked){linked.textContent="";linked.hidden=true;}}
  function clearDecision(){exportRecord=null;if(exportText)exportText.disabled=true;if(exportStatus)exportStatus.textContent="";if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;if(showConclusion)showConclusion.disabled=true;}
  function setConnection(state,reason,provenance=""){
   if(state!=="validated")verifiedRecordId=null;
@@ -2438,6 +2450,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     item.setAttribute?.("aria-label","발언 "+statementId+" 연결 기록 확인");
     const showLinked=()=>{
      if(!canUseRecord())return;
+     selectStatement(item);
      const formatSource=id=>{
       const source=d.transcript[Number(id.slice(1))-1];
       return "["+id+"] "+source.agent+" · "+labels[source.verdict]+"\n"+source.summary+
@@ -2526,6 +2539,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     line.setAttribute?.("aria-label",initial.agent+" 초기 분석 및 상호 검토 상세 보기");
     const showDetails=()=>{
      if(!canUseRecord()||!linked)return;
+     selectStatement(null);
      markSelected(line);
      const initialSet=new Set(initial.concerns);
      const reviewSet=new Set(review.concerns);
@@ -2562,6 +2576,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    conclusion.setAttribute?.("aria-label","COMMANDER 최종 결론 상세 보기");
    const showConclusion=()=>{
     if(!canUseRecord()||!linked)return;
+    selectStatement(null);
     markSelected(conclusion);
     const final=d.transcript[6];
     linked.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+final.summary+
