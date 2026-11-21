@@ -115,7 +115,7 @@ class OpenAIProvider:
                   "Use only supplied observations. Expose uncertainty and disagreements. "
                   "Do not recommend trades, position sizes, leverage, orders or forecast returns. "
                   "Do not claim independent data access, learning or verification. "
-                  "Write statement citations in brackets, for example [M01], using only IDs supplied for this stage. "
+                  "Write statement citations as [M01] or [M01, M02], using only IDs supplied for this stage. "
                   "Return JSON matching the schema. A verdict is research status only.")
         payload = {"model": self.model, "store": False, "max_completion_tokens": 2000,
                    "messages": [{"role": "system", "content": system},
@@ -218,7 +218,9 @@ def run_meeting(bundle, provider, *, clock=None, progress=None):
         result = validate_statement(provider.complete(agent, phase, deepcopy(context)))
         allowed_ids = set(meeting_input_refs(len(transcript)))
         for text in (result["summary"], *result["concerns"]):
-            if not set(re.findall(r"\[(M[0-9]+)\]", text)).issubset(allowed_ids):
+            citation_groups = re.findall(r"\[\s*(M[0-9]+(?:\s*,\s*M[0-9]+)*)\s*\]", text)
+            cited_ids = {citation.strip() for group in citation_groups for citation in group.split(",")}
+            if not cited_ids.issubset(allowed_ids):
                 raise MeetingError("INVALID_STATEMENT_CITATION")
         transcript.append({"agent": agent, "phase": phase, **result})
         if progress:

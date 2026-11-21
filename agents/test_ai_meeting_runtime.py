@@ -87,7 +87,8 @@ class MeetingTests(unittest.TestCase):
 
     def test_citations_are_limited_to_statement_ids_supplied_in_each_round(self):
         for failure_phase, citation in (("ANALYSIS", "M01"), ("PEER_REVIEW", "M04"),
-                                        ("CONCLUSION", "M07"), (None, None)):
+                                        ("PEER_REVIEW", "M01, M04"), ("CONCLUSION", "M07"),
+                                        ("CONCLUSION", "M02, M99"), (None, None)):
             with self.subTest(phase=failure_phase):
                 fixture = Fixture()
 
@@ -96,7 +97,7 @@ class MeetingTests(unittest.TestCase):
                     if phase == failure_phase:
                         result["concerns"] = [f"잘못된 참조 [{citation}]"]
                     elif phase != "ANALYSIS":
-                        result["summary"] = "검토 근거 [M01]" if phase == "PEER_REVIEW" else "결론 근거 [M06]"
+                        result["summary"] = "검토 근거 [M01, M02]" if phase == "PEER_REVIEW" else "결론 근거 [M01, M06]"
                     return result
 
                 fixture.complete = complete
