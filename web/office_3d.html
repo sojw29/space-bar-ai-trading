@@ -2087,6 +2087,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <label>최종 우려 검색 <input id="ai-meeting-concern-search" type="search" maxlength="120" placeholder="우려 문구 또는 발언 번호" style="min-height:44px;max-width:100%"></label>
   <label style="min-height:44px"><input id="ai-meeting-concern-picked-only" type="checkbox"> 선택 우려만 보기</label>
   <button id="ai-meeting-concern-reset-view" type="button" style="min-height:44px" disabled>우려 검색 초기화</button>
+  <button id="ai-meeting-pick-visible-concerns" type="button" style="min-height:44px" disabled>표시된 우려 모두 선택</button>
+  <button id="ai-meeting-unpick-visible-concerns" type="button" style="min-height:44px" disabled>표시된 우려 선택 해제</button>
+  <button id="ai-meeting-save-visible-concerns-txt" type="button" style="min-height:44px" disabled>표시된 우려 TXT 저장</button>
+  <button id="ai-meeting-save-visible-concerns-json" type="button" style="min-height:44px" disabled>표시된 우려 JSON 저장</button>
   <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
@@ -2345,6 +2349,25 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const concernPickedOnly=document.getElementById("ai-meeting-concern-picked-only");
  const concernResetView=document.getElementById("ai-meeting-concern-reset-view");
  const concernMatchCount=document.getElementById("ai-meeting-concern-match-count");
+ const pickVisibleConcerns=document.getElementById("ai-meeting-pick-visible-concerns");
+ const unpickVisibleConcerns=document.getElementById("ai-meeting-unpick-visible-concerns");
+ const visibleConcernExports=["TXT","JSON"].map(format=>({
+  format,button:document.getElementById("ai-meeting-save-visible-concerns-"+format.toLowerCase()),
+ }));
+ function visibleConcernIds(){
+  return [...finalConcernTargets].flatMap(([key,target])=>visibleConcernIndexes(target).map(index=>key+":"+index));
+ }
+ function setVisibleConcernSelection(selected){
+  if(!pairedArchives&&!canUseRecord())return;
+  for(const id of visibleConcernIds()){
+   concernCheckboxes.get(id).checked=selected;
+   if(selected)pickedFinalConcerns.add(id);
+   else pickedFinalConcerns.delete(id);
+  }
+  updatePickedConcerns();
+ }
+ pickVisibleConcerns?.addEventListener("click",()=>setVisibleConcernSelection(true));
+ unpickVisibleConcerns?.addEventListener("click",()=>setVisibleConcernSelection(false));
  function visibleConcernIndexes(target){
   return target.concerns.flatMap((entry,index)=>entry.node.hidden?[]:[index]);
  }
@@ -2374,10 +2397,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    });
   }
   for(const target of finalConcernTargets.values())target.sources.hidden=count===0;
-  if(openPickedConcern)openPickedConcern.disabled=![...finalConcernTargets].some(([key,target])=>
-   visibleConcernIndexes(target).some(index=>pickedFinalConcerns.has(key+":"+index)));
+  const visiblePicks=visibleConcernIds().filter(id=>pickedFinalConcerns.has(id)).length;
+  if(openPickedConcern)openPickedConcern.disabled=visiblePicks===0;
+  if(pickVisibleConcerns)pickVisibleConcerns.disabled=count===visiblePicks;
+  if(unpickVisibleConcerns)unpickVisibleConcerns.disabled=visiblePicks===0;
+  for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
+  const hiddenPicks=pickedFinalConcerns.size-visiblePicks;
   if(concernMatchCount)concernMatchCount.textContent=query||pickedOnly?
-   (count?"표시된 우려 "+count+" / "+total+"건":"조건에 맞는 최종 우려가 없습니다."):"";
+   (count?"표시된 우려 "+count+" / "+total+"건":"조건에 맞는 최종 우려가 없습니다.")+
+   (hiddenPicks?" · 필터로 숨겨진 선택 "+hiddenPicks+"건":""):"";
   if(concernResetView)concernResetView.disabled=!concernSearch?.value&&!pickedOnly;
  }
  concernSearch?.addEventListener("input",updateConcernView);
@@ -2430,8 +2458,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  pickConcernType?.addEventListener("click",()=>setConcernTypeSelection(true));
  unpickConcernType?.addEventListener("click",()=>setConcernTypeSelection(false));
  openPickedConcern?.addEventListener("click",()=>{
-  const first=[...finalConcernTargets].flatMap(([key,target])=>
-   visibleConcernIndexes(target).map(index=>key+":"+index)).find(id=>pickedFinalConcerns.has(id));
+  const first=visibleConcernIds().find(id=>pickedFinalConcerns.has(id));
   if(!first)return;
   const [category,index]=first.split(":");
   openFinalConcern(category,Number(index));
@@ -3065,25 +3092,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const rows=count===undefined?"":"-"+count+"-rows";
   return "spacebar-meeting-"+scope+"-"+stamp(earlier)+"_to_"+stamp(later)+rows+"."+format.toLowerCase();
  }
- function downloadFinalConcerns(format,status,category,index,picked=false){
+ function downloadFinalConcerns(format,status,category,index,scope="all"){
   if(!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   const {earlier,later,execution_mode,market_source,baseline_origin,final_concerns}=comparisonReport;
+  const included=scope==="picked"?pickedFinalConcerns:scope==="visible"?new Set(visibleConcernIds()):null;
   const entries=category?[{category,...final_concerns[category][index]}]:
    Object.entries(final_concerns).flatMap(([key,items])=>items.flatMap((issue,position)=>
-    !picked||pickedFinalConcerns.has(key+":"+position)?[{category:key,...issue}]:[]));
+    !included||included.has(key+":"+position)?[{category:key,...issue}]:[]));
   if(!entries.length)return;
   const json=format==="JSON";
   const report={version:"SPACEBAR_MEETING_FINAL_CONCERNS_1",research_only:true,orders_enabled:false,
-   earlier,later,execution_mode,market_source,baseline_origin,final_concerns:entries};
-  const text=[(picked?"선택한 최종 우려 ":"최종 우려 ")+entries.length+"건","이전 회의 UTC "+earlier.generated_at_utc,
+   earlier,later,execution_mode,market_source,baseline_origin,
+   ...(scope==="visible"?{filters:{search:concernSearch?.value?.trim()??"",picked_only:!!concernPickedOnly?.checked}}:{}),
+   final_concerns:entries};
+  const text=[(scope==="picked"?"선택한 최종 우려 ":scope==="visible"?"표시된 최종 우려 ":"최종 우려 ")+entries.length+"건","이전 회의 UTC "+earlier.generated_at_utc,
    "이후 회의 UTC "+later.generated_at_utc,"실행 방식 "+execution_mode,
    "시장 데이터 출처 "+(market_source??"미기록"),"비교 출처 "+baseline_origin,
    ...entries.map(issue=>finalConcernLabels[issue.category]+" · "+issue.text+
     "\n이전 근거 발언 "+(issue.earlier_statement_ids.join(", ")||"없음")+
     "\n이후 근거 발언 "+(issue.later_statement_ids.join(", ")||"없음"))].join("\n\n");
   try{
-   const scope=category?"final-concern-"+category.replaceAll("_","-")+"-"+(index+1):picked?"picked-final-concerns":"final-concerns";
-   const filename=comparisonFilename(scope,format,entries.length);
+   const filenameScope=category?"final-concern-"+category.replaceAll("_","-")+"-"+(index+1):
+    scope==="all"?"final-concerns":scope+"-final-concerns";
+   const filename=comparisonFilename(filenameScope,format,entries.length);
    saveMeetingFile((json?JSON.stringify(report,null,2):text)+"\n",filename,
     json?"application/json;charset=utf-8":"text/plain;charset=utf-8");
    if(status)status.textContent="저장 요청: "+filename;
@@ -3096,7 +3127,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    ()=>downloadFinalConcerns(format,finalConcernSaveStatus));
  }
  for(const {format,button} of pickedConcernExports){
-  button?.addEventListener("click",()=>downloadFinalConcerns(format,finalConcernSaveStatus,undefined,undefined,true));
+  button?.addEventListener("click",()=>downloadFinalConcerns(format,finalConcernSaveStatus,undefined,undefined,"picked"));
+ }
+ for(const {format,button} of visibleConcernExports){
+  button?.addEventListener("click",()=>downloadFinalConcerns(format,finalConcernSaveStatus,undefined,undefined,"visible"));
  }
  function downloadComparison(format){
   if(!comparisonReport||(!pairedArchives&&!canUseRecord())||!comparisonResult)return;
