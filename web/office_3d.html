@@ -2514,13 +2514,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
 
    const blockers=[];
    const evidence=[];
+   const evidenceIndices=[];
    if(missingCount){
     blockers.push("자료 부족 발언 "+missingCount+"건");
-    d.transcript.forEach((t,i)=>{if(t.verdict==="INSUFFICIENT_DATA")evidence.push("[M"+String(i+1).padStart(2,"0")+"] "+t.agent+" · 자료 부족");});
    }else if(d.transcript.some(t=>t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")){
     blockers.push("GUARDIAN 추가 검토 요청");
-    d.transcript.forEach((t,i)=>{if(t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED")evidence.push("[M"+String(i+1).padStart(2,"0")+"] GUARDIAN · 추가 검토");});
    }
+   d.transcript.forEach((t,i)=>{
+    const decisive=missingCount?t.verdict==="INSUFFICIENT_DATA":
+     t.agent==="GUARDIAN"&&t.verdict==="REVIEW_NEEDED";
+    if(!decisive)return;
+    evidenceIndices.push(i);
+    evidence.push("[M"+String(i+1).padStart(2,"0")+"] "+t.agent+" · "+
+     (missingCount?"자료 부족":"추가 검토"));
+   });
    decision.textContent="COMMANDER 최종 결론 · "+labels[d.final_verdict]+"\n"+
     final.summary+"\n검토 필요 발언: "+reviewCount+"건 · 자료 부족 발언: "+missingCount+"건"+
     "\n판단 변경: "+(changed.length?changed.join(", "):"없음")+
@@ -2529,6 +2536,33 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     "\n판정 규칙 근거 위치: "+(evidence.length?evidence.join(" / "):"해당 없음")+
     "\n근거 표시는 발언 단계와 판정 상태의 연결이며 인과관계 추론이 아닙니다." +
     (final.concerns.length?"\n최종 우려: "+final.concerns.join(" / "):"");
+   if(evidenceIndices.length){
+    const links=document.createElement("span");
+    links.style.display="block";
+    for(const i of evidenceIndices){
+     const button=document.createElement("button");
+     button.type="button";
+     button.textContent="[M"+String(i+1).padStart(2,"0")+"] 발언 보기";
+     button.style.margin="4px";
+     button.onclick=()=>{
+      if(!canUseRecord())return;
+      const entry=renderedStatements[i];
+      if(!entry)return;
+      if(entry.node.hidden){
+       if(agentFilter)agentFilter.value="ALL";
+       if(phaseFilter)phaseFilter.value="ALL";
+       if(verdictFilter)verdictFilter.value="ALL";
+       if(statementSearch)statementSearch.value="";
+       applyAgentView();
+      }
+      entry.node.tabIndex=-1;
+      entry.node.focus?.({preventScroll:true});
+      entry.node.scrollIntoView?.({block:"nearest"});
+     };
+     links.append?.(button);
+    }
+    decision.append?.(links);
+   }
    decision.hidden=false;
   }
   const counts={OBSERVATION_ONLY:0,REVIEW_NEEDED:0,INSUFFICIENT_DATA:0};
