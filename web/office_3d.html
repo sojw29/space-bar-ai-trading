@@ -2171,6 +2171,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     if(entry.id===id)originalCount++;
    }
   }
+  if(activeStatement?.hidden)clearLinked();
   const searchStatus=id?" · 원문 "+originalCount+"개 · 인용 발언 "+(count-originalCount)+"개":query?" · 검색 적용":"";
   if(agentCount)agentCount.textContent=(agent==="ALL"?"전체 에이전트":agent)+" · "+phases[phase]+" · "+states[verdict]+searchStatus+(count===0?" · 표시할 발언 없음":"")+" · 발언 "+count+" / 전체 "+renderedStatements.length+"개 · 최종 요약과 타임라인은 전체 회의 기준";
  }
