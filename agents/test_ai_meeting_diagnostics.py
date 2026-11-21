@@ -123,6 +123,7 @@ class DiagnosticTests(unittest.TestCase):
             self.assertEqual((code, calls), (1, 4))
             self.assertEqual(target.read_text(), 'previous completed snapshot')
             self.assertIn('INVALID_STATEMENT_CITATION (stage INFERENCE · ATLAS / PEER_REVIEW)', text)
+            self.assertIn('Allowed statement IDs: M01, M02, M03.', text)
             self.assertNotIn('private response marker', text + status.read_text())
 
     def test_completed_run_summary_does_not_claim_pages_deployment(self):
