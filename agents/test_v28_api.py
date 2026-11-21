@@ -175,6 +175,37 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn("secret_extra", result)
         self.assertNotIn("secret_extra", result["transcript"][0])
 
+    def test_transcript_endpoint_rejects_verdict_that_understates_missing_data(self):
+        from ai_meeting_runtime import publish_report, run_meeting
+        from test_ai_meeting_runtime import Fixture
+        from test_v240_provider_transport_preflight import request, NOW
+
+        report = run_meeting(request(), Fixture(), clock=lambda: NOW)
+        now = datetime.now(timezone.utc).isoformat()
+        report.update(source_generated_at_utc=now, started_at_utc=now,
+                      generated_at_utc=now, market_source="BYBIT_USDT_PERPETUAL_5M")
+        report["transcript"][5]["verdict"] = "REVIEW_NEEDED"
+        report["transcript"][6]["verdict"] = "INSUFFICIENT_DATA"
+        target = Path(self.temp.name) / "meeting.json"
+        self.server.RequestHandlerClass = v28.make_handler(
+            self.history, meeting_transcript_path=target)
+
+        report["final_verdict"] = "REVIEW_NEEDED"
+        publish_report(report, target)
+        with self.assertRaises(HTTPError) as error:
+            self.get("/api/v1/meeting/transcript")
+        self.assertEqual(error.exception.code, 503)
+        with error.exception as response:
+            payload = json.load(response)
+        self.assertEqual(payload["error"], "meeting_transcript_unavailable_or_invalid")
+        self.assertNotIn("transcript", payload)
+
+        report["final_verdict"] = "INSUFFICIENT_DATA"
+        publish_report(report, target)
+        status, payload = self.get("/api/v1/meeting/transcript")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["final_verdict"], "INSUFFICIENT_DATA")
+
     def test_transcript_rejects_expired_source_even_if_completed(self):
         target = Path(self.temp.name) / "expired.json"
         now = datetime.now(timezone.utc)
