@@ -2288,10 +2288,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(linked){linked.textContent="";linked.hidden=true;}
   if(closeLinked)closeLinked.hidden=true;
  }
- closeLinked?.addEventListener("click",()=>{
+ function dismissLinked(){
   const trigger=linkedTrigger;
   clearLinked();
   trigger?.focus?.();
+ }
+ closeLinked?.addEventListener("click",dismissLinked);
+ document.addEventListener("keydown",event=>{
+  if(event.key!=="Escape"||event.defaultPrevented||!linkedTrigger||linked?.hidden)return;
+  if(event.target!==linkedTrigger&&event.target!==closeLinked&&!linked?.contains?.(event.target))return;
+  event.preventDefault();
+  dismissLinked();
  });
  function clearDecision(){exportRecord=null;if(exportText)exportText.disabled=true;if(exportStatus)exportStatus.textContent="";if(sourceAge){sourceAge.textContent="";sourceAge.title="";sourceAge.hidden=true;}if(decision){decision.textContent="";decision.hidden=true;}if(verdictCounts){verdictCounts.textContent="";verdictCounts.hidden=true;}if(reviewShortcuts)reviewShortcuts.hidden=true;if(showReview)showReview.disabled=true;if(showMissing)showMissing.disabled=true;if(showConclusion)showConclusion.disabled=true;}
  function setConnection(state,reason,provenance=""){
