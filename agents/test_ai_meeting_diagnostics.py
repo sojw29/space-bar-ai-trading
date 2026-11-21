@@ -113,6 +113,18 @@ class DiagnosticTests(unittest.TestCase):
             self.assertIn('2/7', summary)
             self.assertIn('결제 금액이나 실제 과금 횟수가 아닙니다', summary)
 
+    def test_cli_citation_failure_identifies_role_without_printing_response(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, target, status = [Path(directory)/n for n in ('source.json', 'meeting.json', 'status.json')]
+            source.write_text(json.dumps(current_bundle()))
+            target.write_text('previous completed snapshot')
+            invalid = {**statement(), 'summary': 'private response marker [M04]'}
+            code, text, calls = self.invoke(source, target, status, responses=[statement()]*3 + [invalid])
+            self.assertEqual((code, calls), (1, 4))
+            self.assertEqual(target.read_text(), 'previous completed snapshot')
+            self.assertIn('INVALID_STATEMENT_CITATION (stage INFERENCE · ATLAS / PEER_REVIEW)', text)
+            self.assertNotIn('private response marker', text + status.read_text())
+
     def test_completed_run_summary_does_not_claim_pages_deployment(self):
         with tempfile.TemporaryDirectory() as directory:
             source, target, status = [Path(directory)/n for n in ('source.json', 'meeting.json', 'status.json')]
