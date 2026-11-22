@@ -2073,8 +2073,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-final-concern-not_repeated" type="button" style="min-height:44px" aria-controls="ai-meeting-comparison-evidence" disabled>재언급되지 않은 우려</button>
   <button id="ai-meeting-save-final-concerns-txt" type="button" style="min-height:44px">최종 우려 전체 TXT 저장</button>
   <button id="ai-meeting-save-final-concerns-json" type="button" style="min-height:44px">최종 우려 전체 JSON 저장</button>
+  <button id="ai-meeting-save-final-concerns-csv" type="button" style="min-height:44px">최종 우려 전체 CSV 저장</button>
   <button id="ai-meeting-save-picked-concerns-txt" type="button" style="min-height:44px" disabled>선택 우려 TXT 저장</button>
   <button id="ai-meeting-save-picked-concerns-json" type="button" style="min-height:44px" disabled>선택 우려 JSON 저장</button>
+  <button id="ai-meeting-save-picked-concerns-csv" type="button" style="min-height:44px" disabled>선택 우려 CSV 저장</button>
   <button id="ai-meeting-clear-picked-concerns" type="button" style="min-height:44px" disabled>우려 선택 해제</button>
   <label>일괄 선택 유형 <select id="ai-meeting-concern-bulk-type" style="min-height:44px">
    <option value="added">새로 기록된 우려</option>
@@ -2100,6 +2102,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-unpick-visible-concerns" type="button" style="min-height:44px" disabled>표시된 우려 선택 해제</button>
   <button id="ai-meeting-save-visible-concerns-txt" type="button" style="min-height:44px" disabled>표시된 우려 TXT 저장</button>
   <button id="ai-meeting-save-visible-concerns-json" type="button" style="min-height:44px" disabled>표시된 우려 JSON 저장</button>
+  <button id="ai-meeting-save-visible-concerns-csv" type="button" style="min-height:44px" disabled>표시된 우려 CSV 저장</button>
   <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
@@ -2373,7 +2376,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const concernMatchCount=document.getElementById("ai-meeting-concern-match-count");
  const pickVisibleConcerns=document.getElementById("ai-meeting-pick-visible-concerns");
  const unpickVisibleConcerns=document.getElementById("ai-meeting-unpick-visible-concerns");
- const visibleConcernExports=["TXT","JSON"].map(format=>({
+ const visibleConcernExports=["TXT","JSON","CSV"].map(format=>({
   format,button:document.getElementById("ai-meeting-save-visible-concerns-"+format.toLowerCase()),
  }));
  function visibleConcernIds(){
@@ -2477,7 +2480,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const concernCheckboxes=new Map();
  const pickedConcernCount=document.getElementById("ai-meeting-picked-concern-count");
  const clearPickedConcerns=document.getElementById("ai-meeting-clear-picked-concerns");
- const pickedConcernExports=["TXT","JSON"].map(format=>({
+ const pickedConcernExports=["TXT","JSON","CSV"].map(format=>({
   format,button:document.getElementById("ai-meeting-save-picked-concerns-"+format.toLowerCase()),
  }));
  const concernBulkType=document.getElementById("ai-meeting-concern-bulk-type");
@@ -2932,7 +2935,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      pickText.textContent="이 우려 선택";
      checkbox.setAttribute("aria-label",pickText.textContent+" · "+issue.text);
      pickLabel.append(checkbox,pickText);
-     exports.append(saveStatus,pickLabel);
+     const saveCsv=document.createElement("button");
+     saveCsv.type="button";
+     saveCsv.style.minHeight="44px";
+     saveCsv.textContent="이 우려 CSV 저장";
+     saveCsv.addEventListener("click",()=>downloadFinalConcerns("CSV",saveStatus,key,index));
+     exports.append(saveStatus,pickLabel,saveCsv);
      concern.append(exports,counts);
      const back=document.createElement("button");
      back.type="button";
@@ -3143,6 +3151,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const rows=count===undefined?"":"-"+count+"-rows";
   return "spacebar-meeting-"+scope+"-"+stamp(earlier)+"_to_"+stamp(later)+rows+"."+format.toLowerCase();
  }
+ function comparisonCsvCell(value){
+  const raw=String(value??"");
+  const safe=/^[\s\uFEFF]*[=+@-]|^[\t\r\n]/.test(raw)?"'"+raw:raw;
+  return '"'+safe.replace(/"/g,'""')+'"';
+ }
  function downloadFinalConcerns(format,status,category,index,scope="all"){
   if(!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   const {earlier,later,execution_mode,market_source,baseline_origin,final_concerns}=comparisonReport;
@@ -3173,14 +3186,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const filenameScope=category?"final-concern-"+category.replaceAll("_","-")+"-"+(index+1):
     scope==="all"?"final-concerns":scope+"-final-concerns";
    const filename=comparisonFilename(filenameScope,format,entries.length);
-   saveMeetingFile((json?JSON.stringify(report,null,2):text)+"\n",filename,
-    json?"application/json;charset=utf-8":"text/plain;charset=utf-8");
+   let content=(json?JSON.stringify(report,null,2):text)+"\n";
+   let mime=json?"application/json;charset=utf-8":"text/plain;charset=utf-8";
+   if(format==="CSV"){
+    const rows=[["우려 유형","우려 내용","이전 근거 발언","이후 근거 발언","이전 회의 UTC","이후 회의 UTC",
+     "실행 방식","시장 데이터 출처","비교 출처","유형 필터","검색 범위","검색어","선택만 보기"]];
+    for(const issue of entries){
+     rows.push([finalConcernLabels[issue.category],issue.text,issue.earlier_statement_ids.join(" / "),
+      issue.later_statement_ids.join(" / "),earlier.generated_at_utc,later.generated_at_utc,
+      execution_mode,market_source,baseline_origin,filters?.type,filters?.search_scope,filters?.search,
+      filters?(filters.picked_only?"켜짐":"꺼짐"):""]);
+    }
+    content="\uFEFF"+rows.map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n";
+    mime="text/csv;charset=utf-8";
+   }
+   saveMeetingFile(content,filename,mime);
    if(status)status.textContent="저장 요청: "+filename;
   }catch(_){
    if(status)status.textContent="최종 우려 "+format+" 저장을 시작하지 못했습니다.";
   }
  }
- for(const format of ["TXT","JSON"]){
+ for(const format of ["TXT","JSON","CSV"]){
   document.getElementById("ai-meeting-save-final-concerns-"+format.toLowerCase())?.addEventListener("click",
    ()=>downloadFinalConcerns(format,finalConcernSaveStatus));
  }
@@ -3238,18 +3264,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    let content=(json?JSON.stringify(result,null,2):lines.join("\n"))+"\n";
    let mime=json?"application/json;charset=utf-8":"text/plain;charset=utf-8";
    if(format==="CSV"){
-    const cell=value=>{
-     const raw=String(value??"");
-     const safe=/^[\s\uFEFF]*[=+@-]|^[\t\r\n]/.test(raw)?"'"+raw:raw;
-     return '"'+safe.replace(/"/g,'""')+'"';
-    };
     const rows=[["발언 번호","에이전트","단계","이전 판정","이후 판정","이전 요약","이후 요약","추가된 우려","빠진 우려","이전 회의 UTC","이후 회의 UTC"]];
     for(const change of changes){
      rows.push([change.id,change.agent,change.phase,labels[change.earlier_verdict],labels[change.later_verdict],
       change.summary?.earlier,change.summary?.later,change.concerns_added.join(" / "),change.concerns_removed.join(" / "),
       earlier.generated_at_utc,later.generated_at_utc]);
     }
-    content="\uFEFF"+rows.map(row=>row.map(cell).join(",")).join("\r\n")+"\r\n";
+    content="\uFEFF"+rows.map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n";
     mime="text/csv;charset=utf-8";
    }
    const filename=comparisonFilename(selectedView?"picked-changes":"filtered-changes",format,changes.length);
