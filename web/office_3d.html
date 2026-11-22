@@ -2144,6 +2144,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <label for="ai-meeting-evidence-load-progress">저장한 검토 진행 불러오기</label>
   <input id="ai-meeting-evidence-load-progress" type="file" accept=".json,application/json" style="min-height:44px;max-width:100%" disabled>
   <p id="ai-meeting-evidence-progress-preview" role="status" hidden style="overflow-wrap:anywhere"></p>
+  <details id="ai-meeting-evidence-progress-details" hidden>
+   <summary style="min-height:44px">파일에 포함된 근거 발언 확인</summary>
+   <ul id="ai-meeting-evidence-progress-statements"></ul>
+  </details>
   <button id="ai-meeting-evidence-progress-apply" type="button" style="min-height:44px" hidden disabled>검토 진행 적용</button>
   <button id="ai-meeting-evidence-progress-cancel" type="button" style="min-height:44px" hidden>불러오기 취소</button>
   <p id="ai-meeting-evidence-progress-file-status" role="status" style="overflow-wrap:anywhere"></p>
@@ -2487,6 +2491,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let pendingReviewProgress=null;
  const progressPreview=document.getElementById("ai-meeting-evidence-progress-preview");
  const applyProgress=document.getElementById("ai-meeting-evidence-progress-apply");
+ const progressDetails=document.getElementById("ai-meeting-evidence-progress-details");
+ const progressStatements=document.getElementById("ai-meeting-evidence-progress-statements");
  const cancelProgress=document.getElementById("ai-meeting-evidence-progress-cancel");
  function updateProgressPreview(){
   const pending=pendingReviewProgress;
@@ -2496,9 +2502,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    progressPreview.hidden=!pending;
    progressPreview.textContent=pending?pending.name+" · 파일 "+total+"건 · 이미 검토 "+(total-added)+"건 · 추가 예정 "+added+"건":"";
   }
+  if(progressDetails){
+   progressDetails.hidden=!total;
+   if(!total)progressDetails.open=false;
+  }
+  if(progressStatements){
+   const evidence=pending?allReviewEvidence():null;
+   const rows=pending?[...pending.keys].sort().map(key=>{
+    const card=evidence.get(key);
+    if(!card)return null;
+    const {period,statement}=card;
+    const row=document.createElement("li");
+    row.textContent=(reviewedEvidence.has(key)?"이미 검토":"추가 예정")+" · "+
+     (period==="earlier"?"이전 회의":"이후 회의")+" ["+statement.id+"] · "+statement.agent;
+    return row;
+   }):[];
+   progressStatements.replaceChildren(...rows.filter(Boolean));
+  }
   if(applyProgress){
    applyProgress.hidden=!pending;
    applyProgress.disabled=added===0;
+   applyProgress.textContent=added?"검토 진행 "+added+"건 적용":"검토 진행 적용";
   }
   if(cancelProgress)cancelProgress.hidden=!pending;
  }
@@ -2525,12 +2549,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const {earlier,later,execution_mode,market_source}=comparisonReport;
   return {earlier,later,execution_mode,market_source};
  }
- function allReviewEvidenceKeys(){
-  const keys=new Set();
+ function allReviewEvidence(){
+  const evidence=new Map();
   for(const {concerns} of finalConcernTargets.values()){
-   for(const {cards} of concerns)for(const {reviewKey} of cards)keys.add(reviewKey);
+   for(const {cards} of concerns)for(const card of cards)evidence.set(card.reviewKey,card);
   }
-  return keys;
+  return evidence;
  }
  saveReviewProgress?.addEventListener("click",()=>{
   if(!comparisonReport||!reviewedEvidence.size||(!pairedArchives&&!canUseRecord()))return;
@@ -2564,7 +2588,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(JSON.stringify(report.pair)!==JSON.stringify(reviewProgressPair())){
     throw Error("현재 비교 중인 두 회의와 일치하는 검토 진행 파일을 선택해 주세요.");
    }
-   const allowed=allReviewEvidenceKeys();
+   const allowed=allReviewEvidence();
    const keys=new Set(report.reviewed);
    if(keys.size!==report.reviewed.length||[...keys].some(key=>!allowed.has(key))){
     throw Error("검토 진행 파일의 발언 목록이 올바르지 않습니다.");
@@ -2806,7 +2830,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
   if(reviewedEvidenceCount||evidenceSideProgress){
-   const evidenceKeys=allReviewEvidenceKeys();
+   const evidenceKeys=new Set(allReviewEvidence().keys());
    if(reviewedEvidenceCount)reviewedEvidenceCount.textContent=evidenceKeys.size?
     "검토한 근거 발언 "+reviewedEvidence.size+" / "+evidenceKeys.size+"건":"";
    if(evidenceSideProgress)evidenceSideProgress.textContent=evidenceKeys.size?
