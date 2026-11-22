@@ -2146,6 +2146,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <p id="ai-meeting-evidence-progress-preview" role="status" hidden style="overflow-wrap:anywhere"></p>
   <details id="ai-meeting-evidence-progress-details" hidden>
    <summary style="min-height:44px">파일에 포함된 근거 발언 확인</summary>
+   <button id="ai-meeting-evidence-progress-select-all" type="button" style="min-height:44px" disabled>파일 발언 모두 선택</button>
+   <button id="ai-meeting-evidence-progress-select-none" type="button" style="min-height:44px" disabled>파일 발언 선택 해제</button>
    <ul id="ai-meeting-evidence-progress-statements"></ul>
   </details>
   <button id="ai-meeting-evidence-progress-apply" type="button" style="min-height:44px" hidden disabled>검토 진행 적용</button>
@@ -2494,13 +2496,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const progressDetails=document.getElementById("ai-meeting-evidence-progress-details");
  const progressStatements=document.getElementById("ai-meeting-evidence-progress-statements");
  const cancelProgress=document.getElementById("ai-meeting-evidence-progress-cancel");
- function updateProgressPreview(){
+ const selectAllProgress=document.getElementById("ai-meeting-evidence-progress-select-all");
+ const selectNoProgress=document.getElementById("ai-meeting-evidence-progress-select-none");
+ selectAllProgress?.addEventListener("click",()=>{
+  if(!pendingReviewProgress)return;
+  pendingReviewProgress.selected=new Set(pendingReviewProgress.keys);
+  updateProgressPreview();
+ });
+ selectNoProgress?.addEventListener("click",()=>{
+  if(!pendingReviewProgress)return;
+  pendingReviewProgress.selected.clear();
+  updateProgressPreview();
+ });
+ function updateProgressPreview(focusKey){
   const pending=pendingReviewProgress;
   const total=pending?.keys.size??0;
-  const added=pending?[...pending.keys].filter(key=>!reviewedEvidence.has(key)).length:0;
+  const selected=pending?.selected.size??0;
+  const added=pending?[...pending.selected].filter(key=>!reviewedEvidence.has(key)).length:0;
+  if(selectAllProgress)selectAllProgress.disabled=selected===total;
+  if(selectNoProgress)selectNoProgress.disabled=selected===0;
   if(progressPreview){
    progressPreview.hidden=!pending;
-   progressPreview.textContent=pending?pending.name+" · 파일 "+total+"건 · 이미 검토 "+(total-added)+"건 · 추가 예정 "+added+"건":"";
+   progressPreview.textContent=pending?pending.name+" · 파일 "+total+"건 · 이미 검토 "+(selected-added)+"건 · 추가 예정 "+added+"건"+
+    (total>selected?" · 적용 제외 "+(total-selected)+"건":""):"";
   }
   if(progressDetails){
    progressDetails.hidden=!total;
@@ -2508,16 +2526,35 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   if(progressStatements){
    const evidence=pending?allReviewEvidence():null;
+   let restoreFocus=null;
    const rows=pending?[...pending.keys].sort().map(key=>{
     const card=evidence.get(key);
     if(!card)return null;
     const {period,statement}=card;
     const row=document.createElement("li");
-    row.textContent=(reviewedEvidence.has(key)?"이미 검토":"추가 예정")+" · "+
+    const label=document.createElement("label");
+    label.style.display="flex";
+    label.style.alignItems="center";
+    label.style.minHeight="44px";
+    const checkbox=document.createElement("input");
+    checkbox.type="checkbox";
+    checkbox.checked=pending.selected.has(key);
+    checkbox.addEventListener("change",()=>{
+     if(pending!==pendingReviewProgress)return;
+     if(checkbox.checked)pending.selected.add(key);
+     else pending.selected.delete(key);
+     updateProgressPreview(key);
+    });
+    const caption=document.createElement("span");
+    caption.textContent=(!checkbox.checked?"적용 제외":reviewedEvidence.has(key)?"이미 검토":"추가 예정")+" · "+
      (period==="earlier"?"이전 회의":"이후 회의")+" ["+statement.id+"] · "+statement.agent;
+    label.append(checkbox,caption);
+    row.append(label);
+    if(focusKey===key)restoreFocus=checkbox;
     return row;
    }):[];
    progressStatements.replaceChildren(...rows.filter(Boolean));
+   restoreFocus?.focus?.({preventScroll:true});
   }
   if(applyProgress){
    applyProgress.hidden=!pending;
@@ -2539,7 +2576,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  applyProgress?.addEventListener("click",()=>{
   if(!pendingReviewProgress||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   const before=reviewedEvidence.size;
-  applyReviewChange(pendingReviewProgress.keys,true,"검토 진행 불러오기");
+  applyReviewChange(pendingReviewProgress.selected,true,"검토 진행 불러오기");
   discardProgressPreview();
   if(reviewProgressStatus)reviewProgressStatus.textContent="검토 진행 복원 · 추가 "+(reviewedEvidence.size-before)+"건";
   updateConcernView();
@@ -2593,7 +2630,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(keys.size!==report.reviewed.length||[...keys].some(key=>!allowed.has(key))){
     throw Error("검토 진행 파일의 발언 목록이 올바르지 않습니다.");
    }
-   pendingReviewProgress={name:file.name||"검토 진행 JSON",keys};
+   pendingReviewProgress={name:file.name||"검토 진행 JSON",keys,selected:new Set(keys)};
    updateProgressPreview();
   }catch(error){
    if(current()&&reviewProgressStatus)reviewProgressStatus.textContent=error.message;
