@@ -2103,6 +2103,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-save-visible-concerns-txt" type="button" style="min-height:44px" disabled>표시된 우려 TXT 저장</button>
   <button id="ai-meeting-save-visible-concerns-json" type="button" style="min-height:44px" disabled>표시된 우려 JSON 저장</button>
   <button id="ai-meeting-save-visible-concerns-csv" type="button" style="min-height:44px" disabled>표시된 우려 CSV 저장</button>
+  <label>우려 원문 표시 <select id="ai-meeting-concern-evidence-side" style="min-height:44px">
+   <option value="both">이전·이후 회의</option>
+   <option value="earlier">이전 회의만</option>
+   <option value="later">이후 회의만</option>
+  </select></label>
   <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
@@ -2364,7 +2369,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return {search:concernSearch?.value?.trim()??"",type:concernFilterType?.value||"all",
    search_scope:concernSearchScope?.value||"all",picked_only:!!concernPickedOnly?.checked};
  }
+ const concernEvidenceSide=document.getElementById("ai-meeting-concern-evidence-side");
  function resetConcernFilters(){
+  if(concernEvidenceSide)concernEvidenceSide.value="both";
   if(concernSearch)concernSearch.value="";
   if(concernFilterType)concernFilterType.value="all";
   if(concernSearchScope)concernSearchScope.value="all";
@@ -2396,7 +2403,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function visibleConcernIndexes(target){
   return target.concerns.flatMap((entry,index)=>entry.node.hidden?[]:[index]);
  }
+ function updateConcernEvidence(){
+  const side=concernEvidenceSide?.value||"both";
+  for(const {concerns} of finalConcernTargets.values()){
+   for(const {cards,evidenceMessage} of concerns){
+    const visible=cards.filter(({node,period})=>{
+     node.hidden=side!=="both"&&side!==period;
+     return !node.hidden;
+    });
+    evidenceMessage.hidden=visible.length!==0;
+    evidenceMessage.textContent=visible.length?"":side==="earlier"?"이전 회의에 근거 발언이 없습니다.":
+     side==="later"?"이후 회의에 근거 발언이 없습니다.":"근거 발언이 없습니다.";
+   }
+  }
+ }
  function updateConcernView(){
+  updateConcernEvidence();
   const {search,type,search_scope,picked_only}=concernViewFilters();
   if(concernSearch)concernSearch.placeholder={
    all:"우려 문구 또는 발언 번호",
@@ -2450,9 +2472,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    (count?"표시된 우려 "+count+" / "+total+"건":"조건에 맞는 최종 우려가 없습니다.")+
    (hiddenPicks?" · 필터로 숨겨진 선택 "+hiddenPicks+"건":""):"";
   if(concernClearSearch)concernClearSearch.disabled=!concernSearch?.value;
-  if(concernResetView)concernResetView.disabled=!filtered&&!concernSearch?.value&&search_scope==="all";
+  if(concernResetView)concernResetView.disabled=!filtered&&!concernSearch?.value&&search_scope==="all"&&
+   (concernEvidenceSide?.value||"both")==="both";
  }
  concernSearch?.addEventListener("input",updateConcernView);
+ concernEvidenceSide?.addEventListener("change",updateConcernView);
  concernSearch?.addEventListener("keydown",event=>{
   if(event.key!=="Enter"||event.isComposing||!concernViewFilters().search)return;
   const first=visibleConcernIds()[0];
@@ -2871,11 +2895,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     finalConcernTargets.set(key,{sources,concerns});
     for(const [index,issue] of items.entries()){
      const concern=disclosure(label+" · "+issue.text);
-     const entry={node:concern,issue,navigation:null};
+     const evidenceMessage=document.createElement("p");
+     evidenceMessage.setAttribute("role","status");
+     const entry={node:concern,issue,navigation:null,cards:[],evidenceMessage};
      concerns.push(entry);
-     for(const [record,ids,period] of [[older,issue.earlier_statement_ids,"이전"],[newer,issue.later_statement_ids,"이후"]]){
-      for(const id of ids)concern.append(statementCard(record,record.transcript[Number(id.slice(1))-1],period));
+     for(const [record,ids,period,label] of [[older,issue.earlier_statement_ids,"earlier","이전"],[newer,issue.later_statement_ids,"later","이후"]]){
+      for(const id of ids){
+       const node=statementCard(record,record.transcript[Number(id.slice(1))-1],label);
+       entry.cards.push({node,period});
+       concern.append(node);
+      }
      }
+     concern.append(evidenceMessage);
      const counts=document.createElement("p");
      counts.textContent="원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건";
      if(items.length>1){
