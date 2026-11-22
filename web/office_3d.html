@@ -2406,12 +2406,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function updateConcernEvidence(){
   const side=concernEvidenceSide?.value||"both";
   for(const {concerns} of finalConcernTargets.values()){
-   for(const {cards,evidenceMessage} of concerns){
+   for(const {cards,evidenceMessage,showBothEvidence} of concerns){
     const visible=cards.filter(({node,period})=>{
      node.hidden=side!=="both"&&side!==period;
      return !node.hidden;
     });
     evidenceMessage.hidden=visible.length!==0;
+    showBothEvidence.hidden=visible.length!==0||cards.length===0;
     evidenceMessage.textContent=visible.length?"":side==="earlier"?"이전 회의에 근거 발언이 없습니다.":
      side==="later"?"이후 회의에 근거 발언이 없습니다.":"근거 발언이 없습니다.";
    }
@@ -2897,7 +2898,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      const concern=disclosure(label+" · "+issue.text);
      const evidenceMessage=document.createElement("p");
      evidenceMessage.setAttribute("role","status");
-     const entry={node:concern,issue,navigation:null,cards:[],evidenceMessage};
+     const showBothEvidence=document.createElement("button");
+     showBothEvidence.type="button";
+     showBothEvidence.style.minHeight="44px";
+     showBothEvidence.textContent="양쪽 회의 원문 보기";
+     showBothEvidence.addEventListener("click",()=>{
+      if(!concernEvidenceSide)return;
+      concernEvidenceSide.value="both";
+      updateConcernView();
+      concern.children[0].focus?.({preventScroll:true});
+     });
+     const entry={node:concern,issue,navigation:null,cards:[],evidenceMessage,showBothEvidence};
      concerns.push(entry);
      for(const [record,ids,period,label] of [[older,issue.earlier_statement_ids,"earlier","이전"],[newer,issue.later_statement_ids,"later","이후"]]){
       for(const id of ids){
@@ -2906,7 +2917,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        concern.append(node);
       }
      }
-     concern.append(evidenceMessage);
+     concern.append(evidenceMessage,showBothEvidence);
      const counts=document.createElement("p");
      counts.textContent="원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건";
      if(items.length>1){
