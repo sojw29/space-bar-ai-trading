@@ -2619,7 +2619,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    unpickVisibleConcerns.textContent="표시된 우려 선택 해제"+(visiblePicks?" ("+visiblePicks+"건)":"");
   }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
-  if(reviewedEvidenceCount)reviewedEvidenceCount.textContent=finalConcernTargets.size?"검토한 근거 발언 "+reviewedEvidence.size+"건":"";
+  if(reviewedEvidenceCount){
+   const evidenceKeys=new Set();
+   for(const {concerns} of finalConcernTargets.values()){
+    for(const {cards} of concerns)for(const {reviewKey} of cards)evidenceKeys.add(reviewKey);
+   }
+   reviewedEvidenceCount.textContent=evidenceKeys.size?
+    "검토한 근거 발언 "+reviewedEvidence.size+" / "+evidenceKeys.size+"건":"";
+  }
   if(clearReviewedEvidence)clearReviewedEvidence.disabled=reviewedEvidence.size===0;
   const displayedCards=displayedEvidenceCards();
   if(activeEvidenceCard&&!displayedCards.some(({card})=>card===activeEvidenceCard)){
