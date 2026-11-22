@@ -2143,6 +2143,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-evidence-save-progress" type="button" style="min-height:44px" disabled>검토 진행 저장</button>
   <label for="ai-meeting-evidence-load-progress">저장한 검토 진행 불러오기</label>
   <input id="ai-meeting-evidence-load-progress" type="file" accept=".json,application/json" style="min-height:44px;max-width:100%" disabled>
+  <p id="ai-meeting-evidence-progress-preview" role="status" hidden style="overflow-wrap:anywhere"></p>
+  <button id="ai-meeting-evidence-progress-apply" type="button" style="min-height:44px" hidden disabled>검토 진행 적용</button>
+  <button id="ai-meeting-evidence-progress-cancel" type="button" style="min-height:44px" hidden>불러오기 취소</button>
   <p id="ai-meeting-evidence-progress-file-status" role="status" style="overflow-wrap:anywhere"></p>
   <p id="ai-meeting-evidence-review-history" role="status"></p>
   <p id="ai-meeting-evidence-reviewed-count" role="status"></p>
@@ -2481,6 +2484,43 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const loadReviewProgress=document.getElementById("ai-meeting-evidence-load-progress");
  const reviewProgressStatus=document.getElementById("ai-meeting-evidence-progress-file-status");
  let reviewProgressRevision=0;
+ let pendingReviewProgress=null;
+ const progressPreview=document.getElementById("ai-meeting-evidence-progress-preview");
+ const applyProgress=document.getElementById("ai-meeting-evidence-progress-apply");
+ const cancelProgress=document.getElementById("ai-meeting-evidence-progress-cancel");
+ function updateProgressPreview(){
+  const pending=pendingReviewProgress;
+  const total=pending?.keys.size??0;
+  const added=pending?[...pending.keys].filter(key=>!reviewedEvidence.has(key)).length:0;
+  if(progressPreview){
+   progressPreview.hidden=!pending;
+   progressPreview.textContent=pending?pending.name+" · 파일 "+total+"건 · 이미 검토 "+(total-added)+"건 · 추가 예정 "+added+"건":"";
+  }
+  if(applyProgress){
+   applyProgress.hidden=!pending;
+   applyProgress.disabled=added===0;
+  }
+  if(cancelProgress)cancelProgress.hidden=!pending;
+ }
+ function discardProgressPreview(){
+  pendingReviewProgress=null;
+  updateProgressPreview();
+ }
+ cancelProgress?.addEventListener("click",()=>{
+  reviewProgressRevision++;
+  discardProgressPreview();
+  if(reviewProgressStatus)reviewProgressStatus.textContent="검토 진행 불러오기를 취소했습니다.";
+  loadReviewProgress?.focus?.();
+ });
+ applyProgress?.addEventListener("click",()=>{
+  if(!pendingReviewProgress||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+  const before=reviewedEvidence.size;
+  applyReviewChange(pendingReviewProgress.keys,true,"검토 진행 불러오기");
+  discardProgressPreview();
+  if(reviewProgressStatus)reviewProgressStatus.textContent="검토 진행 복원 · 추가 "+(reviewedEvidence.size-before)+"건";
+  updateConcernView();
+  loadReviewProgress?.focus?.();
+ });
  function reviewProgressPair(){
   const {earlier,later,execution_mode,market_source}=comparisonReport;
   return {earlier,later,execution_mode,market_source};
@@ -2509,6 +2549,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!file||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   const comparison=pickedComparisonKey;
   const revision=++reviewProgressRevision;
+  discardProgressPreview();
+  if(reviewProgressStatus)reviewProgressStatus.textContent="";
   const current=()=>revision===reviewProgressRevision&&comparison===pickedComparisonKey&&
    !!comparisonReport&&(!!pairedArchives||canUseRecord());
   try{
@@ -2527,10 +2569,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(keys.size!==report.reviewed.length||[...keys].some(key=>!allowed.has(key))){
     throw Error("검토 진행 파일의 발언 목록이 올바르지 않습니다.");
    }
-   const before=reviewedEvidence.size;
-   applyReviewChange(keys,true,"검토 진행 불러오기");
-   if(reviewProgressStatus)reviewProgressStatus.textContent="검토 진행 복원 · 추가 "+(reviewedEvidence.size-before)+"건";
-   updateConcernView();
+   pendingReviewProgress={name:file.name||"검토 진행 JSON",keys};
+   updateProgressPreview();
   }catch(error){
    if(current()&&reviewProgressStatus)reviewProgressStatus.textContent=error.message;
   }
@@ -2715,6 +2755,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
  }
  function updateConcernView(){
+  updateProgressPreview();
   updateConcernEvidence();
   const {search,type,search_scope,picked_only}=concernViewFilters();
   if(concernSearch)concernSearch.placeholder={
@@ -3566,6 +3607,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    pickedChanges.clear();
    pickedComparisonKey=selectionKey;
    reviewProgressRevision++;
+   discardProgressPreview();
    if(reviewProgressStatus)reviewProgressStatus.textContent="";
    reviewedEvidence.clear();
    reviewUndo.length=0;
