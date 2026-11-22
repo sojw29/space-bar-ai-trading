@@ -2132,6 +2132,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-evidence-open-picked-result" type="button" style="min-height:44px" disabled>고른 근거 발언 열기</button>
   <label style="min-height:44px"><input id="ai-meeting-evidence-unreviewed" type="checkbox"> 미검토 근거만 보기</label>
   <button id="ai-meeting-evidence-clear-reviewed" type="button" style="min-height:44px" disabled>검토 표시 모두 해제</button>
+  <label style="min-height:44px"><input id="ai-meeting-evidence-reviewed-only" type="checkbox"> 검토 완료 근거만 보기</label>
+  <button id="ai-meeting-evidence-mark-visible" type="button" style="min-height:44px" disabled>표시된 근거 검토 완료</button>
+  <button id="ai-meeting-evidence-unmark-visible" type="button" style="min-height:44px" disabled>표시된 근거 검토 표시 해제</button>
+  <p id="ai-meeting-evidence-visible-progress" role="status"></p>
   <p id="ai-meeting-evidence-reviewed-count" role="status"></p>
   <p id="ai-meeting-evidence-position" role="status" hidden></p>
   <p id="ai-meeting-concern-match-count" role="status"></p>
@@ -2403,6 +2407,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const concernEvidenceVerdict=document.getElementById("ai-meeting-concern-evidence-verdict");
  function resetEvidenceFilters(){
   if(unreviewedEvidenceOnly)unreviewedEvidenceOnly.checked=false;
+  if(reviewedEvidenceOnly)reviewedEvidenceOnly.checked=false;
   if(concernEvidenceSearch)concernEvidenceSearch.value="";
   if(concernEvidenceVerdict)concernEvidenceVerdict.value="all";
   if(concernEvidenceSide)concernEvidenceSide.value="both";
@@ -2449,7 +2454,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return {side:concernEvidenceSide?.value||"both",agent:concernEvidenceAgent?.value||"all",
    phase:concernEvidencePhase?.value||"all",verdict:concernEvidenceVerdict?.value||"all",
    search:concernEvidenceSearch?.value?.trim()??"",
-   ...(unreviewedEvidenceOnly?.checked?{unreviewed_only:true}:{})};
+   ...(unreviewedEvidenceOnly?.checked?{unreviewed_only:true}:{}),
+   ...(reviewedEvidenceOnly?.checked?{reviewed_only:true}:{})};
  }
  const firstEvidence=document.getElementById("ai-meeting-evidence-first");
  const previousEvidence=document.getElementById("ai-meeting-evidence-prev");
@@ -2464,7 +2470,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const unreviewedEvidenceOnly=document.getElementById("ai-meeting-evidence-unreviewed");
  const clearReviewedEvidence=document.getElementById("ai-meeting-evidence-clear-reviewed");
  const reviewedEvidenceCount=document.getElementById("ai-meeting-evidence-reviewed-count");
- unreviewedEvidenceOnly?.addEventListener("change",updateConcernView);
+ const reviewedEvidenceOnly=document.getElementById("ai-meeting-evidence-reviewed-only");
+ const markVisibleEvidence=document.getElementById("ai-meeting-evidence-mark-visible");
+ const unmarkVisibleEvidence=document.getElementById("ai-meeting-evidence-unmark-visible");
+ const visibleEvidenceProgress=document.getElementById("ai-meeting-evidence-visible-progress");
+ for(const [control,other] of [[unreviewedEvidenceOnly,reviewedEvidenceOnly],[reviewedEvidenceOnly,unreviewedEvidenceOnly]]){
+  control?.addEventListener("change",()=>{
+   if(control.checked&&other)other.checked=false;
+   updateConcernView();
+  });
+ }
+ function markVisibleReview(reviewed){
+  if(!pairedArchives&&!canUseRecord())return;
+  for(const {card} of displayedEvidenceCards()){
+   if(reviewed)reviewedEvidence.add(card.reviewKey);
+   else reviewedEvidence.delete(card.reviewKey);
+  }
+  updateConcernView();
+ }
+ markVisibleEvidence?.addEventListener("click",()=>markVisibleReview(true));
+ unmarkVisibleEvidence?.addEventListener("click",()=>markVisibleReview(false));
  clearReviewedEvidence?.addEventListener("click",()=>{
   reviewedEvidence.clear();
   updateConcernView();
@@ -2474,9 +2499,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    node.hidden?[]:cards.filter(card=>!card.node.hidden).map(card=>({category,issue,index,card}))));
  }
  function displayedEvidenceRows(){
-  return displayedEvidenceCards().map(({category,issue,card:{period,statement}})=>({
+  return displayedEvidenceCards().map(({category,issue,card:{period,statement,reviewKey}})=>({
    category,concern:issue.text,period,statement_id:statement.id,agent:statement.agent,
-   phase:statement.phase,summary:statement.summary,verdict:statement.verdict,
+   phase:statement.phase,summary:statement.summary,verdict:statement.verdict,reviewed:reviewedEvidence.has(reviewKey),
   }));
  }
  function updateEvidenceNavigation(cards){
@@ -2547,7 +2572,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const {side,agent,phase,verdict,search}=evidenceFilters();
   const query=comparisonSearchText(search);
   const idMatch=/^\[?(m0[1-7])\]?$/.exec(query);
-  const narrowed=agent!=="all"||phase!=="all"||verdict!=="all"||!!query||!!unreviewedEvidenceOnly?.checked;
+  const narrowed=agent!=="all"||phase!=="all"||verdict!=="all"||!!query||!!unreviewedEvidenceOnly?.checked||!!reviewedEvidenceOnly?.checked;
   if(concernEvidenceReset)concernEvidenceReset.disabled=side==="both"&&!narrowed&&!concernEvidenceSearch?.value;
   for(const {concerns} of finalConcernTargets.values()){
    for(const {cards,evidenceMessage,showBothEvidence,counts,issue} of concerns){
@@ -2555,7 +2580,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      const reviewed=reviewedEvidence.has(reviewKey);
      reviewButton.textContent=reviewed?"검토 표시 해제":"검토 완료 표시";
      reviewButton.setAttribute("aria-pressed",String(reviewed));
-     node.hidden=(!!unreviewedEvidenceOnly?.checked&&reviewed)||(side!=="both"&&side!==period)||(agent!=="all"&&statement.agent!==agent)||
+     node.hidden=(!!unreviewedEvidenceOnly?.checked&&reviewed)||(!!reviewedEvidenceOnly?.checked&&!reviewed)||(side!=="both"&&side!==period)||(agent!=="all"&&statement.agent!==agent)||
       (phase!=="all"&&statement.phase!==phase)||(verdict!=="all"&&statement.verdict!==verdict)||
       (!!query&&(idMatch?statement.id.toLowerCase()!==idMatch[1]:!comparisonSearchText(statement.summary).includes(query)));
      return !node.hidden;
@@ -2629,6 +2654,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   if(clearReviewedEvidence)clearReviewedEvidence.disabled=reviewedEvidence.size===0;
   const displayedCards=displayedEvidenceCards();
+  const displayedKeys=new Set(displayedCards.map(({card})=>card.reviewKey));
+  const displayedReviewed=[...displayedKeys].filter(key=>reviewedEvidence.has(key)).length;
+  if(visibleEvidenceProgress)visibleEvidenceProgress.textContent=displayedKeys.size?
+   "표시된 근거 중 검토 완료 "+displayedReviewed+" / "+displayedKeys.size+"건":"";
+  if(markVisibleEvidence)markVisibleEvidence.disabled=displayedReviewed===displayedKeys.size;
+  if(unmarkVisibleEvidence)unmarkVisibleEvidence.disabled=displayedReviewed===0;
   if(activeEvidenceCard&&!displayedCards.some(({card})=>card===activeEvidenceCard)){
    activeEvidenceCard.back.hidden=true;
    activeEvidenceCard=null;
@@ -2650,7 +2681,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(concernResetView)concernResetView.disabled=!filtered&&!concernSearch?.value&&search_scope==="all"&&
    (concernEvidenceSide?.value||"both")==="both"&&(concernEvidenceAgent?.value||"all")==="all"&&
    (concernEvidencePhase?.value||"all")==="all"&&(concernEvidenceVerdict?.value||"all")==="all"&&
-   !concernEvidenceSearch?.value&&!unreviewedEvidenceOnly?.checked;
+   !concernEvidenceSearch?.value&&!unreviewedEvidenceOnly?.checked&&!reviewedEvidenceOnly?.checked;
  }
  concernSearch?.addEventListener("input",updateConcernView);
  concernEvidenceSearch?.addEventListener("input",updateConcernView);
@@ -3483,11 +3514,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    let content,mime;
    if(format==="CSV"){
     const header=["우려 유형","우려 내용","회의","발언 번호","에이전트","단계","발언 요약","회의 UTC","시장 데이터 출처",
-     "원문 회의 필터","에이전트 필터","단계 필터","우려 유형 필터","우려 검색 범위","우려 검색어","선택 우려만","발언 판정","판정 필터","원문 검색어","미검토 근거만"];
+     "원문 회의 필터","에이전트 필터","단계 필터","우려 유형 필터","우려 검색 범위","우려 검색어","선택 우려만","발언 판정","판정 필터","원문 검색어","미검토 근거만","검토 완료 근거만","검토 여부"];
     const cells=rows.map(row=>[finalConcernLabels[row.category],row.concern,periodLabel(row.period),row.statement_id,
      row.agent,row.phase,row.summary,(row.period==="earlier"?earlier:later).generated_at_utc,market_source,
      filters.side,filters.agent,filters.phase,concernFilters.type,concernFilters.search_scope,concernFilters.search,
-     concernFilters.picked_only?"켜짐":"꺼짐",labels[row.verdict],filters.verdict,filters.search,filters.unreviewed_only?"켜짐":"꺼짐"]);
+     concernFilters.picked_only?"켜짐":"꺼짐",labels[row.verdict],filters.verdict,filters.search,filters.unreviewed_only?"켜짐":"꺼짐",filters.reviewed_only?"켜짐":"꺼짐",row.reviewed?"완료":"미검토"]);
     content="\uFEFF"+[header,...cells].map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n";
     mime="text/csv;charset=utf-8";
    }else if(format==="JSON"){
@@ -3498,7 +3529,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      "이후 회의 UTC "+later.generated_at_utc,"시장 데이터 출처 "+(market_source??"미기록"),
      "원문 필터 "+JSON.stringify(filters),"우려 필터 "+JSON.stringify(concernFilters),
      ...rows.map(row=>finalConcernLabels[row.category]+" · "+row.concern+"\n"+
-      periodLabel(row.period)+" ["+row.statement_id+"] "+row.agent+" · "+row.phase+" · "+labels[row.verdict]+"\n"+row.summary)].join("\n\n")+"\n";
+      periodLabel(row.period)+" ["+row.statement_id+"] "+row.agent+" · "+row.phase+" · "+labels[row.verdict]+" · "+(row.reviewed?"검토 완료":"미검토")+"\n"+row.summary)].join("\n\n")+"\n";
     mime="text/plain;charset=utf-8";
    }
    const filename=comparisonFilename("visible-concern-evidence",format,rows.length);
