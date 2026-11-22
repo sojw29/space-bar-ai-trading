@@ -2135,6 +2135,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <label style="min-height:44px"><input id="ai-meeting-evidence-reviewed-only" type="checkbox"> 검토 완료 근거만 보기</label>
   <button id="ai-meeting-evidence-mark-visible" type="button" style="min-height:44px" disabled>표시된 근거 검토 완료</button>
   <button id="ai-meeting-evidence-unmark-visible" type="button" style="min-height:44px" disabled>표시된 근거 검토 표시 해제</button>
+  <button id="ai-meeting-evidence-next-unreviewed" type="button" style="min-height:44px" disabled>다음 미검토 근거 열기</button>
+  <p id="ai-meeting-evidence-side-progress" role="status"></p>
   <p id="ai-meeting-evidence-visible-progress" role="status"></p>
   <p id="ai-meeting-evidence-reviewed-count" role="status"></p>
   <p id="ai-meeting-evidence-position" role="status" hidden></p>
@@ -2474,6 +2476,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const markVisibleEvidence=document.getElementById("ai-meeting-evidence-mark-visible");
  const unmarkVisibleEvidence=document.getElementById("ai-meeting-evidence-unmark-visible");
  const visibleEvidenceProgress=document.getElementById("ai-meeting-evidence-visible-progress");
+ const evidenceSideProgress=document.getElementById("ai-meeting-evidence-side-progress");
+ const nextUnreviewedEvidence=document.getElementById("ai-meeting-evidence-next-unreviewed");
  for(const [control,other] of [[unreviewedEvidenceOnly,reviewedEvidenceOnly],[reviewedEvidenceOnly,unreviewedEvidenceOnly]]){
   control?.addEventListener("change",()=>{
    if(control.checked&&other)other.checked=false;
@@ -2544,6 +2548,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    direction==="picked"?(evidencePicker?.value?Number(evidencePicker.value):-1):position<0?-1:position+direction;
   const entry=cards[index];
   if(!entry)return;
+  openEvidenceResult(cards,index);
+ }
+ function openEvidenceResult(cards,index){
+  const entry=cards[index];
+  if(!entry||(!pairedArchives&&!canUseRecord()))return;
   if(activeEvidenceCard)activeEvidenceCard.back.hidden=true;
   activeEvidenceCard=entry.card;
   openFinalConcern(entry.category,entry.index);
@@ -2554,6 +2563,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   activeEvidenceCard.node.focus?.({preventScroll:true});
   activeEvidenceCard.node.scrollIntoView?.({block:"nearest"});
  }
+ function nextUnreviewedIndex(cards,start){
+  const next=cards.findIndex(({card},index)=>index>start&&!reviewedEvidence.has(card.reviewKey));
+  return next>=0?next:cards.findIndex(({card})=>!reviewedEvidence.has(card.reviewKey));
+ }
+ nextUnreviewedEvidence?.addEventListener("click",()=>{
+  const cards=displayedEvidenceCards();
+  const start=cards.findIndex(({card})=>card===activeEvidenceCard);
+  openEvidenceResult(cards,nextUnreviewedIndex(cards,start));
+ });
  firstEvidence?.addEventListener("click",()=>navigateEvidence("first"));
  lastEvidence?.addEventListener("click",()=>navigateEvidence("last"));
  evidencePicker?.addEventListener("change",()=>{
@@ -2644,20 +2662,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    unpickVisibleConcerns.textContent="표시된 우려 선택 해제"+(visiblePicks?" ("+visiblePicks+"건)":"");
   }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
-  if(reviewedEvidenceCount){
+  if(reviewedEvidenceCount||evidenceSideProgress){
    const evidenceKeys=new Set();
    for(const {concerns} of finalConcernTargets.values()){
     for(const {cards} of concerns)for(const {reviewKey} of cards)evidenceKeys.add(reviewKey);
    }
-   reviewedEvidenceCount.textContent=evidenceKeys.size?
+   if(reviewedEvidenceCount)reviewedEvidenceCount.textContent=evidenceKeys.size?
     "검토한 근거 발언 "+reviewedEvidence.size+" / "+evidenceKeys.size+"건":"";
+   if(evidenceSideProgress)evidenceSideProgress.textContent=evidenceKeys.size?
+    [["earlier","이전 회의"],["later","이후 회의"]].map(([side,label])=>{
+     const keys=[...evidenceKeys].filter(key=>key.startsWith(side+":"));
+     return label+" "+keys.filter(key=>reviewedEvidence.has(key)).length+" / "+keys.length+"건";
+    }).join(" · "):"";
   }
   if(clearReviewedEvidence)clearReviewedEvidence.disabled=reviewedEvidence.size===0;
   const displayedCards=displayedEvidenceCards();
   const displayedKeys=new Set(displayedCards.map(({card})=>card.reviewKey));
   const displayedReviewed=[...displayedKeys].filter(key=>reviewedEvidence.has(key)).length;
   if(visibleEvidenceProgress)visibleEvidenceProgress.textContent=displayedKeys.size?
-   "표시된 근거 중 검토 완료 "+displayedReviewed+" / "+displayedKeys.size+"건":"";
+   "표시된 근거 중 검토 완료 "+displayedReviewed+" / "+displayedKeys.size+"건 · 미검토 "+
+    (displayedKeys.size-displayedReviewed)+"건":"";
+  if(nextUnreviewedEvidence)nextUnreviewedEvidence.disabled=displayedReviewed===displayedKeys.size;
   if(markVisibleEvidence)markVisibleEvidence.disabled=displayedReviewed===displayedKeys.size;
   if(unmarkVisibleEvidence)unmarkVisibleEvidence.disabled=displayedReviewed===0;
   if(activeEvidenceCard&&!displayedCards.some(({card})=>card===activeEvidenceCard)){
@@ -3151,7 +3176,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         updateConcernView();
         if(node.hidden)concern.children[0].focus?.({preventScroll:true});
        });
-       node.append(reviewButton,back);
+       const reviewAndContinue=document.createElement("button");
+       reviewAndContinue.type="button";
+       reviewAndContinue.style.minHeight="44px";
+       reviewAndContinue.textContent="검토 완료 후 다음 미검토 근거";
+       reviewAndContinue.addEventListener("click",()=>{
+        if(!pairedArchives&&!canUseRecord())return;
+        const cards=displayedEvidenceCards();
+        const position=cards.findIndex(({card})=>card.node===node);
+        if(position<0)return;
+        reviewedEvidence.add(reviewKey);
+        const next=cards[nextUnreviewedIndex(cards,position)]?.card;
+        updateConcernView();
+        if(next){
+         const remaining=displayedEvidenceCards();
+         openEvidenceResult(remaining,remaining.findIndex(({card})=>card===next));
+        }else{
+         concern.children[0].focus?.({preventScroll:true});
+        }
+       });
+       node.append(reviewAndContinue,reviewButton,back);
        entry.cards.push({node,period,statement,back,reviewButton,reviewKey});
        concern.append(node);
       }
