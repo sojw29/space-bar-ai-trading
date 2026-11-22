@@ -2123,6 +2123,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-save-evidence-txt" type="button" style="min-height:44px" disabled>표시된 근거 발언 TXT 저장</button>
   <button id="ai-meeting-save-evidence-json" type="button" style="min-height:44px" disabled>표시된 근거 발언 JSON 저장</button>
   <button id="ai-meeting-save-evidence-csv" type="button" style="min-height:44px" disabled>표시된 근거 발언 CSV 저장</button>
+  <button id="ai-meeting-evidence-first" type="button" style="min-height:44px" disabled>첫 근거 발언 열기</button>
+  <button id="ai-meeting-evidence-prev" type="button" style="min-height:44px" disabled>이전 근거 발언</button>
+  <button id="ai-meeting-evidence-next" type="button" style="min-height:44px" disabled>다음 근거 발언</button>
+  <p id="ai-meeting-evidence-position" role="status" hidden></p>
   <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
@@ -2438,13 +2442,51 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    phase:concernEvidencePhase?.value||"all",verdict:concernEvidenceVerdict?.value||"all",
    search:concernEvidenceSearch?.value?.trim()??""};
  }
- function displayedEvidenceRows(){
-  return [...finalConcernTargets].flatMap(([category,target])=>target.concerns.flatMap(({node,issue,cards})=>
-   node.hidden?[]:cards.filter(card=>!card.node.hidden).map(({period,statement})=>({
-    category,concern:issue.text,period,statement_id:statement.id,agent:statement.agent,
-    phase:statement.phase,summary:statement.summary,verdict:statement.verdict,
-   }))));
+ const firstEvidence=document.getElementById("ai-meeting-evidence-first");
+ const previousEvidence=document.getElementById("ai-meeting-evidence-prev");
+ const nextEvidence=document.getElementById("ai-meeting-evidence-next");
+ const evidencePosition=document.getElementById("ai-meeting-evidence-position");
+ let activeEvidenceCard=null;
+ function displayedEvidenceCards(){
+  return [...finalConcernTargets].flatMap(([category,target])=>target.concerns.flatMap(({node,issue,cards},index)=>
+   node.hidden?[]:cards.filter(card=>!card.node.hidden).map(card=>({category,issue,index,card}))));
  }
+ function displayedEvidenceRows(){
+  return displayedEvidenceCards().map(({category,issue,card:{period,statement}})=>({
+   category,concern:issue.text,period,statement_id:statement.id,agent:statement.agent,
+   phase:statement.phase,summary:statement.summary,verdict:statement.verdict,
+  }));
+ }
+ function updateEvidenceNavigation(cards){
+  const position=cards.findIndex(({card})=>card===activeEvidenceCard);
+  if(firstEvidence)firstEvidence.disabled=cards.length===0;
+  if(previousEvidence)previousEvidence.disabled=position<=0;
+  if(nextEvidence)nextEvidence.disabled=position<0||position===cards.length-1;
+  if(evidencePosition){
+   evidencePosition.hidden=position<0;
+   const current=cards[position]?.card;
+   evidencePosition.textContent=current?(position+1)+" / "+cards.length+" · "+
+    (current.period==="earlier"?"이전":"이후")+" ["+current.statement.id+"]":"";
+  }
+  return position;
+ }
+ function navigateEvidence(direction){
+  if(!pairedArchives&&!canUseRecord())return;
+  const cards=displayedEvidenceCards();
+  const position=updateEvidenceNavigation(cards);
+  const entry=cards[direction===0?0:position+direction];
+  if(!entry||(direction!==0&&position<0))return;
+  if(activeEvidenceCard)activeEvidenceCard.back.hidden=true;
+  activeEvidenceCard=entry.card;
+  openFinalConcern(entry.category,entry.index);
+  activeEvidenceCard.back.hidden=false;
+  updateEvidenceNavigation(cards);
+  activeEvidenceCard.node.focus?.({preventScroll:true});
+  activeEvidenceCard.node.scrollIntoView?.({block:"nearest"});
+ }
+ firstEvidence?.addEventListener("click",()=>navigateEvidence(0));
+ previousEvidence?.addEventListener("click",()=>navigateEvidence(-1));
+ nextEvidence?.addEventListener("click",()=>navigateEvidence(1));
  function updateConcernEvidence(){
   const {side,agent,phase,verdict,search}=evidenceFilters();
   const query=comparisonSearchText(search);
@@ -2518,7 +2560,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    unpickVisibleConcerns.textContent="표시된 우려 선택 해제"+(visiblePicks?" ("+visiblePicks+"건)":"");
   }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
-  const evidenceCount=displayedEvidenceRows().length;
+  const displayedCards=displayedEvidenceCards();
+  if(activeEvidenceCard&&!displayedCards.some(({card})=>card===activeEvidenceCard)){
+   activeEvidenceCard.back.hidden=true;
+   activeEvidenceCard=null;
+  }
+  updateEvidenceNavigation(displayedCards);
+  const evidenceCount=displayedCards.length;
   for(const {format,button} of evidenceExports){
    if(!button)continue;
    button.disabled=evidenceCount===0;
@@ -2980,7 +3028,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       for(const id of ids){
        const statement=record.transcript[Number(id.slice(1))-1];
        const node=statementCard(record,statement,label);
-       entry.cards.push({node,period,statement});
+       node.setAttribute("tabindex","-1");
+       const back=document.createElement("button");
+       back.type="button";
+       back.style.minHeight="44px";
+       back.textContent="근거 발언 이동 버튼으로 돌아가기";
+       back.hidden=true;
+       back.addEventListener("click",()=>{
+        const target=nextEvidence&&!nextEvidence.disabled?nextEvidence:previousEvidence&&!previousEvidence.disabled?previousEvidence:firstEvidence;
+        target?.focus?.({preventScroll:true});
+        target?.scrollIntoView?.({block:"nearest"});
+       });
+       node.append(back);
+       entry.cards.push({node,period,statement,back});
        concern.append(node);
       }
      }
@@ -3103,6 +3163,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function clearComparisonExport(){
   finalConcernTargets.clear();
+  activeEvidenceCard=null;
+  updateEvidenceNavigation([]);
   concernCheckboxes.clear();
   if(finalConcernSaveStatus)finalConcernSaveStatus.textContent="";
   if(finalConcernShortcuts)finalConcernShortcuts.hidden=true;
