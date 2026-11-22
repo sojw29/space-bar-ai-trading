@@ -2140,6 +2140,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <p id="ai-meeting-evidence-visible-progress" role="status"></p>
   <button id="ai-meeting-evidence-undo-review" type="button" style="min-height:44px" disabled>검토 변경 되돌리기</button>
   <button id="ai-meeting-evidence-redo-review" type="button" style="min-height:44px" disabled>검토 변경 다시 적용</button>
+  <button id="ai-meeting-evidence-save-progress" type="button" style="min-height:44px" disabled>검토 진행 저장</button>
+  <label for="ai-meeting-evidence-load-progress">저장한 검토 진행 불러오기</label>
+  <input id="ai-meeting-evidence-load-progress" type="file" accept=".json,application/json" style="min-height:44px;max-width:100%" disabled>
+  <p id="ai-meeting-evidence-progress-file-status" role="status" style="overflow-wrap:anywhere"></p>
   <p id="ai-meeting-evidence-review-history" role="status"></p>
   <p id="ai-meeting-evidence-reviewed-count" role="status"></p>
   <p id="ai-meeting-evidence-position" role="status" hidden></p>
@@ -2473,6 +2477,64 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let activeEvidenceCard=null;
  const reviewedEvidence=new Set();
  const reviewUndo=[],reviewRedo=[];
+ const saveReviewProgress=document.getElementById("ai-meeting-evidence-save-progress");
+ const loadReviewProgress=document.getElementById("ai-meeting-evidence-load-progress");
+ const reviewProgressStatus=document.getElementById("ai-meeting-evidence-progress-file-status");
+ let reviewProgressRevision=0;
+ function reviewProgressPair(){
+  const {earlier,later,execution_mode,market_source}=comparisonReport;
+  return {earlier,later,execution_mode,market_source};
+ }
+ function allReviewEvidenceKeys(){
+  const keys=new Set();
+  for(const {concerns} of finalConcernTargets.values()){
+   for(const {cards} of concerns)for(const {reviewKey} of cards)keys.add(reviewKey);
+  }
+  return keys;
+ }
+ saveReviewProgress?.addEventListener("click",()=>{
+  if(!comparisonReport||!reviewedEvidence.size||(!pairedArchives&&!canUseRecord()))return;
+  const report={version:"SPACEBAR_MEETING_REVIEW_PROGRESS_1",pair:reviewProgressPair(),reviewed:[...reviewedEvidence].sort()};
+  try{
+   const filename=comparisonFilename("review-progress","JSON",report.reviewed.length);
+   saveMeetingFile(JSON.stringify(report,null,2)+"\n",filename,"application/json;charset=utf-8");
+   if(reviewProgressStatus)reviewProgressStatus.textContent="저장 요청: "+filename;
+  }catch(_){
+   if(reviewProgressStatus)reviewProgressStatus.textContent="검토 진행 파일을 저장하지 못했습니다.";
+  }
+ });
+ loadReviewProgress?.addEventListener("change",async()=>{
+  const file=loadReviewProgress.files?.[0];
+  loadReviewProgress.value="";
+  if(!file||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+  const comparison=pickedComparisonKey;
+  const revision=++reviewProgressRevision;
+  const current=()=>revision===reviewProgressRevision&&comparison===pickedComparisonKey&&
+   !!comparisonReport&&(!!pairedArchives||canUseRecord());
+  try{
+   if(file.size>65536)throw Error("64 KiB 이하의 검토 진행 JSON을 선택해 주세요.");
+   let report;
+   try{report=JSON.parse(await file.text());}catch(_){throw Error("올바른 검토 진행 JSON 파일을 선택해 주세요.");}
+   if(!current())return;
+   if(report?.version!=="SPACEBAR_MEETING_REVIEW_PROGRESS_1"||!Array.isArray(report.reviewed)){
+    throw Error("검토 진행 파일 형식이 올바르지 않습니다.");
+   }
+   if(JSON.stringify(report.pair)!==JSON.stringify(reviewProgressPair())){
+    throw Error("현재 비교 중인 두 회의와 일치하는 검토 진행 파일을 선택해 주세요.");
+   }
+   const allowed=allReviewEvidenceKeys();
+   const keys=new Set(report.reviewed);
+   if(keys.size!==report.reviewed.length||[...keys].some(key=>!allowed.has(key))){
+    throw Error("검토 진행 파일의 발언 목록이 올바르지 않습니다.");
+   }
+   const before=reviewedEvidence.size;
+   applyReviewChange(keys,true,"검토 진행 불러오기");
+   if(reviewProgressStatus)reviewProgressStatus.textContent="검토 진행 복원 · 추가 "+(reviewedEvidence.size-before)+"건";
+   updateConcernView();
+  }catch(error){
+   if(current()&&reviewProgressStatus)reviewProgressStatus.textContent=error.message;
+  }
+ });
  const undoReview=document.getElementById("ai-meeting-evidence-undo-review");
  const redoReview=document.getElementById("ai-meeting-evidence-redo-review");
  const reviewHistoryStatus=document.getElementById("ai-meeting-evidence-review-history");
@@ -2703,10 +2765,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
   if(reviewedEvidenceCount||evidenceSideProgress){
-   const evidenceKeys=new Set();
-   for(const {concerns} of finalConcernTargets.values()){
-    for(const {cards} of concerns)for(const {reviewKey} of cards)evidenceKeys.add(reviewKey);
-   }
+   const evidenceKeys=allReviewEvidenceKeys();
    if(reviewedEvidenceCount)reviewedEvidenceCount.textContent=evidenceKeys.size?
     "검토한 근거 발언 "+reviewedEvidence.size+" / "+evidenceKeys.size+"건":"";
    if(evidenceSideProgress)evidenceSideProgress.textContent=evidenceKeys.size?
@@ -2716,6 +2775,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     }).join(" · "):"";
   }
   if(clearReviewedEvidence)clearReviewedEvidence.disabled=reviewedEvidence.size===0;
+  if(saveReviewProgress)saveReviewProgress.disabled=reviewedEvidence.size===0;
+  if(loadReviewProgress)loadReviewProgress.disabled=finalConcernTargets.size===0;
   const displayedCards=displayedEvidenceCards();
   const displayedKeys=new Set(displayedCards.map(({card})=>card.reviewKey));
   const displayedReviewed=[...displayedKeys].filter(key=>reviewedEvidence.has(key)).length;
@@ -3359,6 +3420,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function clearComparisonExport(){
   finalConcernTargets.clear();
+  if(saveReviewProgress)saveReviewProgress.disabled=true;
+  if(loadReviewProgress)loadReviewProgress.disabled=true;
   activeEvidenceCard=null;
   updateEvidenceNavigation([]);
   refreshEvidencePicker([]);
@@ -3502,6 +3565,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(selectionKey!==pickedComparisonKey){
    pickedChanges.clear();
    pickedComparisonKey=selectionKey;
+   reviewProgressRevision++;
+   if(reviewProgressStatus)reviewProgressStatus.textContent="";
    reviewedEvidence.clear();
    reviewUndo.length=0;
    reviewRedo.length=0;
