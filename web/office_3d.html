@@ -2148,6 +2148,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <summary style="min-height:44px">파일에 포함된 근거 발언 확인</summary>
    <button id="ai-meeting-evidence-progress-select-all" type="button" style="min-height:44px" disabled>파일 발언 모두 선택</button>
    <button id="ai-meeting-evidence-progress-select-none" type="button" style="min-height:44px" disabled>파일 발언 선택 해제</button>
+   <label>파일 발언 검색 <input id="ai-meeting-progress-search" type="search" maxlength="40" placeholder="발언 번호 또는 에이전트" style="min-height:44px;max-width:100%"></label>
+   <label>회의 <select id="ai-meeting-progress-side" style="min-height:44px">
+    <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
+   </select></label>
+   <label>검토 여부 <select id="ai-meeting-progress-state" style="min-height:44px">
+    <option value="all">전체</option><option value="new">미검토</option><option value="reviewed">이미 검토</option>
+   </select></label>
+   <button id="ai-meeting-progress-reset-preview" type="button" style="min-height:44px" disabled>미리보기 필터 초기화</button>
+   <p id="ai-meeting-progress-match-count" role="status"></p>
    <ul id="ai-meeting-evidence-progress-statements"></ul>
   </details>
   <button id="ai-meeting-evidence-progress-apply" type="button" style="min-height:44px" hidden disabled>검토 진행 적용</button>
@@ -2508,9 +2517,30 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   pendingReviewProgress.selected.clear();
   updateProgressPreview();
  });
+ const progressSearch=document.getElementById("ai-meeting-progress-search");
+ const progressSide=document.getElementById("ai-meeting-progress-side");
+ const progressState=document.getElementById("ai-meeting-progress-state");
+ const progressResetPreview=document.getElementById("ai-meeting-progress-reset-preview");
+ const progressMatchCount=document.getElementById("ai-meeting-progress-match-count");
+ function resetProgressFilters(){
+  if(progressSearch)progressSearch.value="";
+  if(progressSide)progressSide.value="all";
+  if(progressState)progressState.value="all";
+ }
+ progressSearch?.addEventListener("input",()=>updateProgressPreview());
+ for(const control of [progressSide,progressState])control?.addEventListener("change",()=>updateProgressPreview());
+ progressResetPreview?.addEventListener("click",()=>{
+  resetProgressFilters();
+  updateProgressPreview();
+  progressSearch?.focus?.();
+ });
  function updateProgressPreview(focusKey){
   const pending=pendingReviewProgress;
   const total=pending?.keys.size??0;
+  const query=(progressSearch?.value??"").trim().toLowerCase();
+  const side=progressSide?.value||"all",state=progressState?.value||"all";
+  const filtered=!!query||side!=="all"||state!=="all";
+  if(progressResetPreview)progressResetPreview.disabled=!filtered&&!progressSearch?.value;
   const selected=pending?.selected.size??0;
   const added=pending?[...pending.selected].filter(key=>!reviewedEvidence.has(key)).length:0;
   if(selectAllProgress)selectAllProgress.disabled=selected===total;
@@ -2531,6 +2561,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const card=evidence.get(key);
     if(!card)return null;
     const {period,statement}=card;
+    const reviewed=reviewedEvidence.has(key);
+    if((side!=="all"&&side!==period)||(state!=="all"&&(state==="reviewed")!==reviewed)||
+     (query&&!statement.agent.toLowerCase().includes(query)&&statement.id.toLowerCase()!==query.replace(/^\[(.*)\]$/,"$1")))return null;
     const row=document.createElement("li");
     const label=document.createElement("label");
     label.style.display="flex";
@@ -2553,7 +2586,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     if(focusKey===key)restoreFocus=checkbox;
     return row;
    }):[];
-   progressStatements.replaceChildren(...rows.filter(Boolean));
+   const matches=rows.filter(Boolean);
+   progressStatements.replaceChildren(...matches);
+   if(progressMatchCount)progressMatchCount.textContent=filtered&&pending?
+    (matches.length?"표시된 파일 발언 "+matches.length+" / "+total+"건":"조건에 맞는 파일 발언이 없습니다."):"";
    restoreFocus?.focus?.({preventScroll:true});
   }
   if(applyProgress){
@@ -2565,6 +2601,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function discardProgressPreview(){
   pendingReviewProgress=null;
+  resetProgressFilters();
   updateProgressPreview();
  }
  cancelProgress?.addEventListener("click",()=>{
