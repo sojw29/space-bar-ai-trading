@@ -2156,6 +2156,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <option value="all">전체</option><option value="new">미검토</option><option value="reviewed">이미 검토</option>
    </select></label>
    <button id="ai-meeting-progress-reset-preview" type="button" style="min-height:44px" disabled>미리보기 필터 초기화</button>
+   <label style="min-height:44px"><input id="ai-meeting-progress-picked-only" type="checkbox"> 적용할 발언만 보기</label>
+   <button id="ai-meeting-progress-pick-visible" type="button" style="min-height:44px" disabled>표시된 발언 모두 선택</button>
+   <button id="ai-meeting-progress-unpick-visible" type="button" style="min-height:44px" disabled>표시된 발언 선택 해제</button>
    <p id="ai-meeting-progress-match-count" role="status"></p>
    <ul id="ai-meeting-evidence-progress-statements"></ul>
   </details>
@@ -2522,24 +2525,59 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const progressState=document.getElementById("ai-meeting-progress-state");
  const progressResetPreview=document.getElementById("ai-meeting-progress-reset-preview");
  const progressMatchCount=document.getElementById("ai-meeting-progress-match-count");
+ const progressPickedOnly=document.getElementById("ai-meeting-progress-picked-only");
+ const progressPickVisible=document.getElementById("ai-meeting-progress-pick-visible");
+ const progressUnpickVisible=document.getElementById("ai-meeting-progress-unpick-visible");
  function resetProgressFilters(){
+  if(progressPickedOnly)progressPickedOnly.checked=false;
   if(progressSearch)progressSearch.value="";
   if(progressSide)progressSide.value="all";
   if(progressState)progressState.value="all";
  }
  progressSearch?.addEventListener("input",()=>updateProgressPreview());
- for(const control of [progressSide,progressState])control?.addEventListener("change",()=>updateProgressPreview());
+ for(const control of [progressSide,progressState,progressPickedOnly])control?.addEventListener("change",()=>updateProgressPreview());
  progressResetPreview?.addEventListener("click",()=>{
   resetProgressFilters();
   updateProgressPreview();
   progressSearch?.focus?.();
  });
+ function previewVisibleProgressKeys(pending){
+  if(!pending)return [];
+  const evidence=allReviewEvidence();
+  const query=(progressSearch?.value??"").trim().toLowerCase();
+  const idQuery=query.replace(/^\[(.*)\]$/,"$1");
+  const side=progressSide?.value||"all",state=progressState?.value||"all";
+  return [...pending.keys].sort().filter(key=>{
+   const card=evidence.get(key);
+   if(!card)return false;
+   const {period,statement}=card;
+   return (side==="all"||side===period)&&(state==="all"||(state==="reviewed")===reviewedEvidence.has(key))&&
+    (!progressPickedOnly?.checked||pending.selected.has(key))&&
+    (!query||statement.agent.toLowerCase().includes(query)||statement.id.toLowerCase()===idQuery);
+  });
+ }
+ function selectVisibleProgress(selected){
+  const pending=pendingReviewProgress;
+  if(!pending)return;
+  for(const key of previewVisibleProgressKeys(pending)){
+   if(selected)pending.selected.add(key);
+   else pending.selected.delete(key);
+  }
+  updateProgressPreview();
+ }
+ progressPickVisible?.addEventListener("click",()=>selectVisibleProgress(true));
+ progressUnpickVisible?.addEventListener("click",()=>selectVisibleProgress(false));
  function updateProgressPreview(focusKey){
   const pending=pendingReviewProgress;
   const total=pending?.keys.size??0;
   const query=(progressSearch?.value??"").trim().toLowerCase();
   const side=progressSide?.value||"all",state=progressState?.value||"all";
-  const filtered=!!query||side!=="all"||state!=="all";
+  const filtered=!!query||side!=="all"||state!=="all"||!!progressPickedOnly?.checked;
+  const visibleKeys=previewVisibleProgressKeys(pending);
+  const visibleSelected=visibleKeys.filter(key=>pending.selected.has(key));
+  const visibleAdded=visibleSelected.filter(key=>!reviewedEvidence.has(key)).length;
+  if(progressPickVisible)progressPickVisible.disabled=visibleSelected.length===visibleKeys.length;
+  if(progressUnpickVisible)progressUnpickVisible.disabled=visibleSelected.length===0;
   if(progressResetPreview)progressResetPreview.disabled=!filtered&&!progressSearch?.value;
   const selected=pending?.selected.size??0;
   const added=pending?[...pending.selected].filter(key=>!reviewedEvidence.has(key)).length:0;
@@ -2557,13 +2595,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(progressStatements){
    const evidence=pending?allReviewEvidence():null;
    let restoreFocus=null;
-   const rows=pending?[...pending.keys].sort().map(key=>{
+   const rows=pending?visibleKeys.map(key=>{
     const card=evidence.get(key);
     if(!card)return null;
     const {period,statement}=card;
-    const reviewed=reviewedEvidence.has(key);
-    if((side!=="all"&&side!==period)||(state!=="all"&&(state==="reviewed")!==reviewed)||
-     (query&&!statement.agent.toLowerCase().includes(query)&&statement.id.toLowerCase()!==query.replace(/^\[(.*)\]$/,"$1")))return null;
     const row=document.createElement("li");
     const label=document.createElement("label");
     label.style.display="flex";
@@ -2589,7 +2624,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const matches=rows.filter(Boolean);
    progressStatements.replaceChildren(...matches);
    if(progressMatchCount)progressMatchCount.textContent=filtered&&pending?
-    (matches.length?"표시된 파일 발언 "+matches.length+" / "+total+"건":"조건에 맞는 파일 발언이 없습니다."):"";
+    (matches.length?"표시된 파일 발언 "+matches.length+" / "+total+"건 · 표시 중 선택 "+visibleSelected.length+"건":
+     "조건에 맞는 파일 발언이 없습니다.")+(added>visibleAdded?" · 가려진 추가 예정 "+(added-visibleAdded)+"건":""):"";
    restoreFocus?.focus?.({preventScroll:true});
   }
   if(applyProgress){
