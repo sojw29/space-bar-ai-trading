@@ -2094,7 +2094,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <option value="all">전체</option><option value="text">우려 문구</option>
    <option value="earlier">이전 회의 발언 번호</option><option value="later">이후 회의 발언 번호</option>
   </select></label>
-  <label style="min-height:44px"><input id="ai-meeting-concern-picked-only" type="checkbox"> 선택 우려만 보기</label>
+  <label style="display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 8px;cursor:pointer"><input id="ai-meeting-concern-picked-only" type="checkbox"> 선택 우려만 보기</label>
   <button id="ai-meeting-concern-reset-view" type="button" style="min-height:44px" disabled>우려 검색 초기화</button>
   <button id="ai-meeting-pick-visible-concerns" type="button" style="min-height:44px" disabled>표시된 우려 모두 선택</button>
   <button id="ai-meeting-unpick-visible-concerns" type="button" style="min-height:44px" disabled>표시된 우려 선택 해제</button>
