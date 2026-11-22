@@ -2115,6 +2115,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <option value="all">전체</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
   </select></label>
   <button id="ai-meeting-concern-evidence-reset" type="button" style="min-height:44px" disabled>원문 필터만 초기화</button>
+  <button id="ai-meeting-save-evidence-txt" type="button" style="min-height:44px" disabled>표시된 근거 발언 TXT 저장</button>
+  <button id="ai-meeting-save-evidence-json" type="button" style="min-height:44px" disabled>표시된 근거 발언 JSON 저장</button>
+  <button id="ai-meeting-save-evidence-csv" type="button" style="min-height:44px" disabled>표시된 근거 발언 CSV 저장</button>
   <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
@@ -2418,9 +2421,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function visibleConcernIndexes(target){
   return target.concerns.flatMap((entry,index)=>entry.node.hidden?[]:[index]);
  }
+ const evidenceExports=["TXT","JSON","CSV"].map(format=>({
+  format,button:document.getElementById("ai-meeting-save-evidence-"+format.toLowerCase()),
+ }));
+ function evidenceFilters(){
+  return {side:concernEvidenceSide?.value||"both",agent:concernEvidenceAgent?.value||"all",
+   phase:concernEvidencePhase?.value||"all"};
+ }
+ function displayedEvidenceRows(){
+  return [...finalConcernTargets].flatMap(([category,target])=>target.concerns.flatMap(({node,issue,cards})=>
+   node.hidden?[]:cards.filter(card=>!card.node.hidden).map(({period,statement})=>({
+    category,concern:issue.text,period,statement_id:statement.id,agent:statement.agent,
+    phase:statement.phase,summary:statement.summary,
+   }))));
+ }
  function updateConcernEvidence(){
-  const side=concernEvidenceSide?.value||"both";
-  const agent=concernEvidenceAgent?.value||"all",phase=concernEvidencePhase?.value||"all";
+  const {side,agent,phase}=evidenceFilters();
   const narrowed=agent!=="all"||phase!=="all";
   if(concernEvidenceReset)concernEvidenceReset.disabled=side==="both"&&!narrowed;
   for(const {concerns} of finalConcernTargets.values()){
@@ -2489,6 +2505,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    unpickVisibleConcerns.textContent="표시된 우려 선택 해제"+(visiblePicks?" ("+visiblePicks+"건)":"");
   }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
+  const evidenceCount=displayedEvidenceRows().length;
+  for(const {format,button} of evidenceExports){
+   if(!button)continue;
+   button.disabled=evidenceCount===0;
+   button.textContent="표시된 근거 발언 "+evidenceCount+"건 "+format+" 저장";
+  }
   const hiddenPicks=pickedFinalConcerns.size-visiblePicks;
   if(concernMatchCount)concernMatchCount.textContent=filtered?
    (count?"표시된 우려 "+count+" / "+total+"건":"조건에 맞는 최종 우려가 없습니다.")+
@@ -3287,6 +3309,47 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  for(const {format,button} of visibleConcernExports){
   button?.addEventListener("click",()=>downloadFinalConcerns(format,finalConcernSaveStatus,undefined,undefined,"visible"));
+ }
+ function downloadDisplayedEvidence(format){
+  if(!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+  const rows=displayedEvidenceRows();
+  if(!rows.length)return;
+  const {earlier,later,execution_mode,market_source,baseline_origin}=comparisonReport;
+  const filters=evidenceFilters(),concernFilters=concernViewFilters();
+  const json={version:"SPACEBAR_MEETING_CONCERN_EVIDENCE_1",research_only:true,orders_enabled:false,
+   earlier,later,execution_mode,market_source,baseline_origin,evidence_filters:filters,concern_filters:concernFilters,evidence:rows};
+  const periodLabel=period=>period==="earlier"?"이전":"이후";
+  try{
+   let content,mime;
+   if(format==="CSV"){
+    const header=["우려 유형","우려 내용","회의","발언 번호","에이전트","단계","발언 요약","회의 UTC","시장 데이터 출처",
+     "원문 회의 필터","에이전트 필터","단계 필터","우려 유형 필터","우려 검색 범위","우려 검색어","선택 우려만"];
+    const cells=rows.map(row=>[finalConcernLabels[row.category],row.concern,periodLabel(row.period),row.statement_id,
+     row.agent,row.phase,row.summary,(row.period==="earlier"?earlier:later).generated_at_utc,market_source,
+     filters.side,filters.agent,filters.phase,concernFilters.type,concernFilters.search_scope,concernFilters.search,
+     concernFilters.picked_only?"켜짐":"꺼짐"]);
+    content="\uFEFF"+[header,...cells].map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n";
+    mime="text/csv;charset=utf-8";
+   }else if(format==="JSON"){
+    content=JSON.stringify(json,null,2)+"\n";
+    mime="application/json;charset=utf-8";
+   }else{
+    content=["표시된 근거 발언 "+rows.length+"건","이전 회의 UTC "+earlier.generated_at_utc,
+     "이후 회의 UTC "+later.generated_at_utc,"시장 데이터 출처 "+(market_source??"미기록"),
+     "원문 필터 "+JSON.stringify(filters),"우려 필터 "+JSON.stringify(concernFilters),
+     ...rows.map(row=>finalConcernLabels[row.category]+" · "+row.concern+"\n"+
+      periodLabel(row.period)+" ["+row.statement_id+"] "+row.agent+" · "+row.phase+"\n"+row.summary)].join("\n\n")+"\n";
+    mime="text/plain;charset=utf-8";
+   }
+   const filename=comparisonFilename("visible-concern-evidence",format,rows.length);
+   saveMeetingFile(content,filename,mime);
+   if(finalConcernSaveStatus)finalConcernSaveStatus.textContent="저장 요청: "+filename;
+  }catch(_){
+   if(finalConcernSaveStatus)finalConcernSaveStatus.textContent="근거 발언 "+format+" 저장을 시작하지 못했습니다.";
+  }
+ }
+ for(const {format,button} of evidenceExports){
+  button?.addEventListener("click",()=>downloadDisplayedEvidence(format));
  }
  function downloadComparison(format){
   if(!comparisonReport||(!pairedArchives&&!canUseRecord())||!comparisonResult)return;
