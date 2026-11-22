@@ -2108,6 +2108,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <option value="earlier">이전 회의만</option>
    <option value="later">이후 회의만</option>
   </select></label>
+  <label>근거 발언 에이전트 <select id="ai-meeting-concern-evidence-agent" style="min-height:44px">
+   <option value="all">전체</option><option>ATLAS</option><option>QUANT</option><option>GUARDIAN</option><option>COMMANDER</option>
+  </select></label>
+  <label>근거 발언 단계 <select id="ai-meeting-concern-evidence-phase" style="min-height:44px">
+   <option value="all">전체</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
+  </select></label>
+  <button id="ai-meeting-concern-evidence-reset" type="button" style="min-height:44px" disabled>원문 필터만 초기화</button>
   <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
   <p id="ai-meeting-final-concern-save-status" role="status" style="overflow-wrap:anywhere"></p>
@@ -2370,8 +2377,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    search_scope:concernSearchScope?.value||"all",picked_only:!!concernPickedOnly?.checked};
  }
  const concernEvidenceSide=document.getElementById("ai-meeting-concern-evidence-side");
- function resetConcernFilters(){
+ const concernEvidenceAgent=document.getElementById("ai-meeting-concern-evidence-agent");
+ const concernEvidencePhase=document.getElementById("ai-meeting-concern-evidence-phase");
+ const concernEvidenceReset=document.getElementById("ai-meeting-concern-evidence-reset");
+ function resetEvidenceFilters(){
   if(concernEvidenceSide)concernEvidenceSide.value="both";
+  if(concernEvidenceAgent)concernEvidenceAgent.value="all";
+  if(concernEvidencePhase)concernEvidencePhase.value="all";
+ }
+ function resetConcernFilters(){
+  resetEvidenceFilters();
   if(concernSearch)concernSearch.value="";
   if(concernFilterType)concernFilterType.value="all";
   if(concernSearchScope)concernSearchScope.value="all";
@@ -2405,15 +2420,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function updateConcernEvidence(){
   const side=concernEvidenceSide?.value||"both";
+  const agent=concernEvidenceAgent?.value||"all",phase=concernEvidencePhase?.value||"all";
+  const narrowed=agent!=="all"||phase!=="all";
+  if(concernEvidenceReset)concernEvidenceReset.disabled=side==="both"&&!narrowed;
   for(const {concerns} of finalConcernTargets.values()){
-   for(const {cards,evidenceMessage,showBothEvidence} of concerns){
-    const visible=cards.filter(({node,period})=>{
-     node.hidden=side!=="both"&&side!==period;
+   for(const {cards,evidenceMessage,showBothEvidence,counts,issue} of concerns){
+    const visible=cards.filter(({node,period,statement})=>{
+     node.hidden=(side!=="both"&&side!==period)||(agent!=="all"&&statement.agent!==agent)||
+      (phase!=="all"&&statement.phase!==phase);
      return !node.hidden;
     });
     evidenceMessage.hidden=visible.length!==0;
-    showBothEvidence.hidden=visible.length!==0||cards.length===0;
-    evidenceMessage.textContent=visible.length?"":side==="earlier"?"이전 회의에 근거 발언이 없습니다.":
+    showBothEvidence.hidden=visible.length!==0||cards.length===0||narrowed;
+    counts.textContent="원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건"+(side!=="both"||narrowed?" · 현재 표시 "+visible.length+"건":"");
+    evidenceMessage.textContent=visible.length?"":narrowed&&cards.some(({period})=>side==="both"||side===period)?
+     "선택한 에이전트와 단계에 맞는 근거 발언이 없습니다.":side==="earlier"?"이전 회의에 근거 발언이 없습니다.":
      side==="later"?"이후 회의에 근거 발언이 없습니다.":"근거 발언이 없습니다.";
    }
   }
@@ -2474,10 +2495,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    (hiddenPicks?" · 필터로 숨겨진 선택 "+hiddenPicks+"건":""):"";
   if(concernClearSearch)concernClearSearch.disabled=!concernSearch?.value;
   if(concernResetView)concernResetView.disabled=!filtered&&!concernSearch?.value&&search_scope==="all"&&
-   (concernEvidenceSide?.value||"both")==="both";
+   (concernEvidenceSide?.value||"both")==="both"&&(concernEvidenceAgent?.value||"all")==="all"&&
+   (concernEvidencePhase?.value||"all")==="all";
  }
  concernSearch?.addEventListener("input",updateConcernView);
- concernEvidenceSide?.addEventListener("change",updateConcernView);
+ for(const control of [concernEvidenceSide,concernEvidenceAgent,concernEvidencePhase]){
+  control?.addEventListener("change",updateConcernView);
+ }
+ concernEvidenceReset?.addEventListener("click",()=>{
+  resetEvidenceFilters();
+  updateConcernView();
+  concernEvidenceSide?.focus?.();
+ });
  concernSearch?.addEventListener("keydown",event=>{
   if(event.key!=="Enter"||event.isComposing||!concernViewFilters().search)return;
   const first=visibleConcernIds()[0];
@@ -2912,14 +2941,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      concerns.push(entry);
      for(const [record,ids,period,label] of [[older,issue.earlier_statement_ids,"earlier","이전"],[newer,issue.later_statement_ids,"later","이후"]]){
       for(const id of ids){
-       const node=statementCard(record,record.transcript[Number(id.slice(1))-1],label);
-       entry.cards.push({node,period});
+       const statement=record.transcript[Number(id.slice(1))-1];
+       const node=statementCard(record,statement,label);
+       entry.cards.push({node,period,statement});
        concern.append(node);
       }
      }
      concern.append(evidenceMessage,showBothEvidence);
      const counts=document.createElement("p");
-     counts.textContent="원문 이전 "+issue.earlier_statement_ids.length+"건 / 이후 "+issue.later_statement_ids.length+"건";
+     entry.counts=counts;
      if(items.length>1){
       const navigation=document.createElement("div");
       entry.navigation=navigation;
