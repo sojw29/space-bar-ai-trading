@@ -2130,6 +2130,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <button id="ai-meeting-evidence-last" type="button" style="min-height:44px" disabled>마지막 근거 발언 열기</button>
   <label>근거 발언으로 이동 <select id="ai-meeting-evidence-picker" style="min-height:44px;max-width:100%" disabled></select></label>
   <button id="ai-meeting-evidence-open-picked-result" type="button" style="min-height:44px" disabled>고른 근거 발언 열기</button>
+  <label style="min-height:44px"><input id="ai-meeting-evidence-unreviewed" type="checkbox"> 미검토 근거만 보기</label>
+  <button id="ai-meeting-evidence-clear-reviewed" type="button" style="min-height:44px" disabled>검토 표시 모두 해제</button>
+  <p id="ai-meeting-evidence-reviewed-count" role="status"></p>
   <p id="ai-meeting-evidence-position" role="status" hidden></p>
   <p id="ai-meeting-concern-match-count" role="status"></p>
   <p id="ai-meeting-picked-concern-count" role="status"></p>
@@ -2399,6 +2402,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const concernEvidenceSearch=document.getElementById("ai-meeting-concern-evidence-search");
  const concernEvidenceVerdict=document.getElementById("ai-meeting-concern-evidence-verdict");
  function resetEvidenceFilters(){
+  if(unreviewedEvidenceOnly)unreviewedEvidenceOnly.checked=false;
   if(concernEvidenceSearch)concernEvidenceSearch.value="";
   if(concernEvidenceVerdict)concernEvidenceVerdict.value="all";
   if(concernEvidenceSide)concernEvidenceSide.value="both";
@@ -2444,7 +2448,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function evidenceFilters(){
   return {side:concernEvidenceSide?.value||"both",agent:concernEvidenceAgent?.value||"all",
    phase:concernEvidencePhase?.value||"all",verdict:concernEvidenceVerdict?.value||"all",
-   search:concernEvidenceSearch?.value?.trim()??""};
+   search:concernEvidenceSearch?.value?.trim()??"",
+   ...(unreviewedEvidenceOnly?.checked?{unreviewed_only:true}:{})};
  }
  const firstEvidence=document.getElementById("ai-meeting-evidence-first");
  const previousEvidence=document.getElementById("ai-meeting-evidence-prev");
@@ -2455,6 +2460,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const openPickedEvidence=document.getElementById("ai-meeting-evidence-open-picked-result");
  const clearEvidenceSearch=document.getElementById("ai-meeting-evidence-clear-search");
  let activeEvidenceCard=null;
+ const reviewedEvidence=new Set();
+ const unreviewedEvidenceOnly=document.getElementById("ai-meeting-evidence-unreviewed");
+ const clearReviewedEvidence=document.getElementById("ai-meeting-evidence-clear-reviewed");
+ const reviewedEvidenceCount=document.getElementById("ai-meeting-evidence-reviewed-count");
+ unreviewedEvidenceOnly?.addEventListener("change",updateConcernView);
+ clearReviewedEvidence?.addEventListener("click",()=>{
+  reviewedEvidence.clear();
+  updateConcernView();
+ });
  function displayedEvidenceCards(){
   return [...finalConcernTargets].flatMap(([category,target])=>target.concerns.flatMap(({node,issue,cards},index)=>
    node.hidden?[]:cards.filter(card=>!card.node.hidden).map(card=>({category,issue,index,card}))));
@@ -2533,12 +2547,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const {side,agent,phase,verdict,search}=evidenceFilters();
   const query=comparisonSearchText(search);
   const idMatch=/^\[?(m0[1-7])\]?$/.exec(query);
-  const narrowed=agent!=="all"||phase!=="all"||verdict!=="all"||!!query;
+  const narrowed=agent!=="all"||phase!=="all"||verdict!=="all"||!!query||!!unreviewedEvidenceOnly?.checked;
   if(concernEvidenceReset)concernEvidenceReset.disabled=side==="both"&&!narrowed&&!concernEvidenceSearch?.value;
   for(const {concerns} of finalConcernTargets.values()){
    for(const {cards,evidenceMessage,showBothEvidence,counts,issue} of concerns){
-    const visible=cards.filter(({node,period,statement})=>{
-     node.hidden=(side!=="both"&&side!==period)||(agent!=="all"&&statement.agent!==agent)||
+    const visible=cards.filter(({node,period,statement,reviewButton,reviewKey})=>{
+     const reviewed=reviewedEvidence.has(reviewKey);
+     reviewButton.textContent=reviewed?"검토 표시 해제":"검토 완료 표시";
+     reviewButton.setAttribute("aria-pressed",String(reviewed));
+     node.hidden=(!!unreviewedEvidenceOnly?.checked&&reviewed)||(side!=="both"&&side!==period)||(agent!=="all"&&statement.agent!==agent)||
       (phase!=="all"&&statement.phase!==phase)||(verdict!=="all"&&statement.verdict!==verdict)||
       (!!query&&(idMatch?statement.id.toLowerCase()!==idMatch[1]:!comparisonSearchText(statement.summary).includes(query)));
      return !node.hidden;
@@ -2602,6 +2619,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    unpickVisibleConcerns.textContent="표시된 우려 선택 해제"+(visiblePicks?" ("+visiblePicks+"건)":"");
   }
   for(const {button} of visibleConcernExports)if(button)button.disabled=count===0;
+  if(reviewedEvidenceCount)reviewedEvidenceCount.textContent=finalConcernTargets.size?"검토한 근거 발언 "+reviewedEvidence.size+"건":"";
+  if(clearReviewedEvidence)clearReviewedEvidence.disabled=reviewedEvidence.size===0;
   const displayedCards=displayedEvidenceCards();
   if(activeEvidenceCard&&!displayedCards.some(({card})=>card===activeEvidenceCard)){
    activeEvidenceCard.back.hidden=true;
@@ -2624,7 +2643,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(concernResetView)concernResetView.disabled=!filtered&&!concernSearch?.value&&search_scope==="all"&&
    (concernEvidenceSide?.value||"both")==="both"&&(concernEvidenceAgent?.value||"all")==="all"&&
    (concernEvidencePhase?.value||"all")==="all"&&(concernEvidenceVerdict?.value||"all")==="all"&&
-   !concernEvidenceSearch?.value;
+   !concernEvidenceSearch?.value&&!unreviewedEvidenceOnly?.checked;
  }
  concernSearch?.addEventListener("input",updateConcernView);
  concernEvidenceSearch?.addEventListener("input",updateConcernView);
@@ -3083,8 +3102,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         target?.focus?.({preventScroll:true});
         target?.scrollIntoView?.({block:"nearest"});
        });
-       node.append(back);
-       entry.cards.push({node,period,statement,back});
+       const reviewButton=document.createElement("button");
+       reviewButton.type="button";
+       reviewButton.style.minHeight="44px";
+       const reviewKey=period+":"+statement.id;
+       reviewButton.addEventListener("click",()=>{
+        if(!pairedArchives&&!canUseRecord())return;
+        if(reviewedEvidence.has(reviewKey))reviewedEvidence.delete(reviewKey);
+        else reviewedEvidence.add(reviewKey);
+        updateConcernView();
+        if(node.hidden)concern.children[0].focus?.({preventScroll:true});
+       });
+       node.append(reviewButton,back);
+       entry.cards.push({node,period,statement,back,reviewButton,reviewKey});
        concern.append(node);
       }
      }
@@ -3350,6 +3380,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(selectionKey!==pickedComparisonKey){
    pickedChanges.clear();
    pickedComparisonKey=selectionKey;
+   reviewedEvidence.clear();
    finalConcernPositions.clear();
    pickedFinalConcerns.clear();
    resetConcernFilters();
@@ -3445,11 +3476,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    let content,mime;
    if(format==="CSV"){
     const header=["우려 유형","우려 내용","회의","발언 번호","에이전트","단계","발언 요약","회의 UTC","시장 데이터 출처",
-     "원문 회의 필터","에이전트 필터","단계 필터","우려 유형 필터","우려 검색 범위","우려 검색어","선택 우려만","발언 판정","판정 필터","원문 검색어"];
+     "원문 회의 필터","에이전트 필터","단계 필터","우려 유형 필터","우려 검색 범위","우려 검색어","선택 우려만","발언 판정","판정 필터","원문 검색어","미검토 근거만"];
     const cells=rows.map(row=>[finalConcernLabels[row.category],row.concern,periodLabel(row.period),row.statement_id,
      row.agent,row.phase,row.summary,(row.period==="earlier"?earlier:later).generated_at_utc,market_source,
      filters.side,filters.agent,filters.phase,concernFilters.type,concernFilters.search_scope,concernFilters.search,
-     concernFilters.picked_only?"켜짐":"꺼짐",labels[row.verdict],filters.verdict,filters.search]);
+     concernFilters.picked_only?"켜짐":"꺼짐",labels[row.verdict],filters.verdict,filters.search,filters.unreviewed_only?"켜짐":"꺼짐"]);
     content="\uFEFF"+[header,...cells].map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n";
     mime="text/csv;charset=utf-8";
    }else if(format==="JSON"){
