@@ -401,7 +401,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const reviewButton=addedIssue.children[1].children.at(-2);
    reviewButton.click();
    assert.equal(reviewButton.attrs['aria-pressed'],'true');
-   assert.match(elements['ai-meeting-evidence-reviewed-count'].textContent,/1건/);
+   assert.equal(elements['ai-meeting-evidence-reviewed-count'].textContent,'검토한 근거 발언 1 / 6건');
    const unreviewedOnly=elements['ai-meeting-evidence-unreviewed'];
    unreviewedOnly.checked=true;unreviewedOnly.change();
    assert.equal(addedIssue.children[1].hidden,true);
