@@ -2172,10 +2172,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   <details id="ai-meeting-progress-receipt" hidden>
    <summary id="ai-meeting-progress-receipt-heading" style="min-height:44px">마지막 복원 내역</summary>
    <p id="ai-meeting-progress-receipt-summary" style="overflow-wrap:anywhere"></p>
+   <label>복원 발언 검색 <input id="ai-meeting-progress-receipt-search" type="search" maxlength="40" placeholder="발언 번호 또는 에이전트" style="min-height:44px;max-width:100%"></label>
+   <label>회의 <select id="ai-meeting-progress-receipt-side" style="min-height:44px">
+    <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
+   </select></label>
    <label><input id="ai-meeting-progress-receipt-unreviewed" type="checkbox"> 현재 미검토 발언만 보기</label>
    <button id="ai-meeting-progress-receipt-save" type="button" style="min-height:44px">전체 복원 내역 TXT 저장</button>
    <button id="ai-meeting-progress-receipt-close" type="button" style="min-height:44px">복원 내역 접기</button>
    <p id="ai-meeting-progress-receipt-status" role="status"></p>
+   <button id="ai-meeting-progress-receipt-reset" type="button" style="min-height:44px" disabled>복원 내역 필터 초기화</button>
+   <p id="ai-meeting-progress-receipt-count" role="status"></p>
    <ul id="ai-meeting-progress-receipt-rows"></ul>
   </details>
   <p id="ai-meeting-evidence-review-history" role="status"></p>
@@ -2522,6 +2528,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const progressReceiptHeading=document.getElementById("ai-meeting-progress-receipt-heading");
  const progressReceiptUnreviewed=document.getElementById("ai-meeting-progress-receipt-unreviewed");
  const progressReceiptStatus=document.getElementById("ai-meeting-progress-receipt-status");
+ const progressReceiptSearch=document.getElementById("ai-meeting-progress-receipt-search");
+ const progressReceiptSide=document.getElementById("ai-meeting-progress-receipt-side");
+ const progressReceiptReset=document.getElementById("ai-meeting-progress-receipt-reset");
+ const progressReceiptCount=document.getElementById("ai-meeting-progress-receipt-count");
+ const progressReceiptButtons=new Map();
+ function resetProgressReceiptFilters(){
+  if(progressReceiptSearch)progressReceiptSearch.value="";
+  if(progressReceiptSide)progressReceiptSide.value="all";
+  if(progressReceiptUnreviewed)progressReceiptUnreviewed.checked=false;
+ }
  function progressReceiptEntries(){
   const evidence=allReviewEvidence();
   return lastProgressRestore.keys.flatMap(key=>{
@@ -2530,7 +2546,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const reviewed=reviewedEvidence.has(key);
    const label=(card.period==="earlier"?"이전 회의":"이후 회의")+" ["+card.statement.id+"] · "+
     card.statement.agent+" · "+(reviewed?"검토 완료":"현재 미검토");
-   return [{key,reviewed,label}];
+   return [{key,reviewed,label,period:card.period,statement:card.statement}];
   });
  }
  function progressReceiptDescription(entries){
@@ -2550,12 +2566,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    cards=displayedEvidenceCards();
    index=cards.findIndex(({card})=>card.reviewKey===key);
   }
-  openEvidenceResult(cards,index);
+  openEvidenceResult(cards,index,true);
  }
  function updateProgressReceipt(){
   const available=!!(comparisonReport&&lastProgressRestore);
   if(progressReceipt)progressReceipt.hidden=!available;
+  progressReceiptButtons.clear();
   if(!available){
+   if(progressReceiptCount)progressReceiptCount.textContent="";
    if(progressReceiptSummary)progressReceiptSummary.textContent="";
    progressReceiptRows?.replaceChildren();
    return;
@@ -2563,24 +2581,41 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const entries=progressReceiptEntries();
   if(progressReceiptSummary)progressReceiptSummary.textContent=progressReceiptDescription(entries);
   if(!progressReceiptRows)return;
-  const rows=entries.filter(entry=>!progressReceiptUnreviewed?.checked||!entry.reviewed).map(({key,label})=>{
+  const rawQuery=progressReceiptSearch?.value??"";
+  const query=rawQuery.trim().toLowerCase().replace(/^\[(m\d+)\]$/,"$1");
+  const side=progressReceiptSide?.value||"all";
+  const unreviewedOnly=!!progressReceiptUnreviewed?.checked;
+  const visible=entries.filter(({period,statement,reviewed})=>
+   (side==="all"||side===period)&&(!unreviewedOnly||!reviewed)&&
+   (!query||statement.id.toLowerCase().includes(query)||statement.agent.toLowerCase().includes(query)));
+  if(progressReceiptReset)progressReceiptReset.disabled=!rawQuery&&side==="all"&&!unreviewedOnly;
+  if(progressReceiptCount)progressReceiptCount.textContent="표시된 복원 발언 "+visible.length+" / "+entries.length+"건";
+  const rows=visible.map(({key,label})=>{
    const row=document.createElement("li");
    const button=document.createElement("button");
    button.type="button";
    button.style.minHeight="44px";
    button.textContent=label+" · 원문 보기";
    button.addEventListener("click",()=>openRestoredEvidence(key));
+   progressReceiptButtons.set(key,button);
    row.append(button);
    return row;
   });
   if(!rows.length){
    const empty=document.createElement("li");
-   empty.textContent="현재 미검토 발언이 없습니다.";
+   empty.textContent=query||side!=="all"?"조건에 맞는 복원 발언이 없습니다.":"현재 미검토 발언이 없습니다.";
    rows.push(empty);
   }
   progressReceiptRows.replaceChildren(...rows);
  }
  progressReceiptUnreviewed?.addEventListener("change",updateProgressReceipt);
+ progressReceiptSearch?.addEventListener("input",updateProgressReceipt);
+ progressReceiptSide?.addEventListener("change",updateProgressReceipt);
+ progressReceiptReset?.addEventListener("click",()=>{
+  resetProgressReceiptFilters();
+  updateProgressReceipt();
+  progressReceiptSearch?.focus?.();
+ });
  document.getElementById("ai-meeting-progress-receipt-close")?.addEventListener("click",()=>{
   if(!progressReceipt)return;
   progressReceipt.open=false;
@@ -2783,7 +2818,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const before=reviewedEvidence.size;
   applyReviewChange(added,true,"검토 진행 불러오기");
   lastProgressRestore={name:pending.name,visibleOnly,keys:added};
-  if(progressReceiptUnreviewed)progressReceiptUnreviewed.checked=false;
+  resetProgressReceiptFilters();
   if(progressReceiptStatus)progressReceiptStatus.textContent="";
   discardProgressPreview();
   if(reviewProgressStatus)reviewProgressStatus.textContent=(visibleOnly?"표시된 발언만 복원":"검토 진행 복원")+
@@ -2965,13 +3000,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!entry)return;
   openEvidenceResult(cards,index);
  }
- function openEvidenceResult(cards,index){
+ function openEvidenceResult(cards,index,fromReceipt=false){
   const entry=cards[index];
   if(!entry||(!pairedArchives&&!canUseRecord()))return;
   if(activeEvidenceCard)activeEvidenceCard.back.hidden=true;
   activeEvidenceCard=entry.card;
   openFinalConcern(entry.category,entry.index);
   activeEvidenceCard.back.hidden=false;
+  activeEvidenceCard.fromReceipt=fromReceipt;
+  activeEvidenceCard.back.textContent=fromReceipt?"복원 내역으로 돌아가기":"근거 발언 이동 버튼으로 돌아가기";
   updateEvidenceNavigation(cards);
   if(evidencePicker)evidencePicker.value=String(index);
   if(openPickedEvidence)openPickedEvidence.disabled=false;
@@ -3577,6 +3614,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        back.textContent="근거 발언 이동 버튼으로 돌아가기";
        back.hidden=true;
        back.addEventListener("click",()=>{
+        if(activeEvidenceCard?.fromReceipt&&progressReceipt&&!progressReceipt.hidden){
+         progressReceipt.open=true;
+         const target=progressReceiptButtons.get(activeEvidenceCard.reviewKey)||progressReceiptHeading;
+         target?.focus?.({preventScroll:true});
+         target?.scrollIntoView?.({block:"nearest"});
+         return;
+        }
         const target=nextEvidence&&!nextEvidence.disabled?nextEvidence:previousEvidence&&!previousEvidence.disabled?previousEvidence:firstEvidence;
         target?.focus?.({preventScroll:true});
         target?.scrollIntoView?.({block:"nearest"});
