@@ -2209,6 +2209,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <button id="ai-meeting-progress-receipt-select-visible" type="button" style="min-height:44px" disabled>표시된 발언 모두 선택</button>
    <button id="ai-meeting-progress-receipt-clear-selection" type="button" style="min-height:44px" disabled>복원 발언 선택 모두 해제</button>
    <button id="ai-meeting-progress-receipt-save-selected" type="button" style="min-height:44px" disabled>선택한 복원 발언 JSON 저장</button>
+   <button id="ai-meeting-progress-receipt-unselect-visible" type="button" style="min-height:44px" disabled>표시된 발언 선택 해제</button>
+   <button id="ai-meeting-progress-receipt-reveal-selected" type="button" style="min-height:44px" disabled>가려진 선택 보기</button>
+   <button id="ai-meeting-progress-receipt-mark-selected" type="button" style="min-height:44px" disabled>선택한 발언 검토 완료</button>
+   <button id="ai-meeting-progress-receipt-unmark-selected" type="button" style="min-height:44px" disabled>선택한 발언 검토 해제</button>
+   <button id="ai-meeting-progress-receipt-save-selected-csv" type="button" style="min-height:44px" disabled>선택한 복원 발언 CSV 저장</button>
    <p id="ai-meeting-progress-receipt-selection-count" role="status"></p>
    <ul id="ai-meeting-progress-receipt-rows"></ul>
   </details>
@@ -2580,12 +2585,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const progressReceiptClearSelection=document.getElementById("ai-meeting-progress-receipt-clear-selection");
  const progressReceiptSaveSelected=document.getElementById("ai-meeting-progress-receipt-save-selected");
  const progressReceiptSelectionCount=document.getElementById("ai-meeting-progress-receipt-selection-count");
+ const progressReceiptUnselectVisible=document.getElementById("ai-meeting-progress-receipt-unselect-visible");
+ const progressReceiptRevealSelected=document.getElementById("ai-meeting-progress-receipt-reveal-selected");
+ const progressReceiptMarkSelected=document.getElementById("ai-meeting-progress-receipt-mark-selected");
+ const progressReceiptUnmarkSelected=document.getElementById("ai-meeting-progress-receipt-unmark-selected");
+ const progressReceiptSaveSelectedCsv=document.getElementById("ai-meeting-progress-receipt-save-selected-csv");
  const selectedReceiptKeys=new Set();
  function updateProgressReceiptSelectionControls(entries){
   const visibleSelected=entries.filter(entry=>selectedReceiptKeys.has(entry.key)).length;
   const total=selectedReceiptKeys.size;
   if(progressReceiptSelectVisible)progressReceiptSelectVisible.disabled=visibleSelected===entries.length;
   if(progressReceiptClearSelection)progressReceiptClearSelection.disabled=total===0;
+  if(progressReceiptUnselectVisible)progressReceiptUnselectVisible.disabled=visibleSelected===0;
+  if(progressReceiptRevealSelected)progressReceiptRevealSelected.disabled=total===visibleSelected;
+  if(progressReceiptSaveSelectedCsv)progressReceiptSaveSelectedCsv.disabled=total===0;
+  const reviewed=[...selectedReceiptKeys].filter(key=>reviewedEvidence.has(key)).length;
+  updateProgressReceiptReviewButtons(progressReceiptMarkSelected,progressReceiptUnmarkSelected,"선택한",total,reviewed);
   if(progressReceiptSaveSelected)progressReceiptSaveSelected.disabled=total===0;
   if(progressReceiptSelectionCount)progressReceiptSelectionCount.textContent=lastProgressRestore?
    "선택 "+total+"건 · 현재 표시 "+visibleSelected+"건 · 가려진 선택 "+(total-visibleSelected)+"건":"";
@@ -2596,6 +2611,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const key of progressReceiptCards.keys())selectedReceiptKeys.add(key);
   updateProgressReceipt();
   progressReceiptClearSelection?.focus?.();
+ });
+ progressReceiptUnselectVisible?.addEventListener("click",()=>{
+  for(const key of progressReceiptCards.keys())selectedReceiptKeys.delete(key);
+  updateProgressReceipt();
+  (progressReceiptRevealSelected?.disabled?progressReceiptSelectedOnly:progressReceiptRevealSelected)?.focus?.();
+ });
+ progressReceiptRevealSelected?.addEventListener("click",()=>{
+  resetProgressReceiptFilters();
+  if(progressReceiptSelectedOnly)progressReceiptSelectedOnly.checked=true;
+  updateProgressReceipt();
+  progressReceiptSelectedOnly?.focus?.();
  });
  progressReceiptClearSelection?.addEventListener("click",()=>{
   selectedReceiptKeys.clear();
@@ -2697,23 +2723,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(order==="unreviewed")visible.sort((a,b)=>Number(a.reviewed)-Number(b.reviewed));
   return visible;
  }
- function updateProgressReceiptBulkButtons(entries){
-  const reviewed=entries.filter(entry=>entry.reviewed).length;
+ function updateProgressReceiptReviewButtons(mark,unmark,scope,total,reviewed){
   for(const [button,label,count] of [
-   [progressReceiptMark,"표시된 발언 검토 완료",entries.length-reviewed],
-   [progressReceiptUnmark,"표시된 발언 검토 해제",reviewed],
+   [mark,scope+" 발언 검토 완료",total-reviewed],
+   [unmark,scope+" 발언 검토 해제",reviewed],
   ]){
    if(!button)continue;
    button.disabled=count===0;
    button.textContent=label+(count?" ("+count+"건)":"");
   }
  }
- function setVisibleProgressReceiptReview(reviewed){
+ function setProgressReceiptReview(reviewed,selected=false){
   if(!lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
-  const rows=visibleProgressReceiptEntries(progressReceiptEntries(),progressReceiptFilters());
-  applyReviewChange(rows.map(entry=>entry.key),reviewed,reviewed?"표시된 복원 발언 검토 완료":"표시된 복원 발언 검토 해제");
+  const keys=selected?selectedReceiptKeys:progressReceiptCards.keys();
+  const scope=selected?"선택한":"표시된";
+  applyReviewChange(keys,reviewed,scope+(reviewed?" 복원 발언 검토 완료":" 복원 발언 검토 해제"));
   updateConcernView();
-  const active=reviewed?progressReceiptMark:progressReceiptUnmark;
+  const active=selected?(reviewed?progressReceiptMarkSelected:progressReceiptUnmarkSelected):
+   (reviewed?progressReceiptMark:progressReceiptUnmark);
   if(active?.disabled)(progressReceiptReviewState||progressReceiptHeading)?.focus?.();
  }
  function updateProgressReceipt(){
@@ -2730,7 +2757,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(progressReceiptSaveJson)progressReceiptSaveJson.disabled=true;
    if(progressReceiptSideProgress)progressReceiptSideProgress.textContent="";
    if(progressReceiptSaveCsv)progressReceiptSaveCsv.disabled=true;
-   updateProgressReceiptBulkButtons([]);
+   updateProgressReceiptReviewButtons(progressReceiptMark,progressReceiptUnmark,"표시된",0,0);
    if(progressReceiptSaveVisible)progressReceiptSaveVisible.disabled=true;
    if(progressReceiptCount)progressReceiptCount.textContent="";
    if(progressReceiptSummary)progressReceiptSummary.textContent="";
@@ -2754,7 +2781,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }).join(" · "):"";
   if(progressReceiptSaveCsv)progressReceiptSaveCsv.disabled=visible.length===0;
   if(progressReceiptSaveJson)progressReceiptSaveJson.disabled=visible.length===0;
-  updateProgressReceiptBulkButtons(visible);
+  updateProgressReceiptReviewButtons(progressReceiptMark,progressReceiptUnmark,"표시된",
+   visible.length,visible.filter(entry=>entry.reviewed).length);
   if(progressReceiptSaveVisible)progressReceiptSaveVisible.disabled=visible.length===0;
   if(progressReceiptCount)progressReceiptCount.textContent="표시된 복원 발언 "+visible.length+" / "+entries.length+"건";
   const rows=visible.map(({key,label,statement,reviewed})=>{
@@ -2823,8 +2851,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  progressReceiptSearch?.addEventListener("input",updateProgressReceipt);
  progressReceiptOrder?.addEventListener("change",updateProgressReceipt);
  for(const select of Object.values(progressReceiptSelects))select?.addEventListener("change",updateProgressReceipt);
- progressReceiptMark?.addEventListener("click",()=>setVisibleProgressReceiptReview(true));
- progressReceiptUnmark?.addEventListener("click",()=>setVisibleProgressReceiptReview(false));
+ progressReceiptMark?.addEventListener("click",()=>setProgressReceiptReview(true));
+ progressReceiptUnmark?.addEventListener("click",()=>setProgressReceiptReview(false));
+ progressReceiptMarkSelected?.addEventListener("click",()=>setProgressReceiptReview(true,true));
+ progressReceiptUnmarkSelected?.addEventListener("click",()=>setProgressReceiptReview(false,true));
  progressReceiptReset?.addEventListener("click",()=>{
   resetProgressReceiptFilters();
   updateProgressReceipt();
@@ -2883,6 +2913,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  progressReceiptSaveCsv?.addEventListener("click",()=>saveProgressReceipt("visible","CSV"));
  progressReceiptSaveJson?.addEventListener("click",()=>saveProgressReceipt("visible","JSON"));
  progressReceiptSaveSelected?.addEventListener("click",()=>saveProgressReceipt("selected","JSON"));
+ progressReceiptSaveSelectedCsv?.addEventListener("click",()=>saveProgressReceipt("selected","CSV"));
  const progressPreview=document.getElementById("ai-meeting-evidence-progress-preview");
  const applyProgress=document.getElementById("ai-meeting-evidence-progress-apply");
  const progressDetails=document.getElementById("ai-meeting-evidence-progress-details");
