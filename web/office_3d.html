@@ -2173,6 +2173,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <summary id="ai-meeting-progress-receipt-heading" style="min-height:44px">마지막 복원 내역</summary>
    <p id="ai-meeting-progress-receipt-summary" style="overflow-wrap:anywhere"></p>
    <label>복원 발언 검색 <input id="ai-meeting-progress-receipt-search" type="search" maxlength="40" placeholder="발언 번호, 에이전트 또는 요약" style="min-height:44px;max-width:100%"></label>
+   <div role="group" aria-label="검토 상태 빠른 필터">
+    <button id="ai-meeting-progress-receipt-quick-unreviewed" type="button" style="min-height:44px" aria-pressed="false">미검토만</button>
+    <button id="ai-meeting-progress-receipt-quick-reviewed" type="button" style="min-height:44px" aria-pressed="false">검토 완료만</button>
+   </div>
+   <button id="ai-meeting-progress-receipt-reset" type="button" style="min-height:44px" disabled>복원 내역 필터 초기화</button>
+   <p id="ai-meeting-progress-receipt-active-filters" style="overflow-wrap:anywhere"></p>
    <p id="ai-meeting-progress-receipt-count" role="status"></p>
    <p id="ai-meeting-progress-receipt-side-progress"></p>
    <p id="ai-meeting-progress-receipt-selection-count" role="status"></p>
@@ -2196,7 +2202,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <label>복원 발언 정렬 <select id="ai-meeting-progress-receipt-order" style="min-height:44px">
      <option value="default">이전 회의 먼저</option><option value="later">이후 회의 먼저</option><option value="unreviewed">미검토 먼저</option>
     </select></label>
-    <button id="ai-meeting-progress-receipt-reset" type="button" style="min-height:44px" disabled>복원 내역 필터 초기화</button>
    </details>
    <details id="ai-meeting-progress-receipt-review-tools">
     <summary style="min-height:44px">일괄 검토와 되돌리기</summary>
@@ -2244,6 +2249,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <p id="ai-meeting-progress-receipt-selected-position" role="status" tabindex="-1"></p>
    </div>
    <ul id="ai-meeting-progress-receipt-rows"></ul>
+   <button id="ai-meeting-progress-receipt-back-top" type="button" style="min-height:44px">복원 내역 상단으로 이동</button>
   </details>
   <p id="ai-meeting-evidence-review-history" role="status"></p>
   <p id="ai-meeting-evidence-reviewed-count" role="status"></p>
@@ -2808,6 +2814,38 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(next)focusReceiptPreview(next);
  });
  const receiptPhaseLabels={ANALYSIS:"초기 분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"};
+ const quickReceiptReviewFilters={
+  unreviewed:document.getElementById("ai-meeting-progress-receipt-quick-unreviewed"),
+  reviewed:document.getElementById("ai-meeting-progress-receipt-quick-reviewed"),
+ };
+ const progressReceiptActiveFilters=document.getElementById("ai-meeting-progress-receipt-active-filters");
+ for(const [state,button] of Object.entries(quickReceiptReviewFilters)){
+  button?.addEventListener("click",()=>{
+   if(!progressReceiptReviewState)return;
+   progressReceiptReviewState.value=progressReceiptReviewState.value===state?"all":state;
+   updateProgressReceipt();
+  });
+ }
+ document.getElementById("ai-meeting-progress-receipt-back-top")?.addEventListener("click",()=>{
+  progressReceiptHeading?.focus?.({preventScroll:true});
+  progressReceiptHeading?.scrollIntoView?.({block:"nearest"});
+ });
+ function updateReceiptFilterIndicators({search,side,phase,verdict,state,selectedOnly}){
+  for(const [value,button] of Object.entries(quickReceiptReviewFilters)){
+   button?.setAttribute("aria-pressed",String(state===value));
+  }
+  const order=progressReceiptOrder?.value;
+  const active=[
+   search.trim()&&"검색 "+search.trim(),
+   side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),
+   receiptPhaseLabels[phase],
+   labels[verdict],
+   state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),
+   selectedOnly&&"선택한 발언만",
+   order==="later"?"이후 회의 먼저":order==="unreviewed"?"미검토 먼저":"",
+  ].filter(Boolean);
+  if(progressReceiptActiveFilters)progressReceiptActiveFilters.textContent=active.length?active.join(" · "):"";
+ }
  const progressReceiptSelects={side:progressReceiptSide,phase:progressReceiptPhase,
   verdict:progressReceiptVerdict,state:progressReceiptReviewState};
  function resetProgressReceiptFilters(){
@@ -2890,6 +2928,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const [key,{preview}] of progressReceiptCards)rememberProgressPreview(key,preview);
   progressReceiptCards.clear();
   if(!available){
+   if(progressReceiptActiveFilters)progressReceiptActiveFilters.textContent="";
    openProgressPreviews.clear();
    selectedReceiptKeys.clear();
    updateProgressReceiptSelectionControls([]);
@@ -2909,6 +2948,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(progressReceiptSummary)progressReceiptSummary.textContent=progressReceiptDescription(entries);
   if(!progressReceiptRows)return;
   const filters=progressReceiptFilters();
+  updateReceiptFilterIndicators(filters);
   const visible=visibleProgressReceiptEntries(entries,filters);
   const {search,state,selectedOnly,...scopes}=filters;
   const scoped=selectedOnly||Object.values(scopes).some(value=>value!=="all");
