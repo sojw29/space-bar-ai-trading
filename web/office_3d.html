@@ -2255,13 +2255,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <p id="ai-meeting-progress-receipt-view-status" role="status" style="overflow-wrap:anywhere"></p>
     <div id="ai-meeting-progress-receipt-view-preview" hidden>
      <p id="ai-meeting-progress-receipt-view-preview-summary" style="white-space:pre-line;overflow-wrap:anywhere"></p>
-     <fieldset>
+     <fieldset style="display:grid;gap:8px;min-width:0;overflow-wrap:anywhere">
       <legend>적용할 화면 항목</legend>
-      <label><input id="ai-meeting-progress-receipt-view-filters" type="checkbox" checked> 검색과 필터</label>
-      <label><input id="ai-meeting-progress-receipt-view-order" type="checkbox" checked> 정렬 순서</label>
-      <label><input id="ai-meeting-progress-receipt-view-selection" type="checkbox" checked> 선택한 발언</label>
-      <label><input id="ai-meeting-progress-receipt-view-expanded" type="checkbox" checked> 펼친 요약</label>
-      <label><input id="ai-meeting-progress-receipt-view-cursor" type="checkbox" checked> 발언 이동 위치</label>
+      <label><input id="ai-meeting-progress-receipt-view-filters" type="checkbox" checked> 검색과 필터 <span id="ai-meeting-progress-receipt-view-diff-filters"></span></label>
+      <label><input id="ai-meeting-progress-receipt-view-order" type="checkbox" checked> 정렬 순서 <span id="ai-meeting-progress-receipt-view-diff-order"></span></label>
+      <label><input id="ai-meeting-progress-receipt-view-selection" type="checkbox" checked> 선택한 발언 <span id="ai-meeting-progress-receipt-view-diff-selection"></span></label>
+      <label><input id="ai-meeting-progress-receipt-view-expanded" type="checkbox" checked> 펼친 요약 <span id="ai-meeting-progress-receipt-view-diff-expanded"></span></label>
+      <label><input id="ai-meeting-progress-receipt-view-cursor" type="checkbox" checked> 발언 이동 위치 <span id="ai-meeting-progress-receipt-view-diff-cursor"></span></label>
      </fieldset>
      <button id="ai-meeting-progress-receipt-view-apply" type="button" style="min-height:44px">검토 화면 적용</button>
      <button id="ai-meeting-progress-receipt-view-cancel" type="button" style="min-height:44px">불러오기 취소</button>
@@ -2843,6 +2843,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(progressReceiptExpand)progressReceiptExpand.disabled=!cards.some(([,card])=>!card.preview.open);
   if(progressReceiptCollapse)progressReceiptCollapse.disabled=!cards.some(([,card])=>card.preview.open);
   updateSelectedReceiptNavigation();
+  updateReceiptViewDifferences();
  }
  function rememberProgressPreview(key,preview){
   if(preview.open)openProgressPreviews.add(key);
@@ -3242,15 +3243,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(progressReceiptViewSummary)progressReceiptViewSummary.textContent="";
   updateReceiptViewApply();
  }
- function previewProgressReceiptView(view,restore,filename){
-  pendingProgressReceiptView={view,restore};
-  for(const control of Object.values(receiptViewParts))if(control)control.checked=true;
-  updateReceiptViewApply();
-  if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=false;
-  const {filters,order,selected,expanded,cursor}=view;
-  const entries=progressReceiptEntries();
-  const cursorLabel=entries.find(entry=>entry.key===cursor)?.label||"없음";
-  const conditions=[
+ function receiptViewFilterSummary(filters){
+  return [
    filters.search&&"검색 "+filters.search,
    filters.side==="earlier"?"이전 회의만":filters.side==="later"?"이후 회의만":"",
    filters.agent!=="all"&&filters.agent,
@@ -3259,10 +3253,55 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    labels[filters.verdict],
    filters.state==="reviewed"?"검토 완료만":filters.state==="unreviewed"?"미검토만":"",
    filters.selectedOnly&&"선택한 발언만",
-  ].filter(Boolean);
+  ].filter(Boolean).join(" · ")||"전체";
+ }
+ const receiptViewDiffFields=Object.fromEntries(Object.keys(receiptViewParts).map(part=>[
+  part,document.getElementById("ai-meeting-progress-receipt-view-diff-"+part),
+ ]));
+ function receiptViewSetDifference(current,incoming,addedLabel,removedLabel){
+  const next=new Set(incoming);
+  const added=[...next].filter(key=>!current.has(key)).length;
+  const removed=[...current].filter(key=>!next.has(key)).length;
+  return added||removed?current.size+"건 → "+next.size+"건 · "+addedLabel+" "+added+"건 · "+removedLabel+" "+removed+"건":"변경 없음";
+ }
+ function updateReceiptViewDifferences(){
+  if(!pendingProgressReceiptView)return;
+  const {view}=pendingProgressReceiptView;
+  const open=new Set(openProgressPreviews);
+  for(const [key,{preview}] of progressReceiptCards){
+   if(preview.open)open.add(key);
+   else open.delete(key);
+  }
+  const entries=progressReceiptEntries();
+  const formatCursor=key=>{
+   const entry=entries.find(row=>row.key===key);
+   return entry?(entry.period==="earlier"?"이전":"이후")+" ["+entry.statement.id+"] "+entry.statement.agent:"없음";
+  };
+  const formatOrder=order=>receiptSorts[order]?.label||"이전 회의 먼저";
+  const currentFilters=progressReceiptFilters();
+  const currentOrder=progressReceiptOrder?.value||"default";
+  const differences={
+   filters:Object.keys(currentFilters).every(key=>currentFilters[key]===view.filters[key])?"변경 없음":
+    receiptViewFilterSummary(currentFilters)+" → "+receiptViewFilterSummary(view.filters),
+   order:currentOrder===view.order?"변경 없음":formatOrder(currentOrder)+" → "+formatOrder(view.order),
+   selection:receiptViewSetDifference(selectedReceiptKeys,view.selected,"추가","해제"),
+   expanded:receiptViewSetDifference(open,view.expanded,"펼침","접음"),
+   cursor:lastReceiptPreviewKey===view.cursor?"변경 없음":formatCursor(lastReceiptPreviewKey)+" → "+formatCursor(view.cursor),
+  };
+  for(const [part,field] of Object.entries(receiptViewDiffFields))if(field)field.textContent=differences[part];
+ }
+ function previewProgressReceiptView(view,restore,filename){
+  pendingProgressReceiptView={view,restore};
+  for(const control of Object.values(receiptViewParts))if(control)control.checked=true;
+  updateReceiptViewApply();
+  if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=false;
+  updateReceiptViewDifferences();
+  const {filters,order,selected,expanded,cursor}=view;
+  const entries=progressReceiptEntries();
+  const cursorLabel=entries.find(entry=>entry.key===cursor)?.label||"없음";
   if(progressReceiptViewSummary)progressReceiptViewSummary.textContent=[
    filename||"검토 화면 JSON",
-   "필터 "+(conditions.join(" · ")||"전체")+" · 정렬 "+(receiptSorts[order]?.label||"이전 회의 먼저"),
+   "필터 "+receiptViewFilterSummary(filters)+" · 정렬 "+(receiptSorts[order]?.label||"이전 회의 먼저"),
    "선택 "+selected.length+"건 · 펼친 요약 "+expanded.length+"건",
    "이동 위치 "+cursorLabel,
   ].join("\n");
