@@ -2220,7 +2220,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <button id="ai-meeting-progress-receipt-selected-prev" type="button" style="min-height:44px">이전 선택 발언</button>
     <button id="ai-meeting-progress-receipt-selected-next" type="button" style="min-height:44px">다음 선택 발언</button>
     <button id="ai-meeting-progress-receipt-selected-last" type="button" style="min-height:44px">마지막 선택 발언</button>
-    <p id="ai-meeting-progress-receipt-selected-position" role="status"></p>
+    <label>선택 발언 바로 이동 <select id="ai-meeting-progress-receipt-selected-picker" style="min-height:44px;max-width:100%"></select></label>
+    <button id="ai-meeting-progress-receipt-selected-unreviewed" type="button" style="min-height:44px" disabled>다음 미검토 선택 발언</button>
+    <button id="ai-meeting-progress-receipt-selected-continue" type="button" style="min-height:44px" disabled>검토 완료 후 다음 미검토 선택 발언</button>
+    <button id="ai-meeting-progress-receipt-selected-source" type="button" style="min-height:44px" disabled>현재 선택 발언 원문 보기</button>
+    <p id="ai-meeting-progress-receipt-selected-progress"></p>
+    <p id="ai-meeting-progress-receipt-selected-position" role="status" tabindex="-1"></p>
    </div>
    <ul id="ai-meeting-progress-receipt-rows"></ul>
   </details>
@@ -2641,6 +2646,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let lastReceiptPreviewKey=null;
  const selectedReceiptNav=document.getElementById("ai-meeting-progress-receipt-selected-nav");
  const selectedReceiptPosition=document.getElementById("ai-meeting-progress-receipt-selected-position");
+ const selectedReceiptPicker=document.getElementById("ai-meeting-progress-receipt-selected-picker");
+ const selectedReceiptUnreviewed=document.getElementById("ai-meeting-progress-receipt-selected-unreviewed");
+ const selectedReceiptContinue=document.getElementById("ai-meeting-progress-receipt-selected-continue");
+ const selectedReceiptSource=document.getElementById("ai-meeting-progress-receipt-selected-source");
+ const selectedReceiptProgress=document.getElementById("ai-meeting-progress-receipt-selected-progress");
  const selectedReceiptNavButtons={
   first:document.getElementById("ai-meeting-progress-receipt-selected-first"),
   prev:document.getElementById("ai-meeting-progress-receipt-selected-prev"),
@@ -2654,6 +2664,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const cards=displayedSelectedReceiptCards();
   const current=cards.findIndex(([key])=>key===lastReceiptPreviewKey);
   if(selectedReceiptNav)selectedReceiptNav.hidden=cards.length===0;
+  const reviewed=cards.filter(([key])=>reviewedEvidence.has(key)).length;
+  if(selectedReceiptUnreviewed)selectedReceiptUnreviewed.disabled=reviewed===cards.length;
+  if(selectedReceiptContinue)selectedReceiptContinue.disabled=current<0||reviewedEvidence.has(lastReceiptPreviewKey);
+  if(selectedReceiptSource)selectedReceiptSource.disabled=current<0;
+  if(selectedReceiptProgress)selectedReceiptProgress.textContent=cards.length?
+   "표시된 선택 중 검토 "+reviewed+" / "+cards.length+"건 · 미검토 "+(cards.length-reviewed)+"건":"";
+  if(selectedReceiptPicker){
+   const placeholder=document.createElement("option");
+   placeholder.value="";
+   placeholder.textContent="발언 선택";
+   selectedReceiptPicker.replaceChildren(placeholder,...cards.map(([key,{label}])=>{
+    const option=document.createElement("option");
+    option.value=key;
+    option.textContent=label;
+    return option;
+   }));
+   selectedReceiptPicker.value=current<0?"":lastReceiptPreviewKey;
+  }
   const disabled={
    first:cards.length===0||current===0,
    prev:current<=0,
@@ -2683,6 +2711,34 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(target)focusReceiptPreview(target);
   });
  }
+ function nextUnreviewedReceiptCard(cards){
+  const before=cards.findIndex(([key])=>key===lastReceiptPreviewKey);
+  return cards.find(([key],index)=>index>before&&!reviewedEvidence.has(key))||
+   cards.find(([key])=>!reviewedEvidence.has(key));
+ }
+ selectedReceiptPicker?.addEventListener("change",()=>{
+  const target=displayedSelectedReceiptCards().find(([key])=>key===selectedReceiptPicker.value);
+  if(target)focusReceiptPreview(target);
+ });
+ selectedReceiptUnreviewed?.addEventListener("click",()=>{
+  const target=nextUnreviewedReceiptCard(displayedSelectedReceiptCards());
+  if(target)focusReceiptPreview(target);
+ });
+ selectedReceiptSource?.addEventListener("click",()=>{
+  if(!selectedReceiptSource.disabled)openRestoredEvidence(lastReceiptPreviewKey);
+ });
+ selectedReceiptContinue?.addEventListener("click",()=>{
+  if(selectedReceiptContinue.disabled||(!pairedArchives&&!canUseRecord()))return;
+  const key=lastReceiptPreviewKey;
+  applyReviewChange([key],true,"선택한 복원 발언 검토 완료");
+  const next=nextUnreviewedReceiptCard(displayedSelectedReceiptCards());
+  updateConcernView();
+  const following=next&&progressReceiptCards.get(next[0]);
+  const current=progressReceiptCards.get(key);
+  if(following)focusReceiptPreview([next[0],following]);
+  else if(current)focusReceiptPreview([key,current]);
+  else (selectedReceiptNav?.hidden?progressReceiptReviewState:selectedReceiptPosition)?.focus?.();
+ });
  function updateReceiptPreviewControls(){
   const cards=[...progressReceiptCards];
   if(progressReceiptNext)progressReceiptNext.disabled=!cards.some(([key])=>!reviewedEvidence.has(key));
@@ -2705,10 +2761,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
  }
  progressReceiptNext?.addEventListener("click",()=>{
-  const cards=[...progressReceiptCards];
-  const before=cards.findIndex(([key])=>key===lastReceiptPreviewKey);
-  const next=cards.find(([key],index)=>index>before&&!reviewedEvidence.has(key))||
-   cards.find(([key])=>!reviewedEvidence.has(key));
+  const next=nextUnreviewedReceiptCard([...progressReceiptCards]);
   if(next)focusReceiptPreview(next);
  });
  const receiptPhaseLabels={ANALYSIS:"초기 분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"};
