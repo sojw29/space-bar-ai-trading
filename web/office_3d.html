@@ -2183,7 +2183,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <button id="ai-meeting-progress-receipt-quick-reviewed" type="button" style="min-height:44px" aria-pressed="false">검토 완료만</button>
    </div>
    <button id="ai-meeting-progress-receipt-reset" type="button" style="min-height:44px" disabled>복원 내역 필터 초기화</button>
-   <p id="ai-meeting-progress-receipt-active-filters" style="overflow-wrap:anywhere"></p>
+   <div id="ai-meeting-progress-receipt-active-filters" role="group" aria-label="적용 중인 필터와 정렬" hidden></div>
    <p id="ai-meeting-progress-receipt-count" role="status"></p>
    <p id="ai-meeting-progress-receipt-side-progress"></p>
    <p id="ai-meeting-progress-receipt-selection-count" role="status"></p>
@@ -2857,17 +2857,35 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    button?.setAttribute("aria-pressed",String(side===value));
   }
   if(progressReceiptClearSearch)progressReceiptClearSearch.disabled=!search;
+  if(!progressReceiptActiveFilters)return;
   const order=progressReceiptOrder?.value;
   const active=[
-   search.trim()&&"검색 "+search.trim(),
-   side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),
-   receiptPhaseLabels[phase],
-   labels[verdict],
-   state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),
-   selectedOnly&&"선택한 발언만",
-   order==="later"?"이후 회의 먼저":order==="unreviewed"?"미검토 먼저":"",
-  ].filter(Boolean);
-  if(progressReceiptActiveFilters)progressReceiptActiveFilters.textContent=active.length?active.join(" · "):"";
+   [search.trim()&&"검색 "+search.trim(),progressReceiptSearch,"value",""],
+   [side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),progressReceiptSide,"value","all"],
+   [receiptPhaseLabels[phase],progressReceiptPhase,"value","all"],
+   [labels[verdict],progressReceiptVerdict,"value","all"],
+   [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),progressReceiptReviewState,"value","all"],
+   [selectedOnly&&"선택한 발언만",progressReceiptSelectedOnly,"checked",false],
+   [order==="later"?"이후 회의 먼저":order==="unreviewed"?"미검토 먼저":"",progressReceiptOrder,"value","default"],
+  ].filter(([label,control])=>label&&control);
+  progressReceiptActiveFilters.hidden=active.length===0;
+  const buttons=active.map(([label,control,property,defaultValue],index)=>{
+   const button=document.createElement("button");
+   button.type="button";
+   button.style.minHeight="44px";
+   button.style.maxWidth="100%";
+   button.style.overflowWrap="anywhere";
+   button.textContent=label+" ×";
+   button.setAttribute("aria-label",label+" 해제");
+   button.addEventListener("click",()=>{
+    control[property]=defaultValue;
+    updateProgressReceipt();
+    const remaining=progressReceiptActiveFilters.children;
+    (remaining[Math.min(index,remaining.length-1)]||progressReceiptSearch)?.focus?.();
+   });
+   return button;
+  });
+  progressReceiptActiveFilters.replaceChildren(...buttons);
  }
  const progressReceiptSelects={side:progressReceiptSide,phase:progressReceiptPhase,
   verdict:progressReceiptVerdict,state:progressReceiptReviewState};
@@ -2952,7 +2970,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   progressReceiptCards.clear();
   if(!available){
    if(progressReceiptClearSearch)progressReceiptClearSearch.disabled=true;
-   if(progressReceiptActiveFilters)progressReceiptActiveFilters.textContent="";
+   if(progressReceiptActiveFilters){
+    progressReceiptActiveFilters.hidden=true;
+    progressReceiptActiveFilters.replaceChildren();
+   }
    openProgressPreviews.clear();
    selectedReceiptKeys.clear();
    updateProgressReceiptSelectionControls([]);
