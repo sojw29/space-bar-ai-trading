@@ -890,6 +890,35 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(restoredButton().textContent,/검토 완료/);
    undoReview.click();
    receiptReset.click();
+   await loadFile({...progressFile,reviewed:['earlier:M05','later:M04','later:M07']});
+   assert.equal(applyProgress.disabled,false);
+   applyProgress.click();
+   const sortedReceiptRows=()=>receiptRows.children.map(row=>row.children[0].textContent.match(/\[(M0[1-7])\]/)[1]);
+   assert.deepEqual(sortedReceiptRows(),['M05','M04','M07']);
+   for(const [order,expected] of [
+    ['id',['M04','M05','M07']],
+    ['agent',['M04','M07','M05']],
+    ['phase',['M07','M05','M04']],
+   ]){
+    receiptOrder.value=order;receiptOrder.change();
+    assert.deepEqual(sortedReceiptRows(),expected);
+   }
+   receiptOrder.value='verdict';receiptOrder.change();
+   receiptJson.click();
+   const verdictSorted=JSON.parse(await savedBlob.text());
+   const verdictPriority=['INSUFFICIENT_DATA','REVIEW_NEEDED','OBSERVATION_ONLY'];
+   const positions=verdictSorted.statements.map(row=>verdictPriority.indexOf(row.verdict));
+   assert.equal(verdictSorted.order,'verdict');
+   assert.deepEqual(positions,[...positions].sort((a,b)=>a-b));
+   assert.deepEqual(verdictSorted.statements.map(row=>row.statement_id),sortedReceiptRows());
+   receiptReset.click();
+   receiptReview().click();
+   receiptOrder.value='reviewed';receiptOrder.change();
+   assert.deepEqual(sortedReceiptRows(),['M04','M07','M05']);
+   assert.match(receiptRows.children[2].children[0].textContent,/현재 미검토/);
+   undoReview.click();
+   undoReview.click();
+   receiptReset.click();
    evidenceSearchInput.value='M01';evidenceSearchInput.input();
    evidenceSearchInput.value='';evidenceSearchInput.input();
    const nextUnchecked=elements['ai-meeting-evidence-next-unreviewed'];
