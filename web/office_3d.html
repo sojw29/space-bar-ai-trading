@@ -2173,49 +2173,62 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <summary id="ai-meeting-progress-receipt-heading" style="min-height:44px">마지막 복원 내역</summary>
    <p id="ai-meeting-progress-receipt-summary" style="overflow-wrap:anywhere"></p>
    <label>복원 발언 검색 <input id="ai-meeting-progress-receipt-search" type="search" maxlength="40" placeholder="발언 번호, 에이전트 또는 요약" style="min-height:44px;max-width:100%"></label>
-   <label>회의 <select id="ai-meeting-progress-receipt-side" style="min-height:44px">
-    <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
-   </select></label>
-   <label>회의 단계 <select id="ai-meeting-progress-receipt-phase" style="min-height:44px">
-    <option value="all">전체</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
-   </select></label>
-   <label>발언 판정 <select id="ai-meeting-progress-receipt-verdict" style="min-height:44px">
-    <option value="all">전체</option><option value="OBSERVATION_ONLY">관측 요약</option><option value="REVIEW_NEEDED">추가 검토 필요</option><option value="INSUFFICIENT_DATA">자료 부족</option>
-   </select></label>
-   <label>검토 상태 <select id="ai-meeting-progress-receipt-review-state" style="min-height:44px">
-    <option value="all">전체</option><option value="unreviewed">현재 미검토</option><option value="reviewed">검토 완료</option>
-   </select></label>
-   <label>복원 발언 정렬 <select id="ai-meeting-progress-receipt-order" style="min-height:44px">
-    <option value="default">이전 회의 먼저</option><option value="later">이후 회의 먼저</option><option value="unreviewed">미검토 먼저</option>
-   </select></label>
-   <button id="ai-meeting-progress-receipt-undo" type="button" style="min-height:44px" disabled>검토 변경 되돌리기</button>
-   <button id="ai-meeting-progress-receipt-redo" type="button" style="min-height:44px" disabled>검토 변경 다시 적용</button>
-   <p id="ai-meeting-progress-receipt-history"></p>
-   <button id="ai-meeting-progress-receipt-mark" type="button" style="min-height:44px" disabled>표시된 발언 검토 완료</button>
-   <button id="ai-meeting-progress-receipt-unmark" type="button" style="min-height:44px" disabled>표시된 발언 검토 해제</button>
-   <button id="ai-meeting-progress-receipt-save" type="button" style="min-height:44px">전체 복원 내역 TXT 저장</button>
-   <button id="ai-meeting-progress-receipt-save-visible" type="button" style="min-height:44px" disabled>표시된 복원 내역 TXT 저장</button>
-   <button id="ai-meeting-progress-receipt-save-csv" type="button" style="min-height:44px" disabled>표시된 복원 내역 CSV 저장</button>
-   <button id="ai-meeting-progress-receipt-save-json" type="button" style="min-height:44px" disabled>표시된 복원 내역 JSON 저장</button>
-   <button id="ai-meeting-progress-receipt-close" type="button" style="min-height:44px">복원 내역 접기</button>
-   <p id="ai-meeting-progress-receipt-status" role="status"></p>
-   <button id="ai-meeting-progress-receipt-reset" type="button" style="min-height:44px" disabled>복원 내역 필터 초기화</button>
    <p id="ai-meeting-progress-receipt-count" role="status"></p>
    <p id="ai-meeting-progress-receipt-side-progress"></p>
-   <button id="ai-meeting-progress-receipt-next" type="button" style="min-height:44px" disabled>다음 미검토 요약 보기</button>
-   <button id="ai-meeting-progress-receipt-expand" type="button" style="min-height:44px" disabled>표시된 요약 모두 펼치기</button>
-   <button id="ai-meeting-progress-receipt-collapse" type="button" style="min-height:44px" disabled>표시된 요약 모두 접기</button>
-   <label><input id="ai-meeting-progress-receipt-selected-only" type="checkbox"> 선택한 발언만 보기</label>
-   <button id="ai-meeting-progress-receipt-select-visible" type="button" style="min-height:44px" disabled>표시된 발언 모두 선택</button>
-   <button id="ai-meeting-progress-receipt-clear-selection" type="button" style="min-height:44px" disabled>복원 발언 선택 모두 해제</button>
-   <button id="ai-meeting-progress-receipt-save-selected" type="button" style="min-height:44px" disabled>선택한 복원 발언 JSON 저장</button>
-   <button id="ai-meeting-progress-receipt-unselect-visible" type="button" style="min-height:44px" disabled>표시된 발언 선택 해제</button>
-   <button id="ai-meeting-progress-receipt-reveal-selected" type="button" style="min-height:44px" disabled>가려진 선택 보기</button>
-   <button id="ai-meeting-progress-receipt-mark-selected" type="button" style="min-height:44px" disabled>선택한 발언 검토 완료</button>
-   <button id="ai-meeting-progress-receipt-unmark-selected" type="button" style="min-height:44px" disabled>선택한 발언 검토 해제</button>
-   <button id="ai-meeting-progress-receipt-save-selected-csv" type="button" style="min-height:44px" disabled>선택한 복원 발언 CSV 저장</button>
-   <button id="ai-meeting-progress-receipt-save-selected-txt" type="button" style="min-height:44px" disabled>선택한 복원 발언 TXT 저장</button>
    <p id="ai-meeting-progress-receipt-selection-count" role="status"></p>
+   <label><input id="ai-meeting-progress-receipt-selected-only" type="checkbox"> 선택한 발언만 보기</label>
+   <button id="ai-meeting-progress-receipt-next" type="button" style="min-height:44px" disabled>다음 미검토 요약 보기</button>
+   <button id="ai-meeting-progress-receipt-jump" type="button" style="min-height:44px" disabled>발언 목록으로 이동</button>
+   <details id="ai-meeting-progress-receipt-filter-tools">
+    <summary style="min-height:44px">필터와 정렬</summary>
+    <label>회의 <select id="ai-meeting-progress-receipt-side" style="min-height:44px">
+     <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
+    </select></label>
+    <label>회의 단계 <select id="ai-meeting-progress-receipt-phase" style="min-height:44px">
+     <option value="all">전체</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
+    </select></label>
+    <label>발언 판정 <select id="ai-meeting-progress-receipt-verdict" style="min-height:44px">
+     <option value="all">전체</option><option value="OBSERVATION_ONLY">관측 요약</option><option value="REVIEW_NEEDED">추가 검토 필요</option><option value="INSUFFICIENT_DATA">자료 부족</option>
+    </select></label>
+    <label>검토 상태 <select id="ai-meeting-progress-receipt-review-state" style="min-height:44px">
+     <option value="all">전체</option><option value="unreviewed">현재 미검토</option><option value="reviewed">검토 완료</option>
+    </select></label>
+    <label>복원 발언 정렬 <select id="ai-meeting-progress-receipt-order" style="min-height:44px">
+     <option value="default">이전 회의 먼저</option><option value="later">이후 회의 먼저</option><option value="unreviewed">미검토 먼저</option>
+    </select></label>
+    <button id="ai-meeting-progress-receipt-reset" type="button" style="min-height:44px" disabled>복원 내역 필터 초기화</button>
+   </details>
+   <details id="ai-meeting-progress-receipt-review-tools">
+    <summary style="min-height:44px">일괄 검토와 되돌리기</summary>
+    <button id="ai-meeting-progress-receipt-mark" type="button" style="min-height:44px" disabled>표시된 발언 검토 완료</button>
+    <button id="ai-meeting-progress-receipt-unmark" type="button" style="min-height:44px" disabled>표시된 발언 검토 해제</button>
+    <button id="ai-meeting-progress-receipt-mark-selected" type="button" style="min-height:44px" disabled>선택한 발언 검토 완료</button>
+    <button id="ai-meeting-progress-receipt-unmark-selected" type="button" style="min-height:44px" disabled>선택한 발언 검토 해제</button>
+    <button id="ai-meeting-progress-receipt-undo" type="button" style="min-height:44px" disabled>검토 변경 되돌리기</button>
+    <button id="ai-meeting-progress-receipt-redo" type="button" style="min-height:44px" disabled>검토 변경 다시 적용</button>
+    <p id="ai-meeting-progress-receipt-history"></p>
+   </details>
+   <details id="ai-meeting-progress-receipt-selection-tools">
+    <summary style="min-height:44px">발언 선택과 요약</summary>
+    <button id="ai-meeting-progress-receipt-select-visible" type="button" style="min-height:44px" disabled>표시된 발언 모두 선택</button>
+    <button id="ai-meeting-progress-receipt-unselect-visible" type="button" style="min-height:44px" disabled>표시된 발언 선택 해제</button>
+    <button id="ai-meeting-progress-receipt-reveal-selected" type="button" style="min-height:44px" disabled>가려진 선택 보기</button>
+    <button id="ai-meeting-progress-receipt-clear-selection" type="button" style="min-height:44px" disabled>복원 발언 선택 모두 해제</button>
+    <button id="ai-meeting-progress-receipt-expand" type="button" style="min-height:44px" disabled>표시된 요약 모두 펼치기</button>
+    <button id="ai-meeting-progress-receipt-collapse" type="button" style="min-height:44px" disabled>표시된 요약 모두 접기</button>
+   </details>
+   <details id="ai-meeting-progress-receipt-export-tools">
+    <summary style="min-height:44px">복원 내역 저장</summary>
+    <button id="ai-meeting-progress-receipt-save" type="button" style="min-height:44px">전체 복원 내역 TXT 저장</button>
+    <button id="ai-meeting-progress-receipt-save-visible" type="button" style="min-height:44px" disabled>표시된 복원 내역 TXT 저장</button>
+    <button id="ai-meeting-progress-receipt-save-csv" type="button" style="min-height:44px" disabled>표시된 복원 내역 CSV 저장</button>
+    <button id="ai-meeting-progress-receipt-save-json" type="button" style="min-height:44px" disabled>표시된 복원 내역 JSON 저장</button>
+    <button id="ai-meeting-progress-receipt-save-selected-txt" type="button" style="min-height:44px" disabled>선택한 복원 발언 TXT 저장</button>
+    <button id="ai-meeting-progress-receipt-save-selected-csv" type="button" style="min-height:44px" disabled>선택한 복원 발언 CSV 저장</button>
+    <button id="ai-meeting-progress-receipt-save-selected" type="button" style="min-height:44px" disabled>선택한 복원 발언 JSON 저장</button>
+   </details>
+   <p id="ai-meeting-progress-receipt-status" role="status"></p>
+   <button id="ai-meeting-progress-receipt-close" type="button" style="min-height:44px">복원 내역 접기</button>
    <div id="ai-meeting-progress-receipt-selected-nav" role="group" aria-label="선택한 발언 이동" hidden>
     <button id="ai-meeting-progress-receipt-selected-first" type="button" style="min-height:44px">첫 선택 발언</button>
     <button id="ai-meeting-progress-receipt-selected-prev" type="button" style="min-height:44px">이전 선택 발언</button>
@@ -2647,6 +2660,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   progressReceiptSelectedOnly?.focus?.();
  });
  const progressReceiptCards=new Map();
+ const progressReceiptJump=document.getElementById("ai-meeting-progress-receipt-jump");
+ const progressReceiptFilterTools=document.getElementById("ai-meeting-progress-receipt-filter-tools");
+ function focusReceiptFilter(){
+  (progressReceiptFilterTools?.open?progressReceiptReviewState:progressReceiptSearch)?.focus?.();
+ }
+ progressReceiptJump?.addEventListener("click",()=>{
+  const first=progressReceiptCards.values().next().value;
+  first?.button.focus?.({preventScroll:true});
+  first?.button.scrollIntoView?.({block:"nearest"});
+ });
  const openProgressPreviews=new Set();
  let lastReceiptPreviewKey=null;
  const selectedReceiptNav=document.getElementById("ai-meeting-progress-receipt-selected-nav");
@@ -2754,11 +2777,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const current=progressReceiptCards.get(key);
   if(following)focusReceiptPreview([next[0],following]);
   else if(current)focusReceiptPreview([key,current]);
-  else (selectedReceiptNav?.hidden?progressReceiptReviewState:selectedReceiptPosition)?.focus?.();
+  else if(selectedReceiptNav?.hidden)focusReceiptFilter();
+  else selectedReceiptPosition?.focus?.();
  }
  selectedReceiptContinue?.addEventListener("click",()=>reviewSelectedReceiptCard(lastReceiptPreviewKey));
  function updateReceiptPreviewControls(){
   const cards=[...progressReceiptCards];
+  if(progressReceiptJump)progressReceiptJump.disabled=cards.length===0;
   if(progressReceiptNext)progressReceiptNext.disabled=!cards.some(([key])=>!reviewedEvidence.has(key));
   if(progressReceiptExpand)progressReceiptExpand.disabled=!cards.some(([,card])=>!card.preview.open);
   if(progressReceiptCollapse)progressReceiptCollapse.disabled=!cards.some(([,card])=>card.preview.open);
@@ -2857,7 +2882,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   updateConcernView();
   const active=selected?(reviewed?progressReceiptMarkSelected:progressReceiptUnmarkSelected):
    (reviewed?progressReceiptMark:progressReceiptUnmark);
-  if(active?.disabled)(progressReceiptReviewState||progressReceiptHeading)?.focus?.();
+  if(active?.disabled)focusReceiptFilter();
  }
  function updateProgressReceipt(){
   const available=!!(comparisonReport&&lastProgressRestore);
@@ -2934,7 +2959,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const mark=!reviewedEvidence.has(key);
     applyReviewChange([key],mark,mark?"근거 검토 완료":"근거 검토 해제");
     updateConcernView();
-    (progressReceiptCards.get(key)?.review||progressReceiptReviewState)?.focus?.();
+    const current=progressReceiptCards.get(key)?.review;
+    if(current)current.focus?.();
+    else focusReceiptFilter();
    });
    const selection=document.createElement("label");
    const checkbox=document.createElement("input");
