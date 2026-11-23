@@ -2173,6 +2173,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <summary id="ai-meeting-progress-receipt-heading" style="min-height:44px">마지막 복원 내역</summary>
    <p id="ai-meeting-progress-receipt-summary" style="overflow-wrap:anywhere"></p>
    <label>복원 발언 검색 <input id="ai-meeting-progress-receipt-search" type="search" maxlength="40" placeholder="발언 번호, 에이전트 또는 요약" style="min-height:44px;max-width:100%"></label>
+   <button id="ai-meeting-progress-receipt-clear-search" type="button" style="min-height:44px" disabled>검색어 지우기</button>
+   <div role="group" aria-label="회의 범위 빠른 필터">
+    <button id="ai-meeting-progress-receipt-quick-earlier" type="button" style="min-height:44px" aria-pressed="false">이전 회의만</button>
+    <button id="ai-meeting-progress-receipt-quick-later" type="button" style="min-height:44px" aria-pressed="false">이후 회의만</button>
+   </div>
    <div role="group" aria-label="검토 상태 빠른 필터">
     <button id="ai-meeting-progress-receipt-quick-unreviewed" type="button" style="min-height:44px" aria-pressed="false">미검토만</button>
     <button id="ai-meeting-progress-receipt-quick-reviewed" type="button" style="min-height:44px" aria-pressed="false">검토 완료만</button>
@@ -2653,12 +2658,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   updateProgressReceipt();
   (progressReceiptRevealSelected?.disabled?progressReceiptSelectedOnly:progressReceiptRevealSelected)?.focus?.();
  });
- progressReceiptRevealSelected?.addEventListener("click",()=>{
+ function revealSelectedReceiptRows(){
   resetProgressReceiptFilters();
   if(progressReceiptSelectedOnly)progressReceiptSelectedOnly.checked=true;
   updateProgressReceipt();
   progressReceiptSelectedOnly?.focus?.();
- });
+ }
+ progressReceiptRevealSelected?.addEventListener("click",revealSelectedReceiptRows);
  progressReceiptClearSelection?.addEventListener("click",()=>{
   selectedReceiptKeys.clear();
   if(progressReceiptSelectedOnly)progressReceiptSelectedOnly.checked=false;
@@ -2818,13 +2824,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   unreviewed:document.getElementById("ai-meeting-progress-receipt-quick-unreviewed"),
   reviewed:document.getElementById("ai-meeting-progress-receipt-quick-reviewed"),
  };
+ const quickReceiptSideFilters={
+  earlier:document.getElementById("ai-meeting-progress-receipt-quick-earlier"),
+  later:document.getElementById("ai-meeting-progress-receipt-quick-later"),
+ };
+ const progressReceiptClearSearch=document.getElementById("ai-meeting-progress-receipt-clear-search");
+ progressReceiptClearSearch?.addEventListener("click",()=>{
+  if(!progressReceiptSearch)return;
+  progressReceiptSearch.value="";
+  updateProgressReceipt();
+  progressReceiptSearch.focus?.();
+ });
  const progressReceiptActiveFilters=document.getElementById("ai-meeting-progress-receipt-active-filters");
- for(const [state,button] of Object.entries(quickReceiptReviewFilters)){
-  button?.addEventListener("click",()=>{
-   if(!progressReceiptReviewState)return;
-   progressReceiptReviewState.value=progressReceiptReviewState.value===state?"all":state;
-   updateProgressReceipt();
-  });
+ for(const [select,buttons] of [[progressReceiptReviewState,quickReceiptReviewFilters],[progressReceiptSide,quickReceiptSideFilters]]){
+  for(const [value,button] of Object.entries(buttons)){
+   button?.addEventListener("click",()=>{
+    if(!select)return;
+    select.value=select.value===value?"all":value;
+    updateProgressReceipt();
+   });
+  }
  }
  document.getElementById("ai-meeting-progress-receipt-back-top")?.addEventListener("click",()=>{
   progressReceiptHeading?.focus?.({preventScroll:true});
@@ -2834,6 +2853,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const [value,button] of Object.entries(quickReceiptReviewFilters)){
    button?.setAttribute("aria-pressed",String(state===value));
   }
+  for(const [value,button] of Object.entries(quickReceiptSideFilters)){
+   button?.setAttribute("aria-pressed",String(side===value));
+  }
+  if(progressReceiptClearSearch)progressReceiptClearSearch.disabled=!search;
   const order=progressReceiptOrder?.value;
   const active=[
    search.trim()&&"검색 "+search.trim(),
@@ -2928,6 +2951,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const [key,{preview}] of progressReceiptCards)rememberProgressPreview(key,preview);
   progressReceiptCards.clear();
   if(!available){
+   if(progressReceiptClearSearch)progressReceiptClearSearch.disabled=true;
    if(progressReceiptActiveFilters)progressReceiptActiveFilters.textContent="";
    openProgressPreviews.clear();
    selectedReceiptKeys.clear();
@@ -3045,6 +3069,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const empty=document.createElement("li");
    empty.textContent=search.trim()||scoped?"조건에 맞는 복원 발언이 없습니다.":
     state==="reviewed"?"검토 완료된 복원 발언이 없습니다.":"현재 미검토 발언이 없습니다.";
+   const actions=[
+    ["필터 초기화",resetReceiptView],
+    ...(selectedReceiptKeys.size?[["가려진 선택 보기",revealSelectedReceiptRows]]:[]),
+   ];
+   for(const [label,action] of actions){
+    const button=document.createElement("button");
+    button.type="button";
+    button.style.minHeight="44px";
+    button.textContent=label;
+    button.addEventListener("click",action);
+    empty.append(button);
+   }
    rows.push(empty);
   }
   progressReceiptRows.replaceChildren(...rows);
@@ -3057,11 +3093,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  progressReceiptUnmark?.addEventListener("click",()=>setProgressReceiptReview(false));
  progressReceiptMarkSelected?.addEventListener("click",()=>setProgressReceiptReview(true,true));
  progressReceiptUnmarkSelected?.addEventListener("click",()=>setProgressReceiptReview(false,true));
- progressReceiptReset?.addEventListener("click",()=>{
+ function resetReceiptView(){
   resetProgressReceiptFilters();
   updateProgressReceipt();
   progressReceiptSearch?.focus?.();
- });
+ }
+ progressReceiptReset?.addEventListener("click",resetReceiptView);
  document.getElementById("ai-meeting-progress-receipt-close")?.addEventListener("click",()=>{
   if(!progressReceipt)return;
   progressReceipt.open=false;
