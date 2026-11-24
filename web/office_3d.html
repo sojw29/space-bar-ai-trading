@@ -2205,6 +2205,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       <p id="ai-meeting-progress-receipt-preset-preview-source-status" role="status"></p>
       <details id="ai-meeting-progress-receipt-preset-preview-source-changes" hidden>
        <summary id="ai-meeting-progress-receipt-preset-preview-source-changes-label" style="min-height:44px">원문 검토 변경</summary>
+       <div class="receipt-quick-presets" role="group" aria-label="원문 검토 변경 필터">
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-all" type="button" aria-pressed="true" style="min-height:44px">전체</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-completed" type="button" aria-pressed="false" style="min-height:44px">검토 완료</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-reopened" type="button" aria-pressed="false" style="min-height:44px">검토 해제</button>
+       </div>
+       <p id="ai-meeting-progress-receipt-preset-preview-source-changes-empty" role="status" hidden>이 유형의 검토 변경이 없습니다.</p>
        <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-rows"></ul>
       </details>
       <button id="ai-meeting-progress-receipt-preset-preview-source-reveal" type="button" style="min-height:44px" hidden>마지막 원문 발언 표시</button>
@@ -3111,6 +3117,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickPreviewSourceChanges=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes");
  const receiptQuickPreviewSourceChangesLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-label");
  const receiptQuickPreviewSourceChangesRows=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-rows");
+ const receiptQuickSourceChangeFilters=[
+  ["all","전체"],["completed","검토 완료"],["reopened","검토 해제"],
+ ].map(([value,label])=>({value,label,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+value)}));
+ const receiptQuickSourceChangesEmpty=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty");
+ let receiptQuickSourceChangeRows=[];
+ let receiptQuickSourceChangeFilter="all";
+ for(const {value,button} of receiptQuickSourceChangeFilters){
+  button?.addEventListener("click",()=>{
+   receiptQuickSourceChangeFilter=value;
+   renderReceiptQuickSourceChangeFilter();
+  });
+ }
  const receiptQuickPreviewSourceReveal=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-reveal");
  let receiptQuickPreviewSourceFeedback=null;
  const receiptQuickPreviewChangeMode=document.getElementById("ai-meeting-progress-receipt-preset-preview-change-mode");
@@ -3348,10 +3366,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   clearReceiptQuickSourceFeedback();
   openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore));
  }
+ function renderReceiptQuickSourceChangeFilter(){
+  const total=receiptQuickSourceChangeRows.length;
+  const visible=receiptQuickSourceChangeRows.filter(({type})=>receiptQuickSourceChangeFilter==="all"||receiptQuickSourceChangeFilter===type);
+  for(const {value,label,button} of receiptQuickSourceChangeFilters){
+   if(!button)continue;
+   const count=value==="all"?total:receiptQuickSourceChangeRows.filter(({type})=>type===value).length;
+   button.textContent=label+" ("+count+"건)";
+   button.setAttribute("aria-pressed",String(value===receiptQuickSourceChangeFilter));
+  }
+  if(receiptQuickSourceChangesEmpty)receiptQuickSourceChangesEmpty.hidden=!total||visible.length>0;
+  receiptQuickPreviewSourceChangesRows?.replaceChildren(...visible.map(({row})=>row));
+ }
  function renderReceiptQuickSourceChanges(completed,reopened,evidence){
   if(!receiptQuickPreviewSourceChanges||!receiptQuickPreviewSourceChangesRows||!receiptQuickPreviewSourceChangesLabel)return;
   const rows=[];
-  for(const [keys,label] of [[completed,"검토 완료"],[reopened,"검토 해제"]]){
+  for(const [type,keys,label] of [["completed",completed,"검토 완료"],["reopened",reopened,"검토 해제"]]){
    for(const key of keys){
     const entry=evidence.get(key);
     if(!entry)continue;
@@ -3365,12 +3395,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     source.setAttribute("aria-label",statement+" 원문 다시 보기");
     source.addEventListener("click",()=>openReceiptQuickSource(key));
     row.append(source);
-    rows.push(row);
+    rows.push({row,type});
    }
   }
+  receiptQuickSourceChangeRows=rows;
   receiptQuickPreviewSourceChanges.hidden=rows.length===0;
   receiptQuickPreviewSourceChangesLabel.textContent="원문 검토 변경 ("+rows.length+"건)";
-  receiptQuickPreviewSourceChangesRows.replaceChildren(...rows);
+  renderReceiptQuickSourceChangeFilter();
  }
  function clearReceiptQuickSourceFeedback(){
   receiptQuickPreviewSourceFeedback=null;
@@ -3380,7 +3411,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    receiptQuickPreviewSourceChanges.hidden=true;
    receiptQuickPreviewSourceChanges.open=false;
   }
-  receiptQuickPreviewSourceChangesRows?.replaceChildren();
+  receiptQuickSourceChangeRows=[];
+  receiptQuickSourceChangeFilter="all";
+  renderReceiptQuickSourceChangeFilter();
  }
  function updateReceiptQuickSourceReveal(){
   const feedback=receiptQuickPreviewSourceFeedback;
