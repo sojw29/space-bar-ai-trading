@@ -47,6 +47,17 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
   }
+  const previewFacetOptions={
+   side:[['earlier','이전 회의'],['later','이후 회의']],
+   agent:[['COMMANDER','COMMANDER'],['ATLAS','ATLAS']],
+   phase:[['CONCLUSION','최종 결론'],['ANALYSIS','초기 분석']],
+   verdict:[['OBSERVATION_ONLY','관측 요약'],['INSUFFICIENT_DATA','자료 부족']],
+   state:[['unreviewed','미검토'],['reviewed','검토 완료']],
+  };
+  for(const [field,options] of Object.entries(previewFacetOptions)){
+   elements['ai-meeting-progress-receipt-preset-preview-list-'+field].options=
+    [['all','전체'],...options].map(([value,label])=>({value,label}));
+  }
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -951,11 +962,21 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const listFilter=name=>quickList('list-'+name);
    const projectedRows=()=>quickList('projected','-rows').children;
    const projectedDetailsRows=()=>projectedRows().map(row=>row.children[0]);
+
+   const optionLabel=(field,value)=>listFilter(field).options.find(option=>option.value===value).label;
+   assert.equal(optionLabel('side','all'),'전체 (2건)');
+   assert.equal(optionLabel('agent','COMMANDER'),'COMMANDER (2건)');
+   assert.equal(optionLabel('phase','CONCLUSION'),'최종 결론 (2건)');
+   assert.match(optionLabel('verdict','INSUFFICIENT_DATA'),/자료 부족 [(]0건[)]/);
+   assert.equal(optionLabel('state','unreviewed'),'미검토 (2건)');
    assert.match(listFilter('quick-earlier').textContent,/이전 회의 [(]1건[)]/);
    assert.match(listFilter('quick-later').textContent,/이후 회의 [(]1건[)]/);
    listFilter('quick-earlier').click();
    assert.equal(listFilter('side').value,'earlier');
    assert.equal(listFilter('quick-earlier').attrs['aria-pressed'],'true');
+   assert.equal(optionLabel('agent','COMMANDER'),'COMMANDER (1건)');
+   assert.equal(optionLabel('side','later'),'이후 회의 (1건)');
+   assert.equal(optionLabel('state','all'),'전체 (1건)');
    assert.equal(projectedRows().length,1);
    listFilter('quick-later').click();
    assert.equal(listFilter('side').value,'later');
