@@ -2198,6 +2198,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      <legend>빠른 검토 조합</legend>
      <label><input id="ai-meeting-progress-receipt-preset-combine" type="checkbox"> 현재 조건에 조합 추가</label>
      <button id="ai-meeting-progress-receipt-preset-undo" type="button" style="min-height:44px" disabled>직전 조합 되돌리기</button>
+     <button id="ai-meeting-progress-receipt-preset-redo" type="button" style="min-height:44px" disabled>직전 조합 다시 적용</button>
      <p id="ai-meeting-progress-receipt-preset-status" role="status"></p>
      <div class="receipt-quick-presets">
       <button id="ai-meeting-progress-receipt-preset-earlier" type="button" aria-pressed="false" style="min-height:44px">이전 회의 미검토</button>
@@ -2986,6 +2987,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   verdict:progressReceiptVerdict,state:progressReceiptReviewState,agent:progressReceiptAgent,searchScope:progressReceiptSearchScope};
  const combineReceiptQuickPreset=document.getElementById("ai-meeting-progress-receipt-preset-combine");
  const undoReceiptQuickPreset=document.getElementById("ai-meeting-progress-receipt-preset-undo");
+ const redoReceiptQuickPreset=document.getElementById("ai-meeting-progress-receipt-preset-redo");
+ const receiptQuickHistoryControls=[
+  {button:undoReceiptQuickPreset,redo:false,label:"직전 조합 되돌리기"},
+  {button:redoReceiptQuickPreset,redo:true,label:"직전 조합 다시 적용"},
+ ];
  const receiptQuickPresetStatus=document.getElementById("ai-meeting-progress-receipt-preset-status");
  const emptyReceiptQuickFilters={search:"",selectedOnly:false,side:"all",phase:"all",verdict:"all",
   state:"all",agent:"all",searchScope:"all"};
@@ -3011,7 +3017,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    lastReceiptQuickPreset=null;
    if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent="";
   }
-  if(undoReceiptQuickPreset)undoReceiptQuickPreset.disabled=!lastReceiptQuickPreset;
+  for(const {button,redo,label} of receiptQuickHistoryControls){
+   if(!button)continue;
+   const count=eligibleReceiptQuickPresetFields(lastReceiptQuickPreset,current,redo).length;
+   button.disabled=count===0;
+   button.textContent=count?label+" · "+lastReceiptQuickPreset.label+" ("+count+"개 조건)":label;
+  }
   for(const {button,label,filters} of receiptQuickPresets){
    if(!button)continue;
    const count=visibleProgressReceiptEntries(entries,{...receiptQuickPresetBase(current),...filters}).length;
@@ -3028,23 +3039,36 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const before=progressReceiptFilters(),active=receiptQuickPresetActive(filters,before);
    const clear=Object.fromEntries(Object.keys(filters).map(key=>[key,emptyReceiptQuickFilters[key]]));
    const after={...receiptQuickPresetBase(before),...(active?clear:filters)};
-   lastReceiptQuickPreset={restore:lastProgressRestore,before,after};
+   const fields=Object.keys(before).filter(key=>before[key]!==after[key]);
+   lastReceiptQuickPreset={restore:lastProgressRestore,before,after,label,fields,applied:true};
    applyReceiptViewParts({filters:after},["filters"]);
    if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent=label+(active?" 조합 해제":" 조합 적용");
   });
  }
- undoReceiptQuickPreset?.addEventListener("click",()=>{
-  const change=lastReceiptQuickPreset;
-  if(!change||change.restore!==lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
-  const filters=progressReceiptFilters();
-  for(const key of Object.keys(filters)){
-   if(change.before[key]!==change.after[key]&&filters[key]===change.after[key])filters[key]=change.before[key];
-  }
-  lastReceiptQuickPreset=null;
-  applyReceiptViewParts({filters},["filters"]);
-  if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent="직전 조합의 필터 변경을 되돌렸어요.";
-  combineReceiptQuickPreset?.focus?.();
- });
+ function eligibleReceiptQuickPresetFields(change,filters,redo){
+  if(!change||change.applied===redo)return [];
+  const expected=redo?change.before:change.after;
+  return change.fields.filter(key=>filters[key]===expected[key]);
+ }
+ for(const {button,redo} of receiptQuickHistoryControls){
+  button?.addEventListener("click",()=>{
+   const change=lastReceiptQuickPreset;
+   if(!change||change.restore!==lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+   const filters=progressReceiptFilters();
+   const fields=eligibleReceiptQuickPresetFields(change,filters,redo);
+   if(!fields.length)return;
+   const skipped=change.fields.length-fields.length;
+   const target=redo?change.after:change.before;
+   for(const key of fields)filters[key]=target[key];
+   change.fields=fields;
+   change.applied=redo;
+   applyReceiptViewParts({filters},["filters"]);
+   if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent=(redo?"다시 적용 ":"되돌리기 ")+fields.length+"개 조건"+
+    (skipped?" · 직접 수정한 "+skipped+"개 조건 유지":"");
+   const other=redo?undoReceiptQuickPreset:redoReceiptQuickPreset;
+   (other?.disabled?combineReceiptQuickPreset:other)?.focus?.();
+  });
+ }
  function resetProgressReceiptFilters({keepOrder=false}={}){
   if(progressReceiptSearch)progressReceiptSearch.value="";
   for(const select of Object.values(progressReceiptSelects))if(select)select.value="all";
