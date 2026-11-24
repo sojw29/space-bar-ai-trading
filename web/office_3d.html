@@ -64,6 +64,8 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 @media(max-width:800px){main{grid-template-columns:1fr}#stage{min-height:410px;height:58vh}aside{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 #meeting-progress-stages:not([hidden]){display:flex}
+.receipt-quick-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:6px}
+.receipt-quick-presets button[aria-pressed="true"]{border-color:#87defa;background:#1b5265}
 </style>
 </head>
 <body>
@@ -2194,11 +2196,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <summary style="min-height:44px">필터와 정렬</summary>
     <fieldset style="min-width:0">
      <legend>빠른 검토 조합</legend>
-     <button id="ai-meeting-progress-receipt-preset-earlier" type="button" style="min-height:44px">이전 회의 미검토</button>
-     <button id="ai-meeting-progress-receipt-preset-later" type="button" style="min-height:44px">이후 회의 미검토</button>
-     <button id="ai-meeting-progress-receipt-preset-conclusion" type="button" style="min-height:44px">최종 결론 미검토</button>
-     <button id="ai-meeting-progress-receipt-preset-review" type="button" style="min-height:44px">추가 검토 필요</button>
-     <button id="ai-meeting-progress-receipt-preset-insufficient" type="button" style="min-height:44px">자료 부족</button>
+     <div class="receipt-quick-presets">
+      <button id="ai-meeting-progress-receipt-preset-earlier" type="button" aria-pressed="false" style="min-height:44px">이전 회의 미검토</button>
+      <button id="ai-meeting-progress-receipt-preset-later" type="button" aria-pressed="false" style="min-height:44px">이후 회의 미검토</button>
+      <button id="ai-meeting-progress-receipt-preset-conclusion" type="button" aria-pressed="false" style="min-height:44px">최종 결론 미검토</button>
+      <button id="ai-meeting-progress-receipt-preset-review" type="button" aria-pressed="false" style="min-height:44px">추가 검토 필요</button>
+      <button id="ai-meeting-progress-receipt-preset-insufficient" type="button" aria-pressed="false" style="min-height:44px">자료 부족</button>
+     </div>
     </fieldset>
     <label>회의 <select id="ai-meeting-progress-receipt-side" style="min-height:44px">
      <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
@@ -2977,20 +2981,36 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  const progressReceiptSelects={side:progressReceiptSide,phase:progressReceiptPhase,
   verdict:progressReceiptVerdict,state:progressReceiptReviewState,agent:progressReceiptAgent,searchScope:progressReceiptSearchScope};
- const receiptQuickPresets={
-  earlier:{side:"earlier",state:"unreviewed"},
-  later:{side:"later",state:"unreviewed"},
-  conclusion:{phase:"CONCLUSION",state:"unreviewed"},
-  review:{verdict:"REVIEW_NEEDED"},
-  insufficient:{verdict:"INSUFFICIENT_DATA"},
- };
- for(const [name,filters] of Object.entries(receiptQuickPresets)){
-  document.getElementById("ai-meeting-progress-receipt-preset-"+name)?.addEventListener("click",()=>{
-   if(!lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+ const receiptQuickPresets=[
+  ["earlier","이전 회의 미검토",{side:"earlier",state:"unreviewed"}],
+  ["later","이후 회의 미검토",{side:"later",state:"unreviewed"}],
+  ["conclusion","최종 결론 미검토",{phase:"CONCLUSION",state:"unreviewed"}],
+  ["review","추가 검토 필요",{verdict:"REVIEW_NEEDED"}],
+  ["insufficient","자료 부족",{verdict:"INSUFFICIENT_DATA"}],
+ ].map(([name,label,filters])=>({
+  button:document.getElementById("ai-meeting-progress-receipt-preset-"+name),label,
+  filters:{search:"",selectedOnly:false,side:"all",phase:"all",verdict:"all",state:"all",agent:"all",searchScope:"all",...filters},
+ }));
+ function receiptQuickPresetActive(filters,current){
+  return Object.keys(filters).every(key=>filters[key]===current[key]);
+ }
+ function updateReceiptQuickPresets(entries,current){
+  for(const {button,label,filters} of receiptQuickPresets){
+   if(!button)continue;
+   const count=visibleProgressReceiptEntries(entries,filters).length;
+   const active=entries.length>0&&receiptQuickPresetActive(filters,current);
+   button.textContent=label+" ("+count+"건)";
+   button.disabled=!count&&!active;
+   button.setAttribute("aria-pressed",String(active));
+  }
+ }
+ for(const {button,filters} of receiptQuickPresets){
+  button?.addEventListener("click",()=>{
+   if(button.disabled||!lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+   const active=receiptQuickPresetActive(filters,progressReceiptFilters());
    resetProgressReceiptFilters({keepOrder:true});
-   for(const [field,value] of Object.entries(filters)){
-    const control=progressReceiptSelects[field];
-    if(control)control.value=value;
+   if(!active){
+    for(const [field,control] of Object.entries(progressReceiptSelects))if(control)control.value=filters[field];
    }
    updateProgressReceipt();
   });
@@ -3107,6 +3127,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!available){
    lastProgressReceiptExport=null;
    updateProgressReceiptExportControls([],[]);
+   updateReceiptQuickPresets([],{});
    if(progressReceiptClearSearch)progressReceiptClearSearch.disabled=true;
    if(progressReceiptActiveFilters){
     progressReceiptActiveFilters.hidden=true;
@@ -3131,6 +3152,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   updateReceiptFilterIndicators(filters);
   const visible=visibleProgressReceiptEntries(entries,filters);
   updateProgressReceiptExportControls(entries,visible);
+  updateReceiptQuickPresets(entries,filters);
   const {search,state,selectedOnly,...scopes}=filters;
   const scoped=selectedOnly||Object.values(scopes).some(value=>value!=="all");
   updateProgressReceiptSelectionControls(visible);
