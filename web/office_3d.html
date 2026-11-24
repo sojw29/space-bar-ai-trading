@@ -2257,6 +2257,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <p id="ai-meeting-progress-receipt-view-status" role="status" style="overflow-wrap:anywhere"></p>
     <div id="ai-meeting-progress-receipt-view-preview" hidden>
      <p id="ai-meeting-progress-receipt-view-preview-summary" style="white-space:pre-line;overflow-wrap:anywhere"></p>
+     <p id="ai-meeting-progress-receipt-view-projected-count" role="status"></p>
+     <details id="ai-meeting-progress-receipt-view-changed-statements" hidden>
+      <summary style="min-height:44px">변경될 발언 보기</summary>
+      <ul id="ai-meeting-progress-receipt-view-changed-statement-rows"></ul>
+     </details>
      <div role="group" aria-label="적용할 화면 항목 선택">
       <button id="ai-meeting-progress-receipt-view-select-all" type="button" style="min-height:44px">모두 선택</button>
       <button id="ai-meeting-progress-receipt-view-select-none" type="button" style="min-height:44px">모두 해제</button>
@@ -2994,7 +2999,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return {search:progressReceiptSearch?.value??"",selectedOnly:!!progressReceiptSelectedOnly?.checked,...Object.fromEntries(
    Object.entries(progressReceiptSelects).map(([key,select])=>[key,select?.value||"all"]))};
  }
- function visibleProgressReceiptEntries(entries,{search,side,agent,searchScope,phase,verdict,state,selectedOnly}){
+ function visibleProgressReceiptEntries(entries,{search,side,agent,searchScope,phase,verdict,state,selectedOnly},selection=selectedReceiptKeys){
   const query=comparisonSearchText(search);
   const id=(searchScope==="all"||searchScope==="id")&&/^\[?(m0[1-7])\]?$/.exec(query);
   const queryMatches=statement=>{
@@ -3005,7 +3010,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    return searchable.some(text=>typeof text==="string"&&comparisonSearchText(text).includes(query));
   };
   const visible=entries.filter(({key,period,statement,reviewed})=>
-   (!selectedOnly||selectedReceiptKeys.has(key))&&
+   (!selectedOnly||selection.has(key))&&
    (side==="all"||side===period)&&(agent==="all"||agent===statement.agent)&&(phase==="all"||phase===statement.phase)&&
    (verdict==="all"||verdict===statement.verdict)&&(state==="all"||reviewed===(state==="reviewed"))&&
    queryMatches(statement));
@@ -3228,6 +3233,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const redoProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-redo");
  const progressReceiptViewPreview=document.getElementById("ai-meeting-progress-receipt-view-preview");
  const progressReceiptViewSummary=document.getElementById("ai-meeting-progress-receipt-view-preview-summary");
+ const receiptViewProjectedCount=document.getElementById("ai-meeting-progress-receipt-view-projected-count");
+ const receiptViewChangedStatements=document.getElementById("ai-meeting-progress-receipt-view-changed-statements");
+ const receiptViewChangedStatementRows=document.getElementById("ai-meeting-progress-receipt-view-changed-statement-rows");
  const applyProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-apply");
  const cancelProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-cancel");
  const receiptViewParts={
@@ -3257,12 +3265,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const count=selectedReceiptViewParts().length;
   applyProgressReceiptView.disabled=!pendingProgressReceiptView||count===0;
   applyProgressReceiptView.textContent=count?"검토 화면 적용 ("+count+"개 항목)":"검토 화면 적용";
+  updateReceiptViewDifferences();
  }
  for(const control of Object.values(receiptViewParts))control?.addEventListener("change",updateReceiptViewApply);
  function clearPendingProgressReceiptView(){
   pendingProgressReceiptView=null;
   if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=true;
   if(progressReceiptViewSummary)progressReceiptViewSummary.textContent="";
+  if(receiptViewProjectedCount)receiptViewProjectedCount.textContent="";
+  if(receiptViewChangedStatements){receiptViewChangedStatements.open=false;receiptViewChangedStatements.hidden=true;}
+  receiptViewChangedStatementRows?.replaceChildren();
   updateReceiptViewApply();
  }
  function receiptViewFilterSummary(filters){
@@ -3280,11 +3292,36 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptViewDiffFields=Object.fromEntries(Object.keys(receiptViewParts).map(part=>[
   part,document.getElementById("ai-meeting-progress-receipt-view-diff-"+part),
  ]));
- function receiptViewSetDifference(current,incoming,addedLabel,removedLabel){
+ function receiptViewSetDelta(current,incoming){
   const next=new Set(incoming);
-  const added=[...next].filter(key=>!current.has(key)).length;
-  const removed=[...current].filter(key=>!next.has(key)).length;
-  return added||removed?current.size+"건 → "+next.size+"건 · "+addedLabel+" "+added+"건 · "+removedLabel+" "+removed+"건":"변경 없음";
+  return {added:[...next].filter(key=>!current.has(key)),removed:[...current].filter(key=>!next.has(key))};
+ }
+ function receiptViewSetDifference(current,incoming,{added,removed},addedLabel,removedLabel){
+  return added.length||removed.length?current.size+"건 → "+incoming.length+"건 · "+
+   addedLabel+" "+added.length+"건 · "+removedLabel+" "+removed.length+"건":"변경 없음";
+ }
+ function updateReceiptViewProjectedChanges(entries,currentFilters,view,selectionDelta,expandedDelta,formatCursor){
+  const parts=selectedReceiptViewParts();
+  const filters=parts.includes("filters")?view.filters:currentFilters;
+  const selection=parts.includes("selection")?new Set(view.selected):selectedReceiptKeys;
+  if(receiptViewProjectedCount){
+   const current=visibleProgressReceiptEntries(entries,currentFilters).length;
+   const projected=visibleProgressReceiptEntries(entries,filters,selection).length;
+   receiptViewProjectedCount.textContent="표시 발언 "+current+"건 → 적용 후 "+projected+"건";
+  }
+  const changes=[
+   ["선택 추가",parts.includes("selection")?selectionDelta.added:[]],
+   ["선택 해제",parts.includes("selection")?selectionDelta.removed:[]],
+   ["요약 펼침",parts.includes("expanded")?expandedDelta.added:[]],
+   ["요약 접기",parts.includes("expanded")?expandedDelta.removed:[]],
+  ];
+  const rows=changes.filter(([,keys])=>keys.length).map(([label,keys])=>{
+   const row=document.createElement("li");
+   row.textContent=label+" · "+keys.map(formatCursor).join(", ");
+   return row;
+  });
+  if(receiptViewChangedStatements)receiptViewChangedStatements.hidden=rows.length===0;
+  receiptViewChangedStatementRows?.replaceChildren(...rows);
  }
  function updateReceiptViewDifferences(){
   if(!pendingProgressReceiptView)return;
@@ -3302,23 +3339,25 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const formatOrder=order=>receiptSorts[order]?.label||"이전 회의 먼저";
   const currentFilters=progressReceiptFilters();
   const currentOrder=progressReceiptOrder?.value||"default";
+  const selectionDelta=receiptViewSetDelta(selectedReceiptKeys,view.selected);
+  const expandedDelta=receiptViewSetDelta(open,view.expanded);
   const differences={
    filters:Object.keys(currentFilters).every(key=>currentFilters[key]===view.filters[key])?"변경 없음":
     receiptViewFilterSummary(currentFilters)+" → "+receiptViewFilterSummary(view.filters),
    order:currentOrder===view.order?"변경 없음":formatOrder(currentOrder)+" → "+formatOrder(view.order),
-   selection:receiptViewSetDifference(selectedReceiptKeys,view.selected,"추가","해제"),
-   expanded:receiptViewSetDifference(open,view.expanded,"펼침","접음"),
+   selection:receiptViewSetDifference(selectedReceiptKeys,view.selected,selectionDelta,"추가","해제"),
+   expanded:receiptViewSetDifference(open,view.expanded,expandedDelta,"펼침","접음"),
    cursor:lastReceiptPreviewKey===view.cursor?"변경 없음":formatCursor(lastReceiptPreviewKey)+" → "+formatCursor(view.cursor),
   };
   pendingProgressReceiptView.changed=new Set(Object.keys(differences).filter(part=>differences[part]!=="변경 없음"));
   for(const [part,field] of Object.entries(receiptViewDiffFields))if(field)field.textContent=differences[part];
+  updateReceiptViewProjectedChanges(entries,currentFilters,view,selectionDelta,expandedDelta,formatCursor);
  }
  function previewProgressReceiptView(view,restore,filename){
   pendingProgressReceiptView={view,restore,changed:new Set()};
   for(const control of Object.values(receiptViewParts))if(control)control.checked=true;
   updateReceiptViewApply();
   if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=false;
-  updateReceiptViewDifferences();
   const {filters,order,selected,expanded,cursor}=view;
   const entries=progressReceiptEntries();
   const cursorLabel=entries.find(entry=>entry.key===cursor)?.label||"없음";
