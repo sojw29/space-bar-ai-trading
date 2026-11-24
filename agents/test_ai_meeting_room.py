@@ -32,6 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     };
    }
   }
+  elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   for(const name of ['search','state','selected','reset','count']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
@@ -817,7 +818,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(quickList('shown').hidden,true);
    assert.equal(quickList('hidden').hidden,false);
    assert.equal(quickList('hidden').open,false);
-   assert.match(quickList('hidden','-rows').children[0].textContent,/이후 \[M07\] COMMANDER · 미검토/);
+   assert.match(quickList('hidden','-rows').children[0].children[0].children[0].textContent,/이후 \[M07\] COMMANDER · 미검토/);
    assert.equal(quickList('projected','-rows').children.length,1);
    assert.match(quickPreviewSummary.textContent,/변경 후 검토 완료 0건 · 미검토 1건/);
    assert.match(quickPreviewSummary.textContent,/변경 후 표시된 선택 0건 · 가려진 선택 0건/);
@@ -848,7 +849,16 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const directTargets=()=>quickPreviewJump.children.find(group=>group.label==='발언 직접 선택');
    assert.equal(directTargets().children.length,1);
    assert.match(directTargets().children[0].textContent,/이전 .*COMMANDER/);
-   quickPreviewJump.value=directTargets().children[0].value;
+   const [hiddenDetails]=quickList('hidden','-rows').children[0].children;
+   assert.equal(hiddenDetails.children.length,3);
+   const [projectedDetails]=quickList('projected','-rows').children[0].children;
+   assert.match(projectedDetails.children[1].textContent,/최종 결론 · /);
+   assert.ok(projectedDetails.children[2].textContent.length);
+   projectedDetails.children[3].click();
+   assert.equal(quickPreviewJump.value,directTargets().children[0].value);
+   const quickJumpStatus=quickList('jump-status');
+   assert.match(quickJumpStatus.textContent,/적용 후 이동 · 이전 .*COMMANDER/);
+   assert.equal(receiptSide.value,'all');
    quickPreviewApply.click();
    assert.equal(receiptPreview().open,true);
    assert.equal(receiptPreview().children[0].focused,true);
@@ -857,7 +867,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(receiptSearch.value,'command');
    quickEarlier.click();
    assert.match(quickPreviewSummary.textContent,/새로 보이는 발언 1건/);
-   assert.match(quickList('shown','-rows').children[0].textContent,/이후 \[M07\] COMMANDER/);
+   assert.match(quickList('shown','-rows').children[0].children[0].children[0].textContent,/이후 \[M07\] COMMANDER/);
    assert.equal(directTargets().children.length,2);
    const listFilter=name=>quickList('list-'+name);
    const projectedRows=()=>quickList('projected','-rows').children;
