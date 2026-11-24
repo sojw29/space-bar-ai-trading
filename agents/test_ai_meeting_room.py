@@ -34,7 +34,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','state','selected','reset','count']){
+  for(const name of ['search','state','selected','reset','count','expand','collapse']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -889,11 +889,25 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(directTargets().children.length,2);
    const listFilter=name=>quickList('list-'+name);
    const projectedRows=()=>quickList('projected','-rows').children;
+   const projectedDetailsRows=()=>projectedRows().map(row=>row.children[0]);
+   listFilter('expand').click();
+   assert.ok(projectedDetailsRows().every(details=>details.open));
+   listFilter('collapse').click();
+   assert.ok(projectedDetailsRows().every(details=>!details.open));
+   projectedDetailsRows()[0].open=true;
+   document.activeElement=projectedDetailsRows()[0].children[0];
+   receiptOrder.value='default';receiptOrder.change();
+   assert.ok(projectedDetailsRows()[1].open);
+   assert.equal(projectedDetailsRows()[1].children[0].focused,true);
+   document.activeElement=null;
+   receiptOrder.value='later';receiptOrder.change();
    listFilter('search').value='m07';listFilter('search').input();
    assert.equal(projectedRows().length,2);
    listFilter('state').value='reviewed';listFilter('state').change();
    assert.equal(projectedRows().length,0);
    assert.match(listFilter('count').textContent,/0 \/ 2건 · 목록 조건에 맞는 발언이 없습니다/);
+   assert.equal(listFilter('expand').disabled,true);
+   assert.equal(listFilter('collapse').disabled,true);
    assert.equal(quickList('projected').hidden,false);
    assert.equal(quickPreviewApply.disabled,false);
    assert.equal(directTargets().children.length,2);
@@ -906,6 +920,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(projectedRows().length,0);
    listFilter('reset').click();
    assert.equal(projectedRows().length,2);
+   assert.equal(projectedDetailsRows()[0].open,true);
    assert.equal(listFilter('reset').disabled,true);
    assert.equal(listFilter('search').focused,true);
    elements['ai-meeting-progress-receipt-clear-selection'].click();
