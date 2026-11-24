@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -967,6 +967,23 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeRows()[0].children[0].focused,true);
    assert.equal(sourceChangeRows()[0].scrolled,true);
    assert.match(sourceChangeType('selection-position').textContent,/1 \/ 1.*COMMANDER/);
+   const focusedSourceChange=sourceChangeRows()[0].children[0];
+   assert.equal(focusedSourceChange.attrs['aria-current'],'true');
+   const sourceChangePicker=sourceChangeType('selection-picker');
+   assert.equal(sourceChangePicker.value,'1');
+   assert.match(sourceChangePicker.children[1].textContent,/COMMANDER/);
+   sourceChangePicker.change();
+   let sourceChangeEscaped=false;
+   focusedSourceChange.keydown({key:'Escape',preventDefault(){sourceChangeEscaped=true}});
+   assert.ok(sourceChangeEscaped);
+   assert.equal(sourceChangePicker.focused,true);
+   const sourceChangeSummaryButton=sourceChangeType('selection-summary');
+   sourceChangeSummaryButton.click();
+   assert.equal(sourceChangeRows()[0].children[1].open,true);
+   assert.equal(sourceChangeSummaryButton.textContent,'현재 요약 접기');
+   sourceChangeSummaryButton.click();
+   assert.equal(sourceChangeRows()[0].children[1].open,false);
+   assert.equal(sourceChangeType('selection-open').disabled,false);
    assert.equal(sourceChangeType('selection-prev').disabled,true);
    assert.equal(sourceChangeType('selection-last').disabled,true);
    sourceChangeType('search').value='no source matches';
