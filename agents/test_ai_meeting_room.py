@@ -35,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
+  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -895,6 +895,13 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    listFilter('search').value='m07';listFilter('search').input();
    listFilter('scope').value='id';listFilter('scope').change();
    assert.equal(projectedRows().length,2);
+   const markedText=node=>node.children.filter(part=>typeof part!=='string').map(mark=>mark.textContent);
+   assert.deepEqual(markedText(projectedDetailsRows()[0].children[0]),['M07']);
+   assert.equal(listFilter('open-first').hidden,false);
+   listFilter('open-first').click();
+   assert.equal(projectedDetailsRows()[0].open,true);
+   assert.equal(projectedDetailsRows()[0].children[0].focused,true);
+   projectedDetailsRows()[0].open=false;
    listFilter('scope').value='agent';listFilter('scope').change();
    assert.equal(projectedRows().length,0);
    assert.deepEqual(recoveryButtons().map(button=>button.textContent),[
@@ -910,10 +917,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    listFilter('scope').value='agent';listFilter('scope').change();
    listFilter('search').value='command';listFilter('search').input();
    assert.equal(projectedRows().length,2);
+   assert.deepEqual(markedText(projectedDetailsRows()[0].children[0]),['COMMAND']);
    const summaryQuery=projectedDetailsRows()[0].children[2].textContent;
    listFilter('scope').value='summary';listFilter('scope').change();
    listFilter('search').value=summaryQuery;listFilter('search').input();
-   assert.ok(projectedDetailsRows().some(details=>details.children[2].textContent===summaryQuery));
+   assert.ok(projectedDetailsRows().some(details=>markedText(details.children[2]).includes(summaryQuery)));
+   assert.ok(projectedDetailsRows().some(details=>details.children[0].children.includes(' · 요약에 일치')));
    listFilter('reset').click();
    assert.equal(listFilter('scope').value,'all');
    assert.equal(listFilter('recovery').hidden,true);
