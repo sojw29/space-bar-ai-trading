@@ -35,6 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
+  elements['ai-meeting-progress-receipt-preset-reopen']={addEventListener(type,fn){this[type]=fn}};
   for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','reserve-current','open-jump','hidden-jump','reveal-jump','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
@@ -764,6 +765,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const undoQuick=elements['ai-meeting-progress-receipt-preset-undo'];
    const redoQuick=elements['ai-meeting-progress-receipt-preset-redo'];
    const quickStatus=elements['ai-meeting-progress-receipt-preset-status'];
+   const reopenQuick=elements['ai-meeting-progress-receipt-preset-reopen'];
    combineQuick.checked=true;combineQuick.change();
    receiptAgent.value='COMMANDER';receiptAgent.change();
    receiptSearch.value='__no_result__';receiptSearch.input();
@@ -884,6 +886,16 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(quickPreview.hidden,true);
    assert.equal(receiptSide.value,'earlier');
    assert.equal(receiptSearch.value,'command');
+   assert.match(quickStatus.textContent,/2개 조건 변경 · 표시 발언 2건 → 1건 · 이동 이전 .*COMMANDER/);
+   assert.equal(reopenQuick.hidden,false);
+   assert.match(reopenQuick.textContent,/다시 열기 · 이전 .*COMMANDER/);
+   receiptPreview().open=false;
+   reopenQuick.click();
+   assert.equal(receiptPreview().open,true);
+   receiptSearch.value='no-applied-match';receiptSearch.input();
+   assert.equal(reopenQuick.hidden,true);
+   receiptSearch.value='command';receiptSearch.input();
+   assert.equal(reopenQuick.hidden,false);
    quickEarlier.click();
    assert.match(quickPreviewSummary.textContent,/새로 보이는 발언 1건/);
    assert.match(quickList('shown','-rows').children[0].children[0].children[0].textContent,/이후 \[M07\] COMMANDER/);
