@@ -2255,6 +2255,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <p id="ai-meeting-progress-receipt-view-status" role="status" style="overflow-wrap:anywhere"></p>
     <div id="ai-meeting-progress-receipt-view-preview" hidden>
      <p id="ai-meeting-progress-receipt-view-preview-summary" style="white-space:pre-line;overflow-wrap:anywhere"></p>
+     <fieldset>
+      <legend>적용할 화면 항목</legend>
+      <label><input id="ai-meeting-progress-receipt-view-filters" type="checkbox" checked> 검색과 필터</label>
+      <label><input id="ai-meeting-progress-receipt-view-order" type="checkbox" checked> 정렬 순서</label>
+      <label><input id="ai-meeting-progress-receipt-view-selection" type="checkbox" checked> 선택한 발언</label>
+      <label><input id="ai-meeting-progress-receipt-view-expanded" type="checkbox" checked> 펼친 요약</label>
+      <label><input id="ai-meeting-progress-receipt-view-cursor" type="checkbox" checked> 발언 이동 위치</label>
+     </fieldset>
      <button id="ai-meeting-progress-receipt-view-apply" type="button" style="min-height:44px">검토 화면 적용</button>
      <button id="ai-meeting-progress-receipt-view-cancel" type="button" style="min-height:44px">불러오기 취소</button>
     </div>
@@ -3211,13 +3219,33 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const progressReceiptViewSummary=document.getElementById("ai-meeting-progress-receipt-view-preview-summary");
  const applyProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-apply");
  const cancelProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-cancel");
+ const receiptViewParts={
+  filters:document.getElementById("ai-meeting-progress-receipt-view-filters"),
+  order:document.getElementById("ai-meeting-progress-receipt-view-order"),
+  selection:document.getElementById("ai-meeting-progress-receipt-view-selection"),
+  expanded:document.getElementById("ai-meeting-progress-receipt-view-expanded"),
+  cursor:document.getElementById("ai-meeting-progress-receipt-view-cursor"),
+ };
+ function selectedReceiptViewParts(){
+  return Object.entries(receiptViewParts).filter(([,control])=>control?.checked).map(([part])=>part);
+ }
+ function updateReceiptViewApply(){
+  if(!applyProgressReceiptView)return;
+  const count=selectedReceiptViewParts().length;
+  applyProgressReceiptView.disabled=!pendingProgressReceiptView||count===0;
+  applyProgressReceiptView.textContent=count?"검토 화면 적용 ("+count+"개 항목)":"검토 화면 적용";
+ }
+ for(const control of Object.values(receiptViewParts))control?.addEventListener("change",updateReceiptViewApply);
  function clearPendingProgressReceiptView(){
   pendingProgressReceiptView=null;
   if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=true;
   if(progressReceiptViewSummary)progressReceiptViewSummary.textContent="";
+  updateReceiptViewApply();
  }
  function previewProgressReceiptView(view,restore,filename){
   pendingProgressReceiptView={view,restore};
+  for(const control of Object.values(receiptViewParts))if(control)control.checked=true;
+  updateReceiptViewApply();
   if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=false;
   const {filters,order,selected,expanded,cursor}=view;
   const entries=progressReceiptEntries();
@@ -3306,20 +3334,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  applyProgressReceiptView?.addEventListener("click",()=>{
   const pending=pendingProgressReceiptView;
   if(!pending||pending.restore!==lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+  const parts=selectedReceiptViewParts();
+  if(!parts.length)return;
   const {filters,order,selected,expanded,cursor}=pending.view;
   clearPendingProgressReceiptView();
-  if(progressReceiptSearch)progressReceiptSearch.value=filters.search;
-  if(progressReceiptSelectedOnly)progressReceiptSelectedOnly.checked=filters.selectedOnly;
-  if(progressReceiptOrder)progressReceiptOrder.value=order;
-  for(const [key,select] of Object.entries(progressReceiptSelects))if(select)select.value=filters[key];
-  progressReceiptCards.clear();
-  selectedReceiptKeys.clear();
-  openProgressPreviews.clear();
-  for(const key of selected)selectedReceiptKeys.add(key);
-  for(const key of expanded)openProgressPreviews.add(key);
-  lastReceiptPreviewKey=cursor;
+  if(parts.includes("filters")){
+   if(progressReceiptSearch)progressReceiptSearch.value=filters.search;
+   if(progressReceiptSelectedOnly)progressReceiptSelectedOnly.checked=filters.selectedOnly;
+   for(const [key,select] of Object.entries(progressReceiptSelects))if(select)select.value=filters[key];
+  }
+  if(parts.includes("order")&&progressReceiptOrder)progressReceiptOrder.value=order;
+  if(parts.includes("selection")){
+   selectedReceiptKeys.clear();
+   for(const key of selected)selectedReceiptKeys.add(key);
+  }
+  if(parts.includes("expanded")){
+   progressReceiptCards.clear();
+   openProgressPreviews.clear();
+   for(const key of expanded)openProgressPreviews.add(key);
+  }
+  if(parts.includes("cursor"))lastReceiptPreviewKey=cursor;
   updateProgressReceipt();
-  if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면 불러옴 · 선택 "+selected.length+"건";
+  if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면 불러옴 · 선택 "+selectedReceiptKeys.size+"건 · "+
+   parts.length+"개 항목 적용";
   loadProgressReceiptView?.focus?.();
  });
  function saveProgressReceipt(scope,format="TXT"){
