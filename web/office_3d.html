@@ -3207,7 +3207,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(value)updateReceiptQuickSourceSelectionNav(()=>Number(value)-1);
  });
  receiptQuickSourceSelectionOpen?.addEventListener("click",()=>{
-  if(!receiptQuickSourceSelectionOpen.disabled)openReceiptQuickSource(currentReceiptQuickSourceSelection.key);
+  if(!receiptQuickSourceSelectionOpen.disabled)openReceiptQuickSource(currentReceiptQuickSourceSelection.key,receiptQuickPreviewSourceChanges);
  });
  receiptQuickSourceSelectionSummary?.addEventListener("click",()=>{
   if(receiptQuickSourceSelectionSummary.disabled)return;
@@ -3546,8 +3546,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function openReceiptQuickSource(key,originContainer){
   const pending=pendingQuickPreset;
   const reviewedBefore=new Set(reviewedEvidence);
+  const changeView=originContainer===receiptQuickPreviewSourceChanges&&originContainer?{
+   selected:new Set(receiptQuickSourceChangeRows.filter(({selection})=>selection.checked).map(({key})=>key)),
+   expanded:new Set(receiptQuickSourceChangeRows.filter(({details})=>details.open).map(({key})=>key)),
+   currentKey:currentReceiptQuickSourceSelection?.key,
+   selectedOnly:!!receiptQuickSourceSelectedOnly?.checked,
+   fields:[
+    receiptQuickSourceChangeSearch,receiptQuickSourceChangePeriod,receiptQuickSourceChangeOrder,
+    receiptQuickSourceChangeAgent,receiptQuickSourceChangePhase,receiptQuickSourceChangeVerdict,
+   ].filter(Boolean).map(field=>[field,field.value]),
+  }:null;
   clearReceiptQuickSourceFeedback();
-  openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore));
+  openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore,changeView));
  }
  function resetReceiptQuickSourceChangeControls(selectedOnly=false){
   receiptQuickSourceChangeFilter="all";
@@ -3646,7 +3656,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(receiptQuickSourceChangeSaveStatus)receiptQuickSourceChangeSaveStatus.textContent=format+" 저장을 시작하지 못했습니다.";
   }
  }
- function renderReceiptQuickSourceChanges(completed,reopened,evidence){
+ function renderReceiptQuickSourceChanges(completed,reopened,evidence,changeView){
   if(!receiptQuickPreviewSourceChanges||!receiptQuickPreviewSourceChangesRows||!receiptQuickPreviewSourceChangesLabel)return;
   const rows=[];
   for(const [type,keys,label] of [["completed",completed,"검토 완료"],["reopened",reopened,"검토 해제"]]){
@@ -3663,7 +3673,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     source.style.minHeight="44px";
     source.textContent="원문 다시 보기";
     source.setAttribute("aria-label",statement+" 원문 다시 보기");
-    source.addEventListener("click",()=>openReceiptQuickSource(key));
+    source.addEventListener("click",()=>openReceiptQuickSource(key,receiptQuickPreviewSourceChanges));
     row.append(source);
     const details=document.createElement("details");
     const heading=document.createElement("summary");
@@ -3684,7 +3694,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     selectionLabel.append(selection," 선택");
     row.append(selectionLabel);
     const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
+    selection.checked=changeView?.selected.has(key)??false;
+    details.open=changeView?.expanded.has(key)??false;
     const change={key,row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,summary,searchText};
+    if(changeView?.currentKey===key)currentReceiptQuickSourceSelection=change;
     details.addEventListener("toggle",()=>{
      if(currentReceiptQuickSourceSelection===change&&visibleReceiptQuickSourceChanges.includes(change)){
       updateReceiptQuickSourceSelectionSummary(change);
@@ -3709,8 +3722,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }));
    receiptQuickSourceChangeAgent.value="";
   }
+  if(changeView){
+   for(const [field,value] of changeView.fields){
+    if(field!==receiptQuickSourceChangeAgent||!value||rows.some(({agent})=>agent===value))field.value=value;
+   }
+   if(receiptQuickSourceSelectedOnly){
+    receiptQuickSourceSelectedOnly.checked=changeView.selectedOnly&&rows.some(({selection})=>selection.checked);
+   }
+  }
   receiptQuickSourceChangeRows=rows;
   receiptQuickPreviewSourceChanges.hidden=rows.length===0;
+  if(changeView&&rows.length)receiptQuickPreviewSourceChanges.open=true;
   receiptQuickPreviewSourceChangesLabel.textContent="원문 검토 변경 ("+rows.length+"건)";
   renderReceiptQuickSourceChangeFilter();
  }
@@ -3742,7 +3764,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const conditions=receiptQuickStatementRecovery(key);
   if(conditions)startReceiptQuickListRecovery(conditions,key);
  });
- function resumeReceiptQuickSource(pending,originContainer,originKey,currentKey,reviewedBefore){
+ function resumeReceiptQuickSource(pending,originContainer,originKey,currentKey,reviewedBefore,changeView){
   if(!pending||pending!==pendingQuickPreset||!progressReceipt||progressReceipt.hidden)return false;
   progressReceipt.open=true;
   if(progressReceiptFilterTools)progressReceiptFilterTools.open=true;
@@ -3757,7 +3779,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const lastSource=evidence.get(currentKey);
   const completed=[...reviewedEvidence].filter(item=>!reviewedBefore.has(item));
   const reopened=[...reviewedBefore].filter(item=>!reviewedEvidence.has(item));
-  renderReceiptQuickSourceChanges(completed,reopened,evidence);
+  renderReceiptQuickSourceChanges(completed,reopened,evidence,changeView);
   if(receiptQuickPreviewSourceStatus){
    const message=[
     lastSource?"마지막 원문 "+receiptQuickRowLabel(lastSource)+" · "+(reviewedEvidence.has(currentKey)?"검토 완료":"미검토"):"",
@@ -3775,7 +3797,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     renderReceiptQuickListNavigation(true);
    }
   }
-  const focus=target?.source??receiptQuickPreview;
+  const changeFocus=changeView&&(visibleReceiptQuickSourceChanges.find(({key})=>key===currentKey)??
+   visibleReceiptQuickSourceChanges.find(({key})=>key===originKey))?.source;
+  const focus=changeFocus||target?.source||receiptQuickPreview;
   focus?.focus({preventScroll:true});
   focus?.scrollIntoView?.({block:"nearest"});
   return true;
