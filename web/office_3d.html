@@ -2206,6 +2206,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     </select></label>
     <label>복원 발언 정렬 <select id="ai-meeting-progress-receipt-order" style="min-height:44px">
      <option value="default">이전 회의 먼저</option><option value="later">이후 회의 먼저</option><option value="unreviewed">미검토 먼저</option>
+     <option value="reviewed">검토 완료 먼저</option><option value="id">발언 번호순</option><option value="agent">에이전트 이름순</option>
+     <option value="phase">최종 결론 먼저</option><option value="verdict">자료 부족 판정 먼저</option>
     </select></label>
    </details>
    <details id="ai-meeting-progress-receipt-review-tools">
@@ -2820,6 +2822,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(next)focusReceiptPreview(next);
  });
  const receiptPhaseLabels={ANALYSIS:"초기 분석",PEER_REVIEW:"상호 검토",CONCLUSION:"최종 결론"};
+ const receiptPhaseRank={CONCLUSION:0,PEER_REVIEW:1,ANALYSIS:2};
+ const verdictRank={INSUFFICIENT_DATA:0,REVIEW_NEEDED:1,OBSERVATION_ONLY:2};
+ const receiptSorts={
+  later:{label:"이후 회의 먼저",compare:(a,b)=>Number(b.period==="later")-Number(a.period==="later")},
+  unreviewed:{label:"미검토 먼저",compare:(a,b)=>Number(a.reviewed)-Number(b.reviewed)},
+  reviewed:{label:"검토 완료 먼저",compare:(a,b)=>Number(b.reviewed)-Number(a.reviewed)},
+  id:{label:"발언 번호순",compare:(a,b)=>a.statement.id.localeCompare(b.statement.id)},
+  agent:{label:"에이전트 이름순",compare:(a,b)=>a.statement.agent.localeCompare(b.statement.agent)},
+  phase:{label:"최종 결론 먼저",compare:(a,b)=>receiptPhaseRank[a.statement.phase]-receiptPhaseRank[b.statement.phase]},
+  verdict:{label:"자료 부족 판정 먼저",compare:(a,b)=>verdictRank[a.statement.verdict]-verdictRank[b.statement.verdict]},
+ };
  const quickReceiptReviewFilters={
   unreviewed:document.getElementById("ai-meeting-progress-receipt-quick-unreviewed"),
   reviewed:document.getElementById("ai-meeting-progress-receipt-quick-reviewed"),
@@ -2866,7 +2879,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    [labels[verdict],progressReceiptVerdict,"value","all"],
    [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),progressReceiptReviewState,"value","all"],
    [selectedOnly&&"선택한 발언만",progressReceiptSelectedOnly,"checked",false],
-   [order==="later"?"이후 회의 먼저":order==="unreviewed"?"미검토 먼저":"",progressReceiptOrder,"value","default"],
+   [receiptSorts[order]?.label,progressReceiptOrder,"value","default"],
   ].filter(([label,control])=>label&&control);
   progressReceiptActiveFilters.hidden=active.length===0;
   const buttons=active.map(([label,control,property,defaultValue],index)=>{
@@ -2938,9 +2951,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    (verdict==="all"||verdict===statement.verdict)&&(state==="all"||reviewed===(state==="reviewed"))&&
    (id?statement.id.toLowerCase()===id[1]:
     [statement.id,statement.agent,statement.summary].some(text=>comparisonSearchText(text).includes(query))));
-  const order=progressReceiptOrder?.value;
-  if(order==="later")visible.sort((a,b)=>Number(b.period==="later")-Number(a.period==="later"));
-  if(order==="unreviewed")visible.sort((a,b)=>Number(a.reviewed)-Number(b.reviewed));
+  const compare=receiptSorts[progressReceiptOrder?.value]?.compare;
+  if(compare)visible.sort(compare);
   return visible;
  }
  function updateProgressReceiptReviewButtons(mark,unmark,scope,total,reviewed){
@@ -3803,7 +3815,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function orderComparisonChanges(){
   const sort=comparisonSort?.value||"ORDER";
   if(!comparisonChanges.length||sort===appliedComparisonSort)return;
-  const verdictRank={INSUFFICIENT_DATA:0,REVIEW_NEEDED:1,OBSERVATION_ONLY:2};
   const concernCount=change=>change.concerns_added.length+change.concerns_removed.length;
   comparisonChanges.sort((a,b)=>{
    const sequence=a.change.id.localeCompare(b.change.id);
