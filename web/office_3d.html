@@ -3716,6 +3716,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   event.preventDefault();
   closeReceiptQuickPreview(true);
  });
+ const receiptQuickFieldLabels={
+  search:"검색어",selectedOnly:"선택한 발언만",side:"회의",phase:"회의 단계",
+  verdict:"발언 판정",state:"검토 상태",agent:"에이전트",searchScope:"검색 범위",
+ };
  function eligibleReceiptQuickPresetFields(change,filters,redo){
   if(!change||change.applied===redo)return [];
   const expected=redo?change.before:change.after;
@@ -3728,14 +3732,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const filters=progressReceiptFilters();
    const fields=eligibleReceiptQuickPresetFields(change,filters,redo);
    if(!fields.length)return;
-   const skipped=change.fields.length-fields.length;
+   const skipped=change.fields.filter(key=>!fields.includes(key));
+   const before=progressReceiptCards.size;
    const target=redo?change.after:change.before;
    for(const key of fields)filters[key]=target[key];
    change.fields=fields;
    change.applied=redo;
    applyReceiptViewParts({filters},["filters"]);
-   if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent=(redo?"다시 적용 ":"되돌리기 ")+fields.length+"개 조건"+
-    (skipped?" · 직접 수정한 "+skipped+"개 조건 유지":"");
+   if(receiptQuickPresetStatus){
+    const destination=redo&&change.jumpKey?progressReceiptEntries().find(entry=>entry.key===change.jumpKey):null;
+    receiptQuickPresetStatus.textContent=[
+     (redo?"다시 적용 ":"되돌리기 ")+fields.length+"개 조건",
+     skipped.length?"직접 수정한 "+skipped.length+"개 조건 유지 ("+skipped.map(key=>receiptQuickFieldLabels[key]).join(", ")+")":"",
+     "변경 "+fields.map(key=>receiptQuickFieldLabels[key]).join(", "),
+     "표시 발언 "+before+"건 → "+progressReceiptCards.size+"건",
+     destination?(progressReceiptCards.has(destination.key)?"다시 열 수 있는 발언 ":"현재 조건에 가려진 이동 발언 ")+
+      receiptQuickRowLabel(destination):"",
+    ].filter(Boolean).join(" · ");
+   }
    const other=redo?undoReceiptQuickPreset:redoReceiptQuickPreset;
    (other?.disabled?combineReceiptQuickPreset:other)?.focus?.();
   });
