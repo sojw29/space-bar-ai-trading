@@ -2253,6 +2253,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-list-open-prev" type="button" style="min-height:44px" disabled>이전 결과</button>
         <button id="ai-meeting-progress-receipt-preset-preview-list-open-next" type="button" style="min-height:44px">다음 결과</button>
         <button id="ai-meeting-progress-receipt-preset-preview-list-open-last" type="button" style="min-height:44px">마지막 결과</button>
+        <label>검색 결과 선택 <select id="ai-meeting-progress-receipt-preset-preview-list-picker" style="min-height:44px;max-width:100%"></select></label>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-back-search" type="button" style="min-height:44px">검색창으로 이동</button>
         <p id="ai-meeting-progress-receipt-preset-preview-list-position" role="status"></p>
        </div>
        <button id="ai-meeting-progress-receipt-preset-preview-list-expand" type="button" style="min-height:44px" disabled>검색 결과 펼치기</button>
@@ -3097,6 +3099,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   [document.getElementById("ai-meeting-progress-receipt-preset-preview-list-collapse"),false],
  ];
  const receiptQuickListNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-navigation");
+ const receiptQuickListPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-picker");
+ const receiptQuickListBackSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-back-search");
  const receiptQuickListPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-position");
  const receiptQuickListNavigationButtons=Object.fromEntries(["first","prev","next","last"].map(action=>
   [action,document.getElementById("ai-meeting-progress-receipt-preset-preview-list-open-"+action)]));
@@ -3242,7 +3246,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     details.append(choose);
    }
    row.append(details);
-   rendered.set(entry.key,{details,heading,choose});
+   rendered.set(entry.key,{details,heading,choose,label:receiptQuickRowLabel(entry)});
+   if(canJump)heading.addEventListener("click",()=>{
+    if(!details.open&&!receiptQuickListNavigation?.hidden){
+     receiptQuickListCurrentKey=entry.key;
+     renderReceiptQuickListNavigation(true);
+    }
+   });
    return row;
   }));
   if(focusedKey){
@@ -3515,19 +3525,43 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   };
   for(const [action,button] of Object.entries(receiptQuickListNavigationButtons))if(button)button.disabled=disabled[action];
   for(const [key,{heading}] of rows)heading.setAttribute("aria-current",String(key===receiptQuickListCurrentKey));
+  if(receiptQuickListPicker){
+   const placeholder=document.createElement("option");
+   placeholder.value="";
+   placeholder.textContent="발언 선택";
+   receiptQuickListPicker.replaceChildren(placeholder,...(hasQuery?keys.map((key,index)=>{
+    const option=document.createElement("option");
+    option.value=key;
+    option.textContent=(index+1)+". "+rows.get(key).label;
+    return option;
+   }):[]));
+   receiptQuickListPicker.value=receiptQuickListCurrentKey??"";
+  }
  }
+ function openReceiptQuickListResult(key){
+  if(receiptQuickListNavigation?.hidden)return;
+  const target=receiptQuickPreviewLists.projected.rendered.get(key);
+  if(!target)return;
+  receiptQuickListCurrentKey=key;
+  target.details.open=true;
+  target.heading.focus();
+  renderReceiptQuickListNavigation(true);
+ }
+ receiptQuickListPicker?.addEventListener("change",()=>{
+  const key=receiptQuickListPicker.value;
+  if(key)openReceiptQuickListResult(key);
+  else{
+   receiptQuickListCurrentKey=null;
+   renderReceiptQuickListNavigation(true);
+  }
+ });
+ receiptQuickListBackSearch?.addEventListener("click",()=>receiptQuickListSearch?.focus());
  for(const [action,button] of Object.entries(receiptQuickListNavigationButtons)){
   button?.addEventListener("click",()=>{
    if(button.disabled||receiptQuickListNavigation?.hidden)return;
-   const rows=[...receiptQuickPreviewLists.projected.rendered];
-   const index=rows.findIndex(([key])=>key===receiptQuickListCurrentKey);
-   const target=rows[{first:0,prev:index-1,next:index+1,last:rows.length-1}[action]];
-   if(!target)return;
-   const [key,{details,heading}]=target;
-   receiptQuickListCurrentKey=key;
-   details.open=true;
-   heading.focus();
-   renderReceiptQuickListNavigation(true);
+   const keys=[...receiptQuickPreviewLists.projected.rendered.keys()];
+   const index=keys.indexOf(receiptQuickListCurrentKey);
+   openReceiptQuickListResult(keys[{first:0,prev:index-1,next:index+1,last:keys.length-1}[action]]);
   });
  }
  receiptQuickListSearch?.addEventListener("input",refreshReceiptQuickList);
