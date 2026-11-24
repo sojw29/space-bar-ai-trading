@@ -716,6 +716,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(receiptCount.textContent,/2 \/ 2건/);
    const receiptOrder=elements['ai-meeting-progress-receipt-order'];
    receiptOrder.value='later';receiptOrder.change();
+   const quickEarlier=elements['ai-meeting-progress-receipt-preset-earlier'];
+   assert.equal(quickEarlier.disabled,true);
+   assert.match(quickEarlier.textContent,/0건/);
+   elements['ai-meeting-progress-receipt-unmark'].click();
+   assert.equal(quickEarlier.disabled,false);
+   assert.match(quickEarlier.textContent,/1건/);
    receiptSearch.value='commander';receiptSearch.input();
    for(const [name,side,phase,verdict,state] of [
     ['earlier','earlier','all','all','unreviewed'],
@@ -724,12 +730,30 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     ['review','all','all','REVIEW_NEEDED','all'],
     ['insufficient','all','all','INSUFFICIENT_DATA','all'],
    ]){
-    elements['ai-meeting-progress-receipt-preset-'+name].click();
+    const preset=elements['ai-meeting-progress-receipt-preset-'+name];
+    if(preset.disabled){
+     assert.notEqual(verdict,'all');
+     assert.match(preset.textContent,/0건/);
+     continue;
+    }
+    preset.click();
+    assert.equal(preset.attrs['aria-pressed'],'true');
     assert.deepEqual([receiptSide.value,receiptPhase.value,receiptVerdict.value,receiptReviewState.value],
      [side,phase,verdict,state]);
     assert.equal(receiptSearch.value,'');
     assert.equal(receiptOrder.value,'later');
    }
+   quickEarlier.click();
+   assert.equal(quickEarlier.attrs['aria-pressed'],'true');
+   undoReview.click();
+   assert.match(quickEarlier.textContent,/0건/);
+   assert.equal(quickEarlier.disabled,false);
+   quickEarlier.click();
+   assert.equal(quickEarlier.attrs['aria-pressed'],'false');
+   assert.equal(quickEarlier.disabled,true);
+   assert.equal(receiptSide.value,'all');
+   assert.equal(receiptReviewState.value,'all');
+   assert.equal(receiptOrder.value,'later');
    receiptReset.click();
    const receiptSideProgress=elements['ai-meeting-progress-receipt-side-progress'];
    const receiptUndo=elements['ai-meeting-progress-receipt-undo'];
