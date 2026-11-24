@@ -2222,6 +2222,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <ol id="ai-meeting-progress-receipt-preset-preview-projected-rows"></ol>
       </details>
       <label>적용 후 이동 <select id="ai-meeting-progress-receipt-preset-preview-jump" style="min-height:44px;max-width:100%"></select></label>
+      <p id="ai-meeting-progress-receipt-preset-preview-jump-status" role="status"></p>
       <button id="ai-meeting-progress-receipt-preset-preview-apply" type="button" style="min-height:44px">조합 적용</button>
       <button id="ai-meeting-progress-receipt-preset-preview-cancel" type="button" style="min-height:44px">미리보기 취소</button>
      </div>
@@ -3039,6 +3040,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickListCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-count");
  const applyReceiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-apply");
  const receiptQuickPreviewJump=document.getElementById("ai-meeting-progress-receipt-preset-preview-jump");
+ const receiptQuickPreviewJumpStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-jump-status");
  const cancelReceiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-cancel");
  const receiptQuickPresets=[
   ["earlier","이전 회의 미검토",{side:"earlier",state:"unreviewed"}],
@@ -3096,16 +3098,43 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickListState)receiptQuickListState.value="all";
   if(receiptQuickListSelected)receiptQuickListSelected.checked=false;
  }
- function renderReceiptQuickPreviewList({container,rows},entries,total=entries.length){
+ function renderReceiptQuickPreviewList({container,rows},entries,{total=entries.length,canJump=false}={}){
   if(!container||!rows)return;
   container.hidden=total===0;
   rows.replaceChildren(...entries.map(entry=>{
    const row=document.createElement("li");
-   row.textContent=receiptQuickRowLabel(entry)+" · "+(entry.reviewed?"검토 완료":"미검토")+
+   const details=document.createElement("details");
+   const heading=document.createElement("summary");
+   heading.style.minHeight="44px";
+   heading.textContent=receiptQuickRowLabel(entry)+" · "+(entry.reviewed?"검토 완료":"미검토")+
     (selectedReceiptKeys.has(entry.key)?" · 선택됨":"");
+   const meta=document.createElement("p");
+   meta.textContent=receiptPhaseLabels[entry.statement.phase]+" · "+labels[entry.statement.verdict];
+   const excerpt=document.createElement("p");
+   excerpt.textContent=entry.statement.summary;
+   details.append(heading,meta,excerpt);
+   if(canJump&&receiptQuickPreviewJump){
+    const choose=document.createElement("button");
+    choose.type="button";
+    choose.style.minHeight="44px";
+    choose.textContent="적용 후 이 발언으로 이동";
+    choose.setAttribute("aria-label",choose.textContent+" · "+receiptQuickRowLabel(entry));
+    choose.addEventListener("click",()=>{
+     receiptQuickPreviewJump.value="statement:"+entry.key;
+     showReceiptQuickJumpStatus(receiptQuickRowLabel(entry));
+    });
+    details.append(choose);
+   }
+   row.append(details);
    return row;
   }));
  }
+ function showReceiptQuickJumpStatus(label){
+  if(receiptQuickPreviewJumpStatus)receiptQuickPreviewJumpStatus.textContent=label?"적용 후 이동 · "+label:"";
+ }
+ receiptQuickPreviewJump?.addEventListener("change",()=>{
+  showReceiptQuickJumpStatus(receiptQuickPreviewJump.value?receiptQuickPreviewJump.selectedOptions[0]?.textContent:"");
+ });
  function updateReceiptQuickPreviewJump(choices,projected){
   if(!receiptQuickPreviewJump)return;
   const previous=receiptQuickPreviewJump.value;
@@ -3130,7 +3159,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   exactTargets.append(...exactOptions);
   receiptQuickPreviewJump.replaceChildren(stay,...options,...(exactOptions.length?[exactTargets]:[]));
   options.push(...exactOptions);
-  receiptQuickPreviewJump.value=options.some(option=>option.value===previous&&!option.disabled)?previous:"";
+  const selected=options.find(option=>option.value===previous&&!option.disabled);
+  receiptQuickPreviewJump.value=selected?.value??"";
+  showReceiptQuickJumpStatus(selected?.textContent);
  }
  function updateReceiptQuickPreview(entries,current){
   const pending=pendingQuickPreset;
@@ -3203,7 +3234,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   };
   const count=projected.length;
   const matching=visibleProgressReceiptEntries(projected,listFilters);
-  renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,count);
+  renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,{total:count,canJump:true});
   if(receiptQuickListCount)receiptQuickListCount.textContent=matching.length+" / "+count+"건"+
    (matching.length===0&&count?" · 목록 조건에 맞는 발언이 없습니다.":"");
   if(receiptQuickListReset)receiptQuickListReset.disabled=!listFilters.search&&listFilters.state==="all"&&!listFilters.selectedOnly;
