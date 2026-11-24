@@ -2248,7 +2248,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <button id="ai-meeting-progress-receipt-preset-preview-list-recovery-redo" type="button" style="min-height:44px" hidden>목록 조건 다시 해제</button>
        <p id="ai-meeting-progress-receipt-preset-preview-list-recovery-status" role="status"></p>
        <div id="ai-meeting-progress-receipt-preset-preview-list-recovery" role="group" aria-label="검색 결과를 다시 표시할 조건" hidden></div>
-       <button id="ai-meeting-progress-receipt-preset-preview-list-open-first" type="button" style="min-height:44px" hidden>첫 검색 결과 열기</button>
+       <div id="ai-meeting-progress-receipt-preset-preview-list-navigation" role="group" aria-label="미리보기 검색 결과 이동" hidden>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-open-first" type="button" style="min-height:44px">첫 검색 결과 열기</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-open-prev" type="button" style="min-height:44px" disabled>이전 결과</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-open-next" type="button" style="min-height:44px">다음 결과</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-open-last" type="button" style="min-height:44px">마지막 결과</button>
+        <p id="ai-meeting-progress-receipt-preset-preview-list-position" role="status"></p>
+       </div>
        <button id="ai-meeting-progress-receipt-preset-preview-list-expand" type="button" style="min-height:44px" disabled>검색 결과 펼치기</button>
        <button id="ai-meeting-progress-receipt-preset-preview-list-collapse" type="button" style="min-height:44px" disabled>검색 결과 접기</button>
        <ol id="ai-meeting-progress-receipt-preset-preview-projected-rows"></ol>
@@ -3090,7 +3096,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   [document.getElementById("ai-meeting-progress-receipt-preset-preview-list-expand"),true],
   [document.getElementById("ai-meeting-progress-receipt-preset-preview-list-collapse"),false],
  ];
- const receiptQuickListOpenFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-open-first");
+ const receiptQuickListNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-navigation");
+ const receiptQuickListPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-position");
+ const receiptQuickListNavigationButtons=Object.fromEntries(["first","prev","next","last"].map(action=>
+  [action,document.getElementById("ai-meeting-progress-receipt-preset-preview-list-open-"+action)]));
+ let receiptQuickListCurrentKey=null;
  const receiptQuickListCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-count");
  const applyReceiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-apply");
  const receiptQuickPreviewJump=document.getElementById("ai-meeting-progress-receipt-preset-preview-jump");
@@ -3151,6 +3161,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function resetReceiptQuickListFilters(){
   receiptQuickListRecoveryChange=null;
+  receiptQuickListCurrentKey=null;
   if(receiptQuickListSearch)receiptQuickListSearch.value="";
   if(receiptQuickListScope)receiptQuickListScope.value="all";
   if(receiptQuickListState)receiptQuickListState.value="all";
@@ -3468,7 +3479,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,{
    total:count,canJump:true,query,scope:listFilters.searchScope,
   });
-  if(receiptQuickListOpenFirst)receiptQuickListOpenFirst.hidden=!query||matching.length===0;
+  renderReceiptQuickListNavigation(Boolean(query));
   for(const [button] of receiptQuickListExpansion)if(button)button.disabled=matching.length===0;
   if(receiptQuickListCount)receiptQuickListCount.textContent=matching.length+" / "+count+"건"+
    (listEmpty?" · 목록 조건에 맞는 발언이 없습니다. "+
@@ -3486,12 +3497,39 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    for(const {details} of receiptQuickPreviewLists.projected.rendered.values())details.open=open;
   });
  }
- receiptQuickListOpenFirst?.addEventListener("click",()=>{
-  const first=receiptQuickPreviewLists.projected.rendered.values().next().value;
-  if(!first)return;
-  first.details.open=true;
-  first.heading.focus();
- });
+ function renderReceiptQuickListNavigation(hasQuery){
+  const rows=receiptQuickPreviewLists.projected.rendered;
+  const keys=[...rows.keys()];
+  if(!hasQuery||!rows.has(receiptQuickListCurrentKey))receiptQuickListCurrentKey=null;
+  const index=keys.indexOf(receiptQuickListCurrentKey);
+  if(receiptQuickListNavigation)receiptQuickListNavigation.hidden=!hasQuery||!keys.length;
+  if(receiptQuickListPosition){
+   const position=hasQuery?(index>=0?(index+1)+" / "+keys.length+"번째 결과":keys.length+"건 검색됨"):"";
+   if(receiptQuickListPosition.textContent!==position)receiptQuickListPosition.textContent=position;
+  }
+  const disabled={
+   first:!keys.length,
+   prev:index<=0,
+   next:!keys.length||index===keys.length-1,
+   last:!keys.length,
+  };
+  for(const [action,button] of Object.entries(receiptQuickListNavigationButtons))if(button)button.disabled=disabled[action];
+  for(const [key,{heading}] of rows)heading.setAttribute("aria-current",String(key===receiptQuickListCurrentKey));
+ }
+ for(const [action,button] of Object.entries(receiptQuickListNavigationButtons)){
+  button?.addEventListener("click",()=>{
+   if(button.disabled||receiptQuickListNavigation?.hidden)return;
+   const rows=[...receiptQuickPreviewLists.projected.rendered];
+   const index=rows.findIndex(([key])=>key===receiptQuickListCurrentKey);
+   const target=rows[{first:0,prev:index-1,next:index+1,last:rows.length-1}[action]];
+   if(!target)return;
+   const [key,{details,heading}]=target;
+   receiptQuickListCurrentKey=key;
+   details.open=true;
+   heading.focus();
+   renderReceiptQuickListNavigation(true);
+  });
+ }
  receiptQuickListSearch?.addEventListener("input",refreshReceiptQuickList);
  receiptQuickListScope?.addEventListener("change",refreshReceiptQuickList);
  receiptQuickListState?.addEventListener("change",refreshReceiptQuickList);
