@@ -830,9 +830,24 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    receiptCollapse.click();
    receiptClearSelection.click();
    receiptReset.click();
-   await importReceiptView({...receiptView,restored:['earlier:M07']});
-   assert.match(receiptViewStatus.textContent,/현재 복원 발언이 파일과 달라요.*없는 저장 발언 0건.*목록에만 있는 발언 1건/);
+   await importReceiptView({...receiptView,restored:['later:M04','later:M07'],selected:['later:M07']});
+   assert.equal(receiptViewPreview.hidden,false);
+   assert.match(receiptViewSummary.textContent,/검색·필터와 정렬만 적용/);
+   assert.match(receiptViewSummary.textContent,/파일에만 있는 발언 1건 · 이후 M04/);
+   assert.match(receiptViewSummary.textContent,/현재 목록에만 있는 발언 1건 · 이전 M07/);
+   for(const part of ['selection','expanded','cursor']){
+    const input=elements['ai-meeting-progress-receipt-view-'+part];
+    assert.equal(input.disabled,true);
+    assert.equal(input.checked,false);
+   }
    assert.equal(receiptSide.value,'all');
+   receiptSelectedOnly.checked=true;receiptSelectedOnly.change();
+   applyReceiptView.click();
+   assert.match(receiptViewStatus.textContent,/선택 0건 · 2개 항목 적용/);
+   assert.equal(receiptSide.value,'later');
+   assert.equal(receiptOrder.value,'later');
+   assert.equal(receiptSelectedOnly.checked,true);
+   receiptReset.click();
    await importReceiptView(progressFile);
    assert.match(receiptViewStatus.textContent,/저장한 검토 진행 불러오기/);
    await importReceiptView({version:'SPACEBAR_MEETING_RESTORE_RECEIPT_1'});
