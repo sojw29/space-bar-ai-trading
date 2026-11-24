@@ -3436,11 +3436,31 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면 저장을 시작하지 못했습니다.";
   }
  });
+ function sameReceiptViewPair(saved,current){
+  if(saved===current)return true;
+  if(!saved||!current||typeof saved!=="object"||typeof current!=="object"||Array.isArray(saved)||Array.isArray(current))return false;
+  const keys=Object.keys(current);
+  return keys.length===Object.keys(saved).length&&keys.every(key=>Object.hasOwn(saved,key)&&sameReceiptViewPair(saved[key],current[key]));
+ }
  function validateProgressReceiptView(view,restore){
+  if(view?.version==="SPACEBAR_MEETING_REVIEW_PROGRESS_1"){
+   throw Error("검토 표시 진행 파일이에요. ‘저장한 검토 진행 불러오기’에서 열어 주세요.");
+  }
+  if(view?.version==="SPACEBAR_MEETING_RESTORE_RECEIPT_1"){
+   throw Error("복원 발언 내보내기 파일이에요. ‘현재 검토 화면 JSON 저장’으로 저장한 파일을 선택해 주세요.");
+  }
   if(view?.version!=="SPACEBAR_MEETING_RESTORE_VIEW_1")throw Error("검토 화면 JSON 형식이 올바르지 않습니다.");
-  if(JSON.stringify(view.pair)!==JSON.stringify(reviewProgressPair())||
-   JSON.stringify(view.restored)!==JSON.stringify(restore.keys))throw Error("현재 두 회의와 복원 발언이 일치하는 검토 화면을 선택해 주세요.");
+  if(!sameReceiptViewPair(view.pair,reviewProgressPair()))throw Error("파일의 회의 비교가 현재 두 회의와 달라요. 같은 두 회의를 열어 주세요.");
   const allowed=new Set(restore.keys);
+  if(!Array.isArray(view.restored)||!view.restored.every(key=>typeof key==="string"&&/^(earlier|later):M0[1-7]$/.test(key))){
+   throw Error("저장된 복원 발언 목록 형식이 올바르지 않습니다.");
+  }
+  const saved=new Set(view.restored);
+  if(saved.size!==view.restored.length)throw Error("저장된 복원 발언 목록에 중복 발언이 있어요.");
+  const missing=[...saved].filter(key=>!allowed.has(key)).length;
+  const extra=[...allowed].filter(key=>!saved.has(key)).length;
+  if(missing||extra)throw Error("현재 복원 발언이 파일과 달라요. 현재 목록에 없는 저장 발언 "+missing+
+   "건 · 현재 목록에만 있는 발언 "+extra+"건.");
   const validKeys=keys=>Array.isArray(keys)&&keys.length<=allowed.size&&
    new Set(keys).size===keys.length&&keys.every(key=>allowed.has(key));
   if(!validKeys(view.selected)||!validKeys(view.expanded)||(view.cursor!==null&&!allowed.has(view.cursor))){
