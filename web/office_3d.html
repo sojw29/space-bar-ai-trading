@@ -2253,6 +2253,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <label for="ai-meeting-progress-receipt-load-view">검토 화면 JSON 불러오기</label>
     <input id="ai-meeting-progress-receipt-load-view" type="file" accept=".json,application/json" style="min-height:44px;max-width:100%">
     <p id="ai-meeting-progress-receipt-view-status" role="status" style="overflow-wrap:anywhere"></p>
+    <div id="ai-meeting-progress-receipt-view-preview" hidden>
+     <p id="ai-meeting-progress-receipt-view-preview-summary" style="white-space:pre-line;overflow-wrap:anywhere"></p>
+     <button id="ai-meeting-progress-receipt-view-apply" type="button" style="min-height:44px">검토 화면 적용</button>
+     <button id="ai-meeting-progress-receipt-view-cancel" type="button" style="min-height:44px">불러오기 취소</button>
+    </div>
    </details>
    <p id="ai-meeting-progress-receipt-status" role="status"></p>
    <button id="ai-meeting-progress-receipt-close" type="button" style="min-height:44px">복원 내역 접기</button>
@@ -3201,6 +3206,48 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const loadProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-load-view");
  const progressReceiptViewStatus=document.getElementById("ai-meeting-progress-receipt-view-status");
  let progressReceiptViewRevision=0;
+ let pendingProgressReceiptView=null;
+ const progressReceiptViewPreview=document.getElementById("ai-meeting-progress-receipt-view-preview");
+ const progressReceiptViewSummary=document.getElementById("ai-meeting-progress-receipt-view-preview-summary");
+ const applyProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-apply");
+ const cancelProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-cancel");
+ function clearPendingProgressReceiptView(){
+  pendingProgressReceiptView=null;
+  if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=true;
+  if(progressReceiptViewSummary)progressReceiptViewSummary.textContent="";
+ }
+ function previewProgressReceiptView(view,restore,filename){
+  pendingProgressReceiptView={view,restore};
+  if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=false;
+  const {filters,order,selected,expanded,cursor}=view;
+  const entries=progressReceiptEntries();
+  const cursorLabel=entries.find(entry=>entry.key===cursor)?.label||"없음";
+  const conditions=[
+   filters.search&&"검색 "+filters.search,
+   filters.side==="earlier"?"이전 회의만":filters.side==="later"?"이후 회의만":"",
+   filters.agent!=="all"&&filters.agent,
+   receiptSearchScopeLabels[filters.searchScope],
+   receiptPhaseLabels[filters.phase],
+   labels[filters.verdict],
+   filters.state==="reviewed"?"검토 완료만":filters.state==="unreviewed"?"미검토만":"",
+   filters.selectedOnly&&"선택한 발언만",
+  ].filter(Boolean);
+  if(progressReceiptViewSummary)progressReceiptViewSummary.textContent=[
+   filename||"검토 화면 JSON",
+   "필터 "+(conditions.join(" · ")||"전체")+" · 정렬 "+(receiptSorts[order]?.label||"이전 회의 먼저"),
+   "선택 "+selected.length+"건 · 펼친 요약 "+expanded.length+"건",
+   "이동 위치 "+cursorLabel,
+  ].join("\n");
+  if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면을 확인한 뒤 적용하세요.";
+  applyProgressReceiptView?.focus?.();
+ }
+ cancelProgressReceiptView?.addEventListener("click",()=>{
+  progressReceiptViewRevision++;
+  clearPendingProgressReceiptView();
+  if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면 불러오기를 취소했어요.";
+  loadProgressReceiptView?.focus?.();
+ });
+
  saveProgressReceiptView?.addEventListener("click",()=>{
   if(!lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   for(const [key,{preview}] of progressReceiptCards)rememberProgressPreview(key,preview);
@@ -3241,6 +3288,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const restore=lastProgressRestore;
   if(!file||!restore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   const revision=++progressReceiptViewRevision;
+  clearPendingProgressReceiptView();
   if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="";
   const current=()=>revision===progressReceiptViewRevision&&restore===lastProgressRestore&&
    !!comparisonReport&&(!!pairedArchives||canUseRecord());
@@ -3250,22 +3298,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    try{view=JSON.parse(await file.text());}catch(_){throw Error("올바른 검토 화면 JSON을 선택해 주세요.");}
    if(!current())return;
    validateProgressReceiptView(view,restore);
-   const {filters,order,selected,expanded,cursor}=view;
-   if(progressReceiptSearch)progressReceiptSearch.value=filters.search;
-   if(progressReceiptSelectedOnly)progressReceiptSelectedOnly.checked=filters.selectedOnly;
-   if(progressReceiptOrder)progressReceiptOrder.value=order;
-   for(const [key,select] of Object.entries(progressReceiptSelects))if(select)select.value=filters[key];
-   progressReceiptCards.clear();
-   selectedReceiptKeys.clear();
-   openProgressPreviews.clear();
-   for(const key of selected)selectedReceiptKeys.add(key);
-   for(const key of expanded)openProgressPreviews.add(key);
-   lastReceiptPreviewKey=cursor;
-   updateProgressReceipt();
-   if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면 불러옴 · 선택 "+selected.length+"건";
+   previewProgressReceiptView(view,restore,file.name);
   }catch(error){
    if(current()&&progressReceiptViewStatus)progressReceiptViewStatus.textContent=error.message;
   }
+ });
+ applyProgressReceiptView?.addEventListener("click",()=>{
+  const pending=pendingProgressReceiptView;
+  if(!pending||pending.restore!==lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+  const {filters,order,selected,expanded,cursor}=pending.view;
+  clearPendingProgressReceiptView();
+  if(progressReceiptSearch)progressReceiptSearch.value=filters.search;
+  if(progressReceiptSelectedOnly)progressReceiptSelectedOnly.checked=filters.selectedOnly;
+  if(progressReceiptOrder)progressReceiptOrder.value=order;
+  for(const [key,select] of Object.entries(progressReceiptSelects))if(select)select.value=filters[key];
+  progressReceiptCards.clear();
+  selectedReceiptKeys.clear();
+  openProgressPreviews.clear();
+  for(const key of selected)selectedReceiptKeys.add(key);
+  for(const key of expanded)openProgressPreviews.add(key);
+  lastReceiptPreviewKey=cursor;
+  updateProgressReceipt();
+  if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면 불러옴 · 선택 "+selected.length+"건";
+  loadProgressReceiptView?.focus?.();
  });
  function saveProgressReceipt(scope,format="TXT"){
   if(!lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
@@ -3522,6 +3577,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   lastProgressRestore={name:pending.name,visibleOnly,keys:added};
   resetProgressReceiptFilters();
   if(progressReceiptStatus)progressReceiptStatus.textContent="";
+  clearPendingProgressReceiptView();
   if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="";
   discardProgressPreview();
   if(reviewProgressStatus)reviewProgressStatus.textContent=(visibleOnly?"표시된 발언만 복원":"검토 진행 복원")+
@@ -4636,6 +4692,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    pickedChanges.clear();
    pickedComparisonKey=selectionKey;
    lastProgressRestore=null;
+   clearPendingProgressReceiptView();
+   if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="";
    if(progressReceipt)progressReceipt.open=false;
    reviewProgressRevision++;
    discardProgressPreview();
