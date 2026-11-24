@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
    };
@@ -952,6 +952,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChanges.open,false);
    assert.match(quickList('source-changes','-label').textContent,/1건/);
    assert.match(sourceChangeRows()[0].textContent,/검토 완료 · 이후 .*COMMANDER/);
+   assert.equal(sourceChangeRows()[0].children[1].children[0].textContent,'발언 요약');
+   const sourceSummary=sourceChangeRows()[0].children[1].children[1].textContent;
+   assert.ok(sourceSummary);
    const sourceChangeType=type=>quickList('source-changes','-'+type);
    assert.equal(sourceChangeType('all').textContent,'전체 (1건)');
    assert.equal(sourceChangeType('completed').textContent,'검토 완료 (1건)');
@@ -959,10 +962,26 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sourceChangeType('reopened').click();
    assert.equal(sourceChangeRows().length,0);
    assert.equal(sourceChangeType('empty').hidden,false);
+   const beforeEmptyExport=downloads.length;
+   sourceChangeType('json').click();
+   assert.equal(sourceChangeType('json').disabled,true);
+   assert.equal(downloads.length,beforeEmptyExport);
    sourceChangeType('completed').click();
    assert.equal(sourceChangeRows().length,1);
    assert.equal(sourceChangeType('completed').attrs['aria-pressed'],'true');
    assert.equal(sourceChangeType('empty').hidden,true);
+   sourceChangeType('json').click();
+   assert.match(downloads.at(-1),/visible-source-review-changes-.*-1-rows\.json$/);
+   const sourceRows=JSON.parse(await savedBlob.text()).rows;
+   assert.equal(sourceRows.length,1);
+   assert.equal(sourceRows[0].change,'completed');
+   assert.equal(sourceRows[0].meeting,'later');
+   assert.equal(sourceRows[0].summary,sourceSummary);
+   sourceChangeType('csv').click();
+   assert.match(await savedBlob.text(),/"검토 완료","이후 회의",[^\r\n]+"COMMANDER"/);
+   sourceChangeType('txt').click();
+   assert.match(await savedBlob.text(),/검토 완료 · 이후 회의 · .*COMMANDER/);
+   assert.match(sourceChangeType('save-status').textContent,/저장 요청: .*txt · 1건/);
    assert.equal(sourceChangeType('count').textContent,'표시 1건 / 전체 1건');
    sourceChangeType('search').value='  ｃｏｍｍａｎｄｅｒ  ';
    sourceChangeType('search').input();
