@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -961,6 +961,14 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    selectSourceRow.checked=true;
    selectSourceRow.change();
    assert.equal(sourceChangeType('selection-count').textContent,'선택 1건 · 현재 표시 1건');
+   assert.equal(sourceChangeType('selection-nav').hidden,false);
+   assert.equal(sourceChangeType('selection-next').disabled,false);
+   sourceChangeType('selection-next').click();
+   assert.equal(sourceChangeRows()[0].children[0].focused,true);
+   assert.equal(sourceChangeRows()[0].scrolled,true);
+   assert.match(sourceChangeType('selection-position').textContent,/1 \/ 1.*COMMANDER/);
+   assert.equal(sourceChangeType('selection-prev').disabled,true);
+   assert.equal(sourceChangeType('selection-last').disabled,true);
    sourceChangeType('search').value='no source matches';
    sourceChangeType('search').input();
    assert.equal(sourceChangeRows().length,0);
