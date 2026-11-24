@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
    };
@@ -963,6 +963,28 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeRows().length,1);
    assert.equal(sourceChangeType('completed').attrs['aria-pressed'],'true');
    assert.equal(sourceChangeType('empty').hidden,true);
+   assert.equal(sourceChangeType('count').textContent,'표시 1건 / 전체 1건');
+   sourceChangeType('search').value='  ｃｏｍｍａｎｄｅｒ  ';
+   sourceChangeType('search').input();
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('period').value='earlier';
+   sourceChangeType('period').change();
+   assert.equal(sourceChangeRows().length,0);
+   assert.equal(sourceChangeType('count').textContent,'표시 0건 / 전체 1건');
+   sourceChangeType('period').value='later';
+   sourceChangeType('period').change();
+   sourceChangeType('order').value='meeting';
+   sourceChangeType('order').change();
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('search').value='no matching statement';
+   sourceChangeType('search').input();
+   assert.equal(sourceChangeRows().length,0);
+   sourceChangeType('reset').click();
+   assert.equal(sourceChangeType('search').value,'');
+   assert.equal(sourceChangeType('period').value,'all');
+   assert.equal(sourceChangeType('order').value,'type');
+   assert.equal(sourceChangeType('all').attrs['aria-pressed'],'true');
+   assert.equal(sourceChangeRows().length,1);
    assert.equal(quickList('source-reveal').hidden,true);
    sourceChangeRows()[0].children[0].click();
    assert.equal(sourceChanges.hidden,true);
