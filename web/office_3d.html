@@ -68,6 +68,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 #ai-meeting-progress-receipt-preset-preview-projected-rows summary[aria-current="true"]{background:#1b5265;border-radius:4px}
 .receipt-quick-presets button[aria-pressed="true"],
 #ai-meeting-progress-receipt-preset-preview-projected-rows button[aria-pressed="true"]{border-color:#87defa;background:#1b5265}
+#ai-meeting-progress-receipt-preset-preview-source-changes-rows button[aria-current="true"]{outline:2px solid currentColor;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -2239,6 +2240,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-first" type="button" style="min-height:44px">첫 선택</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-prev" type="button" style="min-height:44px">이전 선택</button>
         <span id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-position" role="status"></span>
+        <label>선택 발언 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-picker" style="min-height:44px"></select></label>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-open" type="button" style="min-height:44px" disabled>현재 원문 열기</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-summary" type="button" style="min-height:44px" disabled>현재 요약 펼치기</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-next" type="button" style="min-height:44px">다음 선택</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-last" type="button" style="min-height:44px">마지막 선택</button>
        </div>
@@ -3195,6 +3199,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceSelectionCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-count");
  const receiptQuickSourceSelectionNav=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-nav");
  const receiptQuickSourceSelectionPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-position");
+ const receiptQuickSourceSelectionPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-picker");
+ const receiptQuickSourceSelectionOpen=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-open");
+ const receiptQuickSourceSelectionSummary=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-summary");
+ receiptQuickSourceSelectionPicker?.addEventListener("change",()=>{
+  const value=receiptQuickSourceSelectionPicker.value;
+  if(value)updateReceiptQuickSourceSelectionNav(()=>Number(value)-1);
+ });
+ receiptQuickSourceSelectionOpen?.addEventListener("click",()=>{
+  if(!receiptQuickSourceSelectionOpen.disabled)openReceiptQuickSource(currentReceiptQuickSourceSelection.key);
+ });
+ receiptQuickSourceSelectionSummary?.addEventListener("click",()=>{
+  if(receiptQuickSourceSelectionSummary.disabled)return;
+  const {details}=currentReceiptQuickSourceSelection;
+  details.open=!details.open;
+  updateReceiptQuickSourceSelectionSummary(currentReceiptQuickSourceSelection);
+  if(details.open)details.scrollIntoView({block:"nearest"});
+ });
+ function updateReceiptQuickSourceSelectionSummary(entry){
+  if(receiptQuickSourceSelectionSummary){
+   receiptQuickSourceSelectionSummary.disabled=!entry;
+   receiptQuickSourceSelectionSummary.textContent=entry?.details.open?"현재 요약 접기":"현재 요약 펼치기";
+  }
+ }
  const receiptQuickSourceSelectionTargets=[
   ["first",()=>0],["prev",index=>index<0?0:index-1],
   ["next",index=>index+1],["last",(_,length)=>length-1],
@@ -3212,6 +3239,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    entry.row.scrollIntoView({block:"nearest"});
   }
   if(receiptQuickSourceSelectionNav)receiptQuickSourceSelectionNav.hidden=!entries.length;
+  const current=entries[index];
+  if(receiptQuickSourceSelectionPicker){
+   const labels=["선택 발언으로 이동",...entries.map(({label})=>label)];
+   receiptQuickSourceSelectionPicker.replaceChildren(...labels.map((label,i)=>{
+    const option=document.createElement("option");
+    option.value=i?String(i):"";
+    option.textContent=label;
+    return option;
+   }));
+   receiptQuickSourceSelectionPicker.value=index<0?"":String(index+1);
+  }
+  if(receiptQuickSourceSelectionOpen)receiptQuickSourceSelectionOpen.disabled=!current;
+  updateReceiptQuickSourceSelectionSummary(current);
+  for(const entry of visibleReceiptQuickSourceChanges)entry.source.setAttribute("aria-current",String(entry===current));
   if(receiptQuickSourceSelectionPosition){
    receiptQuickSourceSelectionPosition.textContent=!entries.length?"":index<0?"표시된 선택 "+entries.length+"건":
     (index+1)+" / "+entries.length+" · "+entries[index].label;
@@ -3643,7 +3684,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     selectionLabel.append(selection," 선택");
     row.append(selectionLabel);
     const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
-    rows.push({row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,summary,searchText});
+    const change={key,row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,summary,searchText};
+    details.addEventListener("toggle",()=>{
+     if(currentReceiptQuickSourceSelection===change&&visibleReceiptQuickSourceChanges.includes(change)){
+      updateReceiptQuickSourceSelectionSummary(change);
+     }
+    });
+    source.addEventListener("keydown",event=>{
+     if(event.key==="Escape"&&receiptQuickSourceSelectionPicker&&!receiptQuickSourceSelectionNav?.hidden){
+      event.preventDefault();
+      receiptQuickSourceSelectionPicker.focus();
+     }
+    });
+    rows.push(change);
    }
   }
   if(receiptQuickSourceChangeAgent){
