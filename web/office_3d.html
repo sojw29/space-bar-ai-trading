@@ -2254,6 +2254,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <input id="ai-meeting-progress-receipt-load-view" type="file" accept=".json,application/json" style="min-height:44px;max-width:100%">
     <button id="ai-meeting-progress-receipt-view-undo" type="button" style="min-height:44px" disabled>마지막 화면 적용 되돌리기</button>
     <button id="ai-meeting-progress-receipt-view-jump" type="button" style="min-height:44px" hidden disabled>복원한 발언으로 이동</button>
+    <button id="ai-meeting-progress-receipt-view-reveal-jump" type="button" style="min-height:44px" hidden>필터를 해제하고 복원한 발언으로 이동</button>
+    <button id="ai-meeting-progress-receipt-view-hidden-source" type="button" style="min-height:44px" hidden>가려진 복원 발언 원문 보기</button>
     <button id="ai-meeting-progress-receipt-view-redo" type="button" style="min-height:44px" disabled>화면 적용 다시 실행</button>
     <p id="ai-meeting-progress-receipt-view-status" role="status" style="overflow-wrap:anywhere"></p>
     <div id="ai-meeting-progress-receipt-view-preview" hidden>
@@ -2262,6 +2264,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      <p id="ai-meeting-progress-receipt-view-projected-review"></p>
      <p id="ai-meeting-progress-receipt-view-projected-selection"></p>
      <p id="ai-meeting-progress-receipt-view-projected-cursor"></p>
+     <p id="ai-meeting-progress-receipt-view-visibility-note" role="status"></p>
+     <button id="ai-meeting-progress-receipt-view-keep-filters" type="button" style="min-height:44px" hidden>현재 필터 유지</button>
      <details id="ai-meeting-progress-receipt-view-changed-statements" hidden>
       <summary style="min-height:44px">변경될 발언 보기</summary>
       <ul id="ai-meeting-progress-receipt-view-changed-statement-rows"></ul>
@@ -3243,6 +3247,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptViewProjectedSelection=document.getElementById("ai-meeting-progress-receipt-view-projected-selection");
  const receiptViewProjectedCursor=document.getElementById("ai-meeting-progress-receipt-view-projected-cursor");
  const jumpToAppliedReceiptView=document.getElementById("ai-meeting-progress-receipt-view-jump");
+ const revealAppliedReceiptView=document.getElementById("ai-meeting-progress-receipt-view-reveal-jump");
+ const sourceOfHiddenReceiptView=document.getElementById("ai-meeting-progress-receipt-view-hidden-source");
+ const receiptViewVisibilityNote=document.getElementById("ai-meeting-progress-receipt-view-visibility-note");
+ const keepCurrentReceiptFilters=document.getElementById("ai-meeting-progress-receipt-view-keep-filters");
  const receiptViewChangedStatements=document.getElementById("ai-meeting-progress-receipt-view-changed-statements");
  const receiptViewChangedStatementRows=document.getElementById("ai-meeting-progress-receipt-view-changed-statement-rows");
  const applyProgressReceiptView=document.getElementById("ai-meeting-progress-receipt-view-apply");
@@ -3266,6 +3274,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    updateReceiptViewApply();
   });
  }
+ keepCurrentReceiptFilters?.addEventListener("click",()=>{
+  if(!pendingProgressReceiptView||!receiptViewParts.filters)return;
+  receiptViewParts.filters.checked=false;
+  updateReceiptViewApply();
+  receiptViewParts.filters.focus?.();
+ });
  function selectedReceiptViewParts(){
   return Object.entries(receiptViewParts).filter(([,control])=>control?.checked).map(([part])=>part);
  }
@@ -3281,9 +3295,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   pendingProgressReceiptView=null;
   if(progressReceiptViewPreview)progressReceiptViewPreview.hidden=true;
   if(progressReceiptViewSummary)progressReceiptViewSummary.textContent="";
-  for(const field of [receiptViewProjectedCount,receiptViewProjectedReview,receiptViewProjectedSelection,receiptViewProjectedCursor]){
+  for(const field of [receiptViewProjectedCount,receiptViewProjectedReview,receiptViewProjectedSelection,receiptViewProjectedCursor,receiptViewVisibilityNote]){
    if(field)field.textContent="";
   }
+  if(keepCurrentReceiptFilters)keepCurrentReceiptFilters.hidden=true;
   if(receiptViewChangedStatements){receiptViewChangedStatements.open=false;receiptViewChangedStatements.hidden=true;}
   receiptViewChangedStatementRows?.replaceChildren();
   updateReceiptViewApply();
@@ -3324,16 +3339,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const reviewed=projected.filter(entry=>entry.reviewed).length;
    receiptViewProjectedReview.textContent="적용 후 검토 완료 "+reviewed+"건 · 미검토 "+(projected.length-reviewed)+"건";
   }
+  const visibleSelected=projected.filter(entry=>selection.has(entry.key)).length;
   if(receiptViewProjectedSelection){
-   const visibleSelected=projected.filter(entry=>selection.has(entry.key)).length;
    receiptViewProjectedSelection.textContent="적용 후 표시된 선택 "+visibleSelected+"건 · 가려진 선택 "+(selection.size-visibleSelected)+"건";
   }
+  const cursor=parts.includes("cursor")?view.cursor:lastReceiptPreviewKey;
+  const visibleCursor=projected.some(entry=>entry.key===cursor);
   if(receiptViewProjectedCursor){
-   const cursor=parts.includes("cursor")?view.cursor:lastReceiptPreviewKey;
-   const visibleCursor=projected.some(entry=>entry.key===cursor);
    receiptViewProjectedCursor.textContent=cursor?
     "적용 후 이동 위치 "+formatCursor(cursor)+" · "+(visibleCursor?"목록에 표시":"필터에 가려짐"):"적용 후 이동 위치 없음";
   }
+  const allSelectedHidden=selection.size>0&&visibleSelected===0;
+  if(receiptViewVisibilityNote)receiptViewVisibilityNote.textContent=[
+   !projected.length&&"적용 후 목록에 표시되는 발언이 없어요.",
+   allSelectedHidden&&"선택한 발언이 모두 가려져요.",
+  ].filter(Boolean).join(" ");
+  if(keepCurrentReceiptFilters)keepCurrentReceiptFilters.hidden=!parts.includes("filters")||
+   (projected.length>0&&!allSelectedHidden&&(!cursor||visibleCursor));
   const changes=[
    ["선택 추가",parts.includes("selection")?selectionDelta.added:[]],
    ["선택 해제",parts.includes("selection")?selectionDelta.removed:[]],
@@ -3465,15 +3487,32 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return change?.applied&&change.restore===lastProgressRestore&&change.parts.includes("cursor")?change.after.cursor:null;
  }
  function updateAppliedReceiptViewJump(){
-  if(!jumpToAppliedReceiptView)return;
   const key=appliedReceiptCursor();
-  jumpToAppliedReceiptView.hidden=!key;
-  jumpToAppliedReceiptView.disabled=!key||!progressReceiptCards.has(key);
+  const hidden=!!key&&!progressReceiptCards.has(key);
+  if(jumpToAppliedReceiptView){
+   jumpToAppliedReceiptView.hidden=!key;
+   jumpToAppliedReceiptView.disabled=!key||hidden;
+  }
+  if(revealAppliedReceiptView)revealAppliedReceiptView.hidden=!hidden;
+  if(sourceOfHiddenReceiptView)sourceOfHiddenReceiptView.hidden=!hidden;
  }
- jumpToAppliedReceiptView?.addEventListener("click",()=>{
+ function focusAppliedReceiptView(){
   const key=appliedReceiptCursor();
   const card=key&&progressReceiptCards.get(key);
   if(card)focusReceiptPreview([key,card]);
+ }
+ jumpToAppliedReceiptView?.addEventListener("click",focusAppliedReceiptView);
+ revealAppliedReceiptView?.addEventListener("click",()=>{
+  if(!appliedReceiptCursor())return;
+  const order=progressReceiptOrder?.value;
+  resetProgressReceiptFilters();
+  if(progressReceiptOrder&&order)progressReceiptOrder.value=order;
+  updateProgressReceipt();
+  focusAppliedReceiptView();
+ });
+ sourceOfHiddenReceiptView?.addEventListener("click",()=>{
+  const key=appliedReceiptCursor();
+  if(key)openRestoredEvidence(key);
  });
  function updateProgressReceiptViewHistory(){
   if(undoProgressReceiptView)undoProgressReceiptView.disabled=!lastReceiptViewApplication?.applied;
