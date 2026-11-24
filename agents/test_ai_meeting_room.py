@@ -32,6 +32,11 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
+  for(const suffix of ['all','completed','reopened','empty']){
+   elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
+    attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
+   };
+  }
   for(const suffix of ['', '-label', '-rows']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes'+suffix]={children:[],replaceChildren(...children){this.children=children}};
   }
@@ -947,6 +952,17 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChanges.open,false);
    assert.match(quickList('source-changes','-label').textContent,/1건/);
    assert.match(sourceChangeRows()[0].textContent,/검토 완료 · 이후 .*COMMANDER/);
+   const sourceChangeType=type=>quickList('source-changes','-'+type);
+   assert.equal(sourceChangeType('all').textContent,'전체 (1건)');
+   assert.equal(sourceChangeType('completed').textContent,'검토 완료 (1건)');
+   assert.equal(sourceChangeType('reopened').textContent,'검토 해제 (0건)');
+   sourceChangeType('reopened').click();
+   assert.equal(sourceChangeRows().length,0);
+   assert.equal(sourceChangeType('empty').hidden,false);
+   sourceChangeType('completed').click();
+   assert.equal(sourceChangeRows().length,1);
+   assert.equal(sourceChangeType('completed').attrs['aria-pressed'],'true');
+   assert.equal(sourceChangeType('empty').hidden,true);
    assert.equal(quickList('source-reveal').hidden,true);
    sourceChangeRows()[0].children[0].click();
    assert.equal(sourceChanges.hidden,true);
@@ -955,6 +971,13 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    receiptBack.click();
    assert.match(sourceStatus.textContent,/COMMANDER · 미검토 · 검토 해제 1건/);
    assert.match(sourceChangeRows()[0].textContent,/검토 해제 · 이후 .*COMMANDER/);
+   assert.equal(sourceChangeType('all').attrs['aria-pressed'],'true');
+   sourceChangeType('reopened').click();
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('completed').click();
+   assert.equal(sourceChangeRows().length,0);
+   sourceChangeType('all').click();
+   assert.equal(sourceChangeRows().length,1);
    undoReview.click();
    undoReview.click();
    let [projectedDetails]=quickList('projected','-rows').children[0].children;
