@@ -3132,6 +3132,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  ].map(([field,value,label,select])=>({
   field,value,label,select,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-list-quick-"+value),
  }));
+ const receiptQuickListOptionLabels=new WeakMap();
+ const receiptQuickListFacetValues={
+  side:entry=>entry.period,
+  agent:entry=>entry.statement.agent,
+  phase:entry=>entry.statement.phase,
+  verdict:entry=>entry.statement.verdict,
+  state:entry=>entry.reviewed?"reviewed":"unreviewed",
+ };
  const receiptQuickListOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-order");
  const receiptQuickListMore=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more");
  const receiptQuickListMoreLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more-label");
@@ -3580,11 +3588,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  receiptQuickListRecoveryUndo?.addEventListener("click",()=>applyReceiptQuickListRecovery(false));
  receiptQuickListRecoveryRedo?.addEventListener("click",()=>applyReceiptQuickListRecovery(true));
- function renderReceiptQuickListShortcuts(projected,filters){
+ function renderReceiptQuickListOptions(projected,filters){
+  const countsByField=new Map();
+  for(const [field,select] of Object.entries({...receiptQuickListFacets,state:receiptQuickListState})){
+   if(!select)continue;
+   const entries=visibleProgressReceiptEntries(projected,{...filters,[field]:"all"});
+   const counts=new Map([["all",entries.length]]);
+   for(const entry of entries){
+    const value=receiptQuickListFacetValues[field](entry);
+    counts.set(value,(counts.get(value)??0)+1);
+   }
+   countsByField.set(field,counts);
+   for(const option of select.options??[]){
+    if(!receiptQuickListOptionLabels.has(option))receiptQuickListOptionLabels.set(option,option.label);
+    const label=receiptQuickListOptionLabels.get(option)+" ("+(counts.get(option.value)??0)+"건)";
+    if(option.label!==label)option.label=label;
+   }
+  }
   for(const {field,value,label,button,select} of receiptQuickListShortcuts){
    if(!button||!select)continue;
    const active=filters[field]===value;
-   const count=visibleProgressReceiptEntries(projected,{...filters,[field]:value}).length;
+   const count=countsByField.get(field)?.get(value)??0;
    button.textContent=label+" ("+count+"건)";
    button.disabled=!active&&count===0;
    button.setAttribute("aria-pressed",String(active));
@@ -3609,7 +3633,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const matching=visibleProgressReceiptEntries(projected,listFilters);
   const sort=receiptSorts[receiptQuickListOrder?.value];
   if(sort)matching.sort(sort.compare);
-  renderReceiptQuickListShortcuts(projected,listFilters);
+  renderReceiptQuickListOptions(projected,listFilters);
   const conditions=renderReceiptQuickListFilters(listFilters,sort);
   receiptQuickListContext={projected,conditions,filters:listFilters};
   const listEmpty=matching.length===0&&count>0;
