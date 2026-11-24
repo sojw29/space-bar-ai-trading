@@ -805,7 +805,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(quickPreviewSummary.textContent,/변경 후 표시된 선택 0건 · 가려진 선택 0건/);
    assert.match(quickPreviewSummary.textContent,/이동 위치 없음/);
    assert.deepEqual(quickPreviewJump.children.map(option=>[option.value,!!option.disabled]),[
-    ['',false],['first',false],['unreviewed',false],['new',true],['selected',true],['current',true],
+    ['',false],['first',false],['last',false],['unreviewed',false],['reviewed',true],
+    ['new',true],['selected',true],['selected-unreviewed',true],['current',true],
+    ['previous-unreviewed',true],['next-unreviewed',true],
    ]);
    assert.match(quickPreviewJump.children[1].textContent,/첫 표시 발언 · 이전 \[.*\] COMMANDER/);
    let escapeHandled=false;
@@ -834,7 +836,20 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(receiptSearch.value,'command');
    quickEarlier.click();
    assert.match(quickPreviewSummary.textContent,/새로 보이는 발언 1건 · 이후 \[M07\] COMMANDER/);
-   assert.equal(quickPreviewJump.children.find(option=>option.value==='new').disabled,false);
+   const quickJumpOption=value=>quickPreviewJump.children.find(option=>option.value===value);
+   assert.equal(quickJumpOption('new').disabled,false);
+   assert.match(quickJumpOption('last').textContent,/마지막 표시 발언 · 이전/);
+   assert.equal(quickJumpOption('reviewed').disabled,true);
+   assert.match(quickJumpOption('previous-unreviewed').textContent,/이전 미검토 발언 · 이후/);
+   assert.equal(quickJumpOption('next-unreviewed').disabled,true);
+   receiptOrder.value='default';receiptOrder.change();
+   assert.match(quickJumpOption('next-unreviewed').textContent,/다음 미검토 발언 · 이후/);
+   assert.equal(quickJumpOption('previous-unreviewed').disabled,true);
+   receiptOrder.value='later';receiptOrder.change();
+   elements['ai-meeting-progress-receipt-select-visible'].click();
+   assert.match(quickJumpOption('selected-unreviewed').textContent,/첫 선택 미검토 발언 · 이전/);
+   elements['ai-meeting-progress-receipt-clear-selection'].click();
+   assert.equal(quickJumpOption('selected-unreviewed').disabled,true);
    quickPreviewCancel.click();
    undoQuick.click();
    quickPreviewMode.checked=false;quickPreviewMode.change();
