@@ -33,6 +33,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    }
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
+  elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
   for(const name of ['search','state','selected','reset','count']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
@@ -858,6 +859,23 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(quickPreviewJump.value,directTargets().children[0].value);
    const quickJumpStatus=quickList('jump-status');
    assert.match(quickJumpStatus.textContent,/적용 후 이동 · 이전 .*COMMANDER/);
+   const jumpClear=quickList('jump-clear');
+   const chooseJump=projectedDetails.children[3];
+   assert.equal(chooseJump.attrs['aria-pressed'],'true');
+   assert.equal(jumpClear.hidden,false);
+   chooseJump.click();
+   assert.equal(quickPreviewJump.value,'');
+   assert.equal(chooseJump.attrs['aria-pressed'],'false');
+   chooseJump.click();
+   jumpClear.click();
+   assert.equal(quickPreviewJump.focused,true);
+   assert.equal(jumpClear.hidden,true);
+   chooseJump.click();
+   receiptSearch.value='no-match';receiptSearch.input();
+   assert.equal(quickPreviewJump.value,'');
+   assert.match(quickJumpStatus.textContent,/선택한 이동 위치가 변경된 조건에서 사라졌습니다/);
+   receiptSearch.value='command';receiptSearch.input();
+   quickList('projected','-rows').children[0].children[0].children[3].click();
    assert.equal(receiptSide.value,'all');
    quickPreviewApply.click();
    assert.equal(receiptPreview().open,true);
