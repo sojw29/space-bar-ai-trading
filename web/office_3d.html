@@ -2250,7 +2250,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    <details>
     <summary style="min-height:44px">검토 화면 저장과 불러오기</summary>
     <button id="ai-meeting-progress-receipt-save-view" type="button" style="min-height:44px">현재 검토 화면 JSON 저장</button>
-    <label for="ai-meeting-progress-receipt-load-view">검토 화면 JSON 불러오기</label>
+    <button id="ai-meeting-progress-receipt-save-filter-preset" type="button" style="min-height:44px">다른 회의용 검색·필터 설정 저장</button>
+    <label for="ai-meeting-progress-receipt-load-view">검토 화면 또는 필터 설정 JSON 불러오기</label>
     <input id="ai-meeting-progress-receipt-load-view" type="file" accept=".json,application/json" style="min-height:44px;max-width:100%">
     <button id="ai-meeting-progress-receipt-view-undo" type="button" style="min-height:44px" disabled>마지막 화면 적용 되돌리기</button>
     <button id="ai-meeting-progress-receipt-view-jump" type="button" style="min-height:44px" hidden disabled>복원한 발언으로 이동</button>
@@ -3403,8 +3404,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const [part,field] of Object.entries(receiptViewDiffFields))if(field)field.textContent=differences[part];
   updateReceiptViewProjectedChanges(entries,currentFilters,candidate,selectionDelta,expandedDelta,formatCursor);
  }
- function previewProgressReceiptView(view,restore,filename,{missing,extra}){
-  const layoutOnly=missing.length>0||extra.length>0;
+ function previewProgressReceiptView(view,restore,filename,{missing,extra,portable=false}){
+  const layoutOnly=portable||missing.length>0||extra.length>0;
   pendingProgressReceiptView={view,restore,layoutOnly,changed:new Set()};
   for(const [part,control] of Object.entries(receiptViewParts)){
    if(!control)continue;
@@ -3417,7 +3418,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const entries=progressReceiptEntries();
   const cursorLabel=entries.find(entry=>entry.key===cursor)?.label||"없음";
   const formatKeys=keys=>keys.map(key=>key.replace("earlier:","이전 ").replace("later:","이후 ")).join(", ")||"없음";
-  const highlights=layoutOnly?[
+  const highlights=portable?["회의 공통 설정 · 검색과 필터, 정렬만 적용할 수 있어요."]:layoutOnly?[
    "같은 회의지만 복원 발언이 달라 검색·필터와 정렬만 적용할 수 있어요.",
    "파일에만 있는 발언 "+missing.length+"건 · "+formatKeys(missing),
    "현재 목록에만 있는 발언 "+extra.length+"건 · "+formatKeys(extra),
@@ -3450,6 +3451,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="검토 화면 저장을 시작하지 못했습니다.";
   }
  });
+ document.getElementById("ai-meeting-progress-receipt-save-filter-preset")?.addEventListener("click",()=>{
+  if(!lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+  const {search,side,phase,verdict,state,agent,searchScope}=progressReceiptFilters();
+  const preset={version:"SPACEBAR_MEETING_RECEIPT_FILTER_PRESET_1",
+   filters:{search,side,phase,verdict,state,agent,searchScope},order:progressReceiptOrder?.value||"default"};
+  try{
+   const filename="spacebar-meeting-receipt-filter-preset.json";
+   saveMeetingFile(JSON.stringify(preset,null,2)+"\n",filename,"application/json;charset=utf-8");
+   if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="필터 설정 저장 요청: "+filename;
+  }catch(_){
+   if(progressReceiptViewStatus)progressReceiptViewStatus.textContent="필터 설정 저장을 시작하지 못했습니다.";
+  }
+ });
  function sameReceiptViewPair(saved,current){
   if(saved===current)return true;
   if(!saved||!current||typeof saved!=="object"||typeof current!=="object"||Array.isArray(saved)||Array.isArray(current))return false;
@@ -3478,16 +3492,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!validKeys(view.selected)||!validKeys(view.expanded)||(view.cursor!==null&&!saved.has(view.cursor))){
    throw Error("검토 화면의 발언 목록이 올바르지 않습니다.");
   }
+  validateReceiptFilterSettings(view.filters,view.order);
+  if(typeof view.filters.selectedOnly!=="boolean")throw Error("검토 화면의 필터나 정렬이 올바르지 않습니다.");
+  return {missing,extra};
+ }
+ function validateReceiptFilterSettings(filters,order){
   const values={
    side:["earlier","later"],phase:Object.keys(receiptPhaseLabels),verdict:Object.keys(labels),
    state:["reviewed","unreviewed"],agent:["ATLAS","QUANT","GUARDIAN","COMMANDER"],
    searchScope:Object.keys(receiptSearchScopeLabels),
   };
-  const {filters,order}=view;
-  if(typeof filters?.search!=="string"||filters.search.length>40||typeof filters.selectedOnly!=="boolean"||
+  if(typeof filters?.search!=="string"||filters.search.length>40||
    Object.entries(values).some(([field,options])=>filters[field]!=="all"&&!options.includes(filters[field]))||
    (order!=="default"&&!Object.hasOwn(receiptSorts,order)))throw Error("검토 화면의 필터나 정렬이 올바르지 않습니다.");
-  return {missing,extra};
  }
  loadProgressReceiptView?.addEventListener("change",async()=>{
   const file=loadProgressReceiptView.files?.[0];
@@ -3504,8 +3521,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    let view;
    try{view=JSON.parse(await file.text());}catch(_){throw Error("올바른 검토 화면 JSON을 선택해 주세요.");}
    if(!current())return;
-   const differences=validateProgressReceiptView(view,restore);
-   previewProgressReceiptView(view,restore,file.name,differences);
+   if(view?.version==="SPACEBAR_MEETING_RECEIPT_FILTER_PRESET_1"){
+    validateReceiptFilterSettings(view.filters,view.order);
+    const preset={filters:view.filters,order:view.order,selected:[],expanded:[],cursor:null};
+    previewProgressReceiptView(preset,restore,file.name,{missing:[],extra:[],portable:true});
+   }else{
+    const differences=validateProgressReceiptView(view,restore);
+    previewProgressReceiptView(view,restore,file.name,differences);
+   }
   }catch(error){
    if(current()&&progressReceiptViewStatus)progressReceiptViewStatus.textContent=error.message;
   }
