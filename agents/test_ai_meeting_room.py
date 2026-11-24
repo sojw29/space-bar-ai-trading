@@ -918,7 +918,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(receiptBack.textContent,'조합 미리보기로 돌아가기');
    previewSourceLast.click();
    firstEvidence.click();
-   elements['ai-meeting-evidence-unreviewed'].click();
+   elements['ai-meeting-evidence-next-unreviewed'].click();
    firstEvidence.click();
    assert.equal(receiptBack.textContent,'조합 미리보기로 돌아가기');
    receipt.open=false;
