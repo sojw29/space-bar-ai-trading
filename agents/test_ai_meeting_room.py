@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -961,6 +961,29 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    selectSourceRow.checked=true;
    selectSourceRow.change();
    assert.equal(sourceChangeType('selection-count').textContent,'선택 1건 · 현재 표시 1건');
+   sourceChangeType('search').value='no source matches';
+   sourceChangeType('search').input();
+   assert.equal(sourceChangeRows().length,0);
+   for(const format of ['csv','json','txt']){
+    const button=sourceChangeType('selected-'+format);
+    assert.equal(button.disabled,false);
+    button.click();
+    assert.ok(downloads.at(-1).includes('selected-source-review-changes'));
+    assert.ok(downloads.at(-1).endsWith('.'+format));
+    const content=await savedBlob.text();
+    assert.match(content,/COMMANDER/);
+   }
+   sourceChangeType('reveal-selected').click();
+   assert.equal(sourceChangeType('selected-only').checked,true);
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('search').value='no source matches';
+   sourceChangeType('search').input();
+   sourceChangeType('clear-selected').click();
+   assert.equal(selectSourceRow.checked,false);
+   assert.equal(sourceChangeType('selected-json').disabled,true);
+   sourceChangeType('reset').click();
+   selectSourceRow.checked=true;
+   selectSourceRow.change();
    sourceChangeType('selected-only').checked=true;
    sourceChangeType('selected-only').change();
    assert.equal(sourceChangeRows().length,1);
