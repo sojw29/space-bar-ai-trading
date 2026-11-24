@@ -35,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','reserve-current','open-jump','hidden-jump','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
+  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','reserve-current','open-jump','hidden-jump','reveal-jump','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -915,8 +915,18 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    listFilter('side').value='later';listFilter('side').change();
    assert.equal(listFilter('open-jump').hidden,true);
    assert.equal(listFilter('hidden-jump').hidden,false);
+   assert.match(listFilter('hidden-jump').textContent,/해제할 조건 · 이후 회의/);
    assert.equal(quickPreviewJump.value,'statement:'+secondResultKey);
-   listFilter('side').value='all';listFilter('side').change();
+   listFilter('reveal-jump').click();
+   assert.equal(listFilter('side').value,'all');
+   assert.equal(listFilter('search').value,'m07');
+   assert.equal(searchPicker.value,secondResultKey);
+   assert.equal(projectedDetailsRows()[1].open,true);
+   listFilter('recovery-undo').click();
+   assert.equal(listFilter('side').value,'later');
+   assert.equal(listFilter('reveal-jump').hidden,false);
+   listFilter('recovery-redo').click();
+   assert.equal(searchPicker.value,secondResultKey);
    listFilter('open-jump').click();
    assert.equal(searchPicker.value,secondResultKey);
    listFilter('reserve-current').click();
