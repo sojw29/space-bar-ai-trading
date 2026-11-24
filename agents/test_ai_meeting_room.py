@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+from tempfile import TemporaryDirectory
 import unittest
 
 from ai_meeting_runtime import run_meeting
@@ -34,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active']){
+  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -890,6 +891,23 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const listFilter=name=>quickList('list-'+name);
    const projectedRows=()=>quickList('projected','-rows').children;
    const projectedDetailsRows=()=>projectedRows().map(row=>row.children[0]);
+   const recoveryButtons=()=>listFilter('recovery').children;
+   assert.equal(listFilter('recovery').hidden,true);
+   listFilter('search').value='no-preview-match';listFilter('search').input();
+   assert.deepEqual(recoveryButtons().map(button=>button.textContent),['검색 no-preview-match 해제 · 2건 표시']);
+   listFilter('side').value='earlier';listFilter('side').change();
+   assert.deepEqual(recoveryButtons().map(button=>button.textContent),['검색 no-preview-match 해제 · 1건 표시']);
+   listFilter('agent').value='ATLAS';listFilter('agent').change();
+   assert.equal(listFilter('recovery').hidden,true);
+   assert.match(listFilter('count').textContent,/조건을 여러 개 해제/);
+   listFilter('agent').value='all';listFilter('agent').change();
+   recoveryButtons()[0].click();
+   assert.equal(listFilter('search').value,'');
+   assert.equal(listFilter('side').value,'earlier');
+   assert.equal(projectedRows().length,1);
+   assert.equal(projectedDetailsRows()[0].children[0].focused,true);
+   assert.equal(listFilter('recovery').hidden,true);
+   listFilter('reset').click();
    assert.equal(listFilter('more').open,false);
    listFilter('side').value='earlier';listFilter('side').change();
    assert.equal(projectedRows().length,1);
@@ -2116,9 +2134,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
  }
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
-        result = subprocess.run([shutil.which('node'), '-e', harness],
-                                input=json.dumps({'script': script, 'report': report}),
-                                text=True, capture_output=True, timeout=15)
+        with TemporaryDirectory() as directory:
+            harness_path = Path(directory) / 'meeting-viewer.cjs'
+            harness_path.write_text(harness, encoding='utf-8')
+            result = subprocess.run([shutil.which('node'), str(harness_path)],
+                                    input=json.dumps({'script': script, 'report': report}),
+                                    text=True, capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
