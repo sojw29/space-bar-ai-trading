@@ -2969,9 +2969,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    (side==="all"||side===period)&&(agent==="all"||agent===statement.agent)&&(phase==="all"||phase===statement.phase)&&
    (verdict==="all"||verdict===statement.verdict)&&(state==="all"||reviewed===(state==="reviewed"))&&
    queryMatches(statement));
+  return sortProgressReceiptEntries(visible);
+ }
+ function sortProgressReceiptEntries(entries){
   const compare=receiptSorts[progressReceiptOrder?.value]?.compare;
-  if(compare)visible.sort(compare);
-  return visible;
+  return compare?entries.sort(compare):entries;
  }
  function updateProgressReceiptReviewButtons(mark,unmark,scope,total,reviewed){
   for(const [button,label,count] of [
@@ -3161,21 +3163,30 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const entries=progressReceiptEntries();
   const {earlier,later}=comparisonReport;
   const filters=progressReceiptFilters();
-  const rows=scope==="selected"?entries.filter(entry=>selectedReceiptKeys.has(entry.key)):
+  const rows=scope==="selected"?sortProgressReceiptEntries(entries.filter(entry=>selectedReceiptKeys.has(entry.key))):
    scope==="visible"?visibleProgressReceiptEntries(entries,filters):entries;
+  const order=scope==="all"?"default":progressReceiptOrder?.value||"default";
+  const scopeLabel={all:"전체",visible:"표시된 발언",selected:"선택한 발언"}[scope];
+  const orderLabel=receiptSorts[order]?.label||"이전 회의 먼저";
   if(!rows.length)return;
   let content=[progressReceiptDescription(entries),"이전 회의 UTC "+earlier.generated_at_utc,
    "이후 회의 UTC "+later.generated_at_utc,
    ...(scope==="visible"?["표시된 복원 발언 "+rows.length+" / "+entries.length+"건"]:[]),
    ...(scope==="selected"?["선택한 복원 발언 "+rows.length+" / "+entries.length+"건"]:[]),
-   ...rows.map(entry=>entry.label)].join("\n")+"\n";
+   ...rows.map(entry=>entry.label),"","내보내기 범위 "+scopeLabel,"정렬 "+orderLabel,
+   ...(scope==="visible"?["현재 필터 "+JSON.stringify(filters)]:[]),
+   "","발언별 요약",
+   ...rows.map(({label,statement})=>label+" · "+receiptPhaseLabels[statement.phase]+" · "+labels[statement.verdict]+"\n"+statement.summary),
+  ].join("\n")+"\n";
   let mime="text/plain;charset=utf-8";
   if(format==="JSON"){
    const {execution_mode,market_source}=comparisonReport;
    content=JSON.stringify({version:"SPACEBAR_MEETING_RESTORE_RECEIPT_1",research_only:true,orders_enabled:false,
     earlier,later,execution_mode,market_source,source_file:lastProgressRestore.name,
     restore_scope:lastProgressRestore.visibleOnly?"displayed":"selected",total_restored:entries.length,
-    ...(scope==="selected"?{export_scope:"selected"}:{filters,order:progressReceiptOrder?.value||"default"}),
+    export_scope:scope,order,exported_count:rows.length,
+    reviewed_count:rows.filter(entry=>entry.reviewed).length,
+    ...(scope==="visible"?{filters}:{}),
     statements:rows.map(({period,statement,reviewed})=>({
      period,statement_id:statement.id,agent:statement.agent,phase:statement.phase,
      verdict:statement.verdict,summary:statement.summary,reviewed,
@@ -3183,11 +3194,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    },null,2)+"\n";
    mime="application/json;charset=utf-8";
   }else if(format==="CSV"){
-   const cells=[["회의","회의 UTC","발언 번호","에이전트","회의 단계","발언 판정","검토 상태","발언 요약"],
+   const cells=[["회의","회의 UTC","발언 번호","에이전트","회의 단계","발언 판정","검토 상태","발언 요약",
+    "복원 파일","내보내기 범위","정렬"],
     ...rows.map(({period,statement,reviewed})=>[
      period==="earlier"?"이전 회의":"이후 회의",(period==="earlier"?earlier:later).generated_at_utc,
      statement.id,statement.agent,receiptPhaseLabels[statement.phase],labels[statement.verdict],
-     reviewed?"검토 완료":"미검토",statement.summary,
+     reviewed?"검토 완료":"미검토",statement.summary,lastProgressRestore.name,scopeLabel,orderLabel,
     ])];
    content="\uFEFF"+cells.map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n";
    mime="text/csv;charset=utf-8";
