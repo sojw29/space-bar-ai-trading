@@ -2195,6 +2195,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     <label>회의 <select id="ai-meeting-progress-receipt-side" style="min-height:44px">
      <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
     </select></label>
+    <label>에이전트 <select id="ai-meeting-progress-receipt-agent" style="min-height:44px">
+     <option value="all">전체</option><option>ATLAS</option><option>QUANT</option><option>GUARDIAN</option><option>COMMANDER</option>
+    </select></label>
+    <label>검색 범위 <select id="ai-meeting-progress-receipt-search-scope" style="min-height:44px">
+     <option value="all">전체</option><option value="id">발언 번호만</option><option value="agent">에이전트 이름만</option><option value="summary">요약 내용만</option>
+    </select></label>
     <label>회의 단계 <select id="ai-meeting-progress-receipt-phase" style="min-height:44px">
      <option value="all">전체</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option>
     </select></label>
@@ -2602,6 +2608,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const progressReceiptHeading=document.getElementById("ai-meeting-progress-receipt-heading");
  const progressReceiptReviewState=document.getElementById("ai-meeting-progress-receipt-review-state");
  const progressReceiptPhase=document.getElementById("ai-meeting-progress-receipt-phase");
+ const progressReceiptAgent=document.getElementById("ai-meeting-progress-receipt-agent");
+ const progressReceiptSearchScope=document.getElementById("ai-meeting-progress-receipt-search-scope");
+ const receiptSearchScopeLabels={id:"발언 번호만",agent:"에이전트 이름만",summary:"요약 내용만"};
  const progressReceiptVerdict=document.getElementById("ai-meeting-progress-receipt-verdict");
  const progressReceiptMark=document.getElementById("ai-meeting-progress-receipt-mark");
  const progressReceiptUnmark=document.getElementById("ai-meeting-progress-receipt-unmark");
@@ -2842,12 +2851,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   later:document.getElementById("ai-meeting-progress-receipt-quick-later"),
  };
  const progressReceiptClearSearch=document.getElementById("ai-meeting-progress-receipt-clear-search");
- progressReceiptClearSearch?.addEventListener("click",()=>{
+ function clearProgressReceiptSearch(){
   if(!progressReceiptSearch)return;
   progressReceiptSearch.value="";
   updateProgressReceipt();
   progressReceiptSearch.focus?.();
- });
+ }
+ progressReceiptClearSearch?.addEventListener("click",clearProgressReceiptSearch);
  const progressReceiptActiveFilters=document.getElementById("ai-meeting-progress-receipt-active-filters");
  for(const [select,buttons] of [[progressReceiptReviewState,quickReceiptReviewFilters],[progressReceiptSide,quickReceiptSideFilters]]){
   for(const [value,button] of Object.entries(buttons)){
@@ -2862,7 +2872,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   progressReceiptHeading?.focus?.({preventScroll:true});
   progressReceiptHeading?.scrollIntoView?.({block:"nearest"});
  });
- function updateReceiptFilterIndicators({search,side,phase,verdict,state,selectedOnly}){
+ function updateReceiptFilterIndicators({search,side,agent,searchScope,phase,verdict,state,selectedOnly}){
   for(const [value,button] of Object.entries(quickReceiptReviewFilters)){
    button?.setAttribute("aria-pressed",String(state===value));
   }
@@ -2875,6 +2885,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const active=[
    [search.trim()&&"검색 "+search.trim(),progressReceiptSearch,"value",""],
    [side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),progressReceiptSide,"value","all"],
+   [agent!=="all"&&agent,progressReceiptAgent,"value","all"],
+   [receiptSearchScopeLabels[searchScope],progressReceiptSearchScope,"value","all"],
    [receiptPhaseLabels[phase],progressReceiptPhase,"value","all"],
    [labels[verdict],progressReceiptVerdict,"value","all"],
    [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),progressReceiptReviewState,"value","all"],
@@ -2901,7 +2913,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   progressReceiptActiveFilters.replaceChildren(...buttons);
  }
  const progressReceiptSelects={side:progressReceiptSide,phase:progressReceiptPhase,
-  verdict:progressReceiptVerdict,state:progressReceiptReviewState};
+  verdict:progressReceiptVerdict,state:progressReceiptReviewState,agent:progressReceiptAgent,searchScope:progressReceiptSearchScope};
  function resetProgressReceiptFilters(){
   if(progressReceiptSearch)progressReceiptSearch.value="";
   for(const select of Object.values(progressReceiptSelects))if(select)select.value="all";
@@ -2942,15 +2954,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return {search:progressReceiptSearch?.value??"",selectedOnly:!!progressReceiptSelectedOnly?.checked,...Object.fromEntries(
    Object.entries(progressReceiptSelects).map(([key,select])=>[key,select?.value||"all"]))};
  }
- function visibleProgressReceiptEntries(entries,{search,side,phase,verdict,state,selectedOnly}){
+ function visibleProgressReceiptEntries(entries,{search,side,agent,searchScope,phase,verdict,state,selectedOnly}){
   const query=comparisonSearchText(search);
-  const id=/^\[?(m0[1-7])\]?$/.exec(query);
+  const id=(searchScope==="all"||searchScope==="id")&&/^\[?(m0[1-7])\]?$/.exec(query);
+  const queryMatches=statement=>{
+   if(!query)return true;
+   if(id)return statement.id.toLowerCase()===id[1];
+   const fields={id:statement.id,agent:statement.agent,summary:statement.summary};
+   const searchable=searchScope==="all"?Object.values(fields):[fields[searchScope]];
+   return searchable.some(text=>typeof text==="string"&&comparisonSearchText(text).includes(query));
+  };
   const visible=entries.filter(({key,period,statement,reviewed})=>
    (!selectedOnly||selectedReceiptKeys.has(key))&&
-   (side==="all"||side===period)&&(phase==="all"||phase===statement.phase)&&
+   (side==="all"||side===period)&&(agent==="all"||agent===statement.agent)&&(phase==="all"||phase===statement.phase)&&
    (verdict==="all"||verdict===statement.verdict)&&(state==="all"||reviewed===(state==="reviewed"))&&
-   (id?statement.id.toLowerCase()===id[1]:
-    [statement.id,statement.agent,statement.summary].some(text=>comparisonSearchText(text).includes(query))));
+   queryMatches(statement));
   const compare=receiptSorts[progressReceiptOrder?.value]?.compare;
   if(compare)visible.sort(compare);
   return visible;
@@ -3105,6 +3123,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const actions=[
     ["필터 초기화",resetReceiptView],
     ...(selectedReceiptKeys.size?[["가려진 선택 보기",revealSelectedReceiptRows]]:[]),
+    ...(search.trim()?[["검색어만 지우기",clearProgressReceiptSearch]]:[]),
    ];
    for(const [label,action] of actions){
     const button=document.createElement("button");
