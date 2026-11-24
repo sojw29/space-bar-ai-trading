@@ -34,9 +34,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more']){
+  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
-    addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
+    children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
   }
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
@@ -906,6 +906,26 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    listFilter('reset').click();
    assert.equal(projectedRows().length,2);
    assert.equal(listFilter('verdict').value,'all');
+   assert.equal(listFilter('active').hidden,true);
+   listFilter('search').value='m07';listFilter('search').input();
+   listFilter('side').value='earlier';listFilter('side').change();
+   listFilter('order').value='later';listFilter('order').change();
+   assert.equal(listFilter('more').open,false);
+   assert.match(listFilter('more-label').textContent,/2개 적용/);
+   const listChips=()=>listFilter('active').children;
+   assert.deepEqual(listChips().map(button=>button.attrs['aria-label']),
+    ['검색 m07 해제','이전 회의 해제','정렬 이후 회의 먼저 해제']);
+   listChips()[1].click();
+   assert.equal(listFilter('side').value,'all');
+   assert.equal(listFilter('search').value,'m07');
+   assert.equal(listChips()[1].focused,true);
+   listChips()[1].click();
+   assert.equal(listFilter('order').value,'default');
+   assert.equal(listChips()[0].focused,true);
+   listChips()[0].click();
+   assert.equal(listFilter('active').hidden,true);
+   assert.equal(listFilter('search').focused,true);
+   assert.equal(listFilter('reset').disabled,true);
    receiptOrder.value='default';receiptOrder.change();
    listFilter('order').value='later';listFilter('order').change();
    assert.match(projectedDetailsRows()[0].children[0].textContent,/이후/);
