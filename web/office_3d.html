@@ -3044,7 +3044,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    return;
   }
   const {after,active,fields}=receiptQuickPresetChange(pending.preset,current);
-  const count=visibleProgressReceiptEntries(entries,after).length;
+  const visible=visibleProgressReceiptEntries(entries,current);
+  const projected=visibleProgressReceiptEntries(entries,after);
+  const count=projected.length;
+  const visibleKeys=new Set(visible.map(entry=>entry.key));
+  const projectedKeys=new Set(projected.map(entry=>entry.key));
+  const newlyVisible=projected.filter(entry=>!visibleKeys.has(entry.key));
+  const newlyHidden=visible.filter(entry=>!projectedKeys.has(entry.key));
+  const labelRows=rows=>rows.map(({period,statement})=>
+   (period==="earlier"?"이전":"이후")+" ["+statement.id+"] "+statement.agent).join(", ");
+  const reviewed=projected.filter(entry=>entry.reviewed).length;
+  const selected=projected.filter(entry=>selectedReceiptKeys.has(entry.key)).length;
+  const cursor=entries.find(entry=>entry.key===lastReceiptPreviewKey);
   if(receiptQuickPreview)receiptQuickPreview.hidden=false;
   if(applyReceiptQuickPreview){
    applyReceiptQuickPreview.disabled=!fields.length||(!count&&!active);
@@ -3054,7 +3065,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    pending.preset.label+(active?" 해제":" 적용"),
    "현재 조건 "+receiptViewFilterSummary(current),
    "변경 후 "+receiptViewFilterSummary(after),
-   "표시 발언 "+visibleProgressReceiptEntries(entries,current).length+"건 → "+count+"건",
+   "표시 발언 "+visible.length+"건 → "+count+"건",
+   "새로 보이는 발언 "+newlyVisible.length+"건"+(newlyVisible.length?" · "+labelRows(newlyVisible):""),
+   "가려지는 발언 "+newlyHidden.length+"건"+(newlyHidden.length?" · "+labelRows(newlyHidden):""),
+   "변경 후 검토 완료 "+reviewed+"건 · 미검토 "+(count-reviewed)+"건",
+   "변경 후 표시된 선택 "+selected+"건 · 가려진 선택 "+(selectedReceiptKeys.size-selected)+"건",
+   "이동 위치 "+(cursor?labelRows([cursor])+" · "+(projectedKeys.has(cursor.key)?"목록에 표시":"필터에 가려짐"):"없음"),
   ].join("\n");
  }
  function updateReceiptQuickPresets(entries,current){
