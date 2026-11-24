@@ -35,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
+  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -892,6 +892,30 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const projectedRows=()=>quickList('projected','-rows').children;
    const projectedDetailsRows=()=>projectedRows().map(row=>row.children[0]);
    const recoveryButtons=()=>listFilter('recovery').children;
+   listFilter('search').value='m07';listFilter('search').input();
+   listFilter('scope').value='id';listFilter('scope').change();
+   assert.equal(projectedRows().length,2);
+   listFilter('scope').value='agent';listFilter('scope').change();
+   assert.equal(projectedRows().length,0);
+   assert.deepEqual(recoveryButtons().map(button=>button.textContent),[
+    '검색 m07 해제 · 2건 표시','에이전트 이름만 해제 · 2건 표시',
+   ]);
+   assert.ok(listFilter('active').children.some(button=>button.attrs['aria-label']==='에이전트 이름만 해제'));
+   recoveryButtons()[1].click();
+   assert.equal(listFilter('scope').value,'all');
+   assert.equal(listFilter('search').value,'m07');
+   assert.equal(projectedRows().length,2);
+   listFilter('scope').value='summary';listFilter('scope').change();
+   assert.equal(projectedRows().length,0);
+   listFilter('scope').value='agent';listFilter('scope').change();
+   listFilter('search').value='command';listFilter('search').input();
+   assert.equal(projectedRows().length,2);
+   const summaryQuery=projectedDetailsRows()[0].children[2].textContent;
+   listFilter('scope').value='summary';listFilter('scope').change();
+   listFilter('search').value=summaryQuery;listFilter('search').input();
+   assert.ok(projectedDetailsRows().some(details=>details.children[2].textContent===summaryQuery));
+   listFilter('reset').click();
+   assert.equal(listFilter('scope').value,'all');
    assert.equal(listFilter('recovery').hidden,true);
    listFilter('search').value='no-preview-match';listFilter('search').input();
    assert.deepEqual(recoveryButtons().map(button=>button.textContent),['검색 no-preview-match 해제 · 2건 표시']);
