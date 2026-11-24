@@ -2210,7 +2210,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-completed" type="button" aria-pressed="false" style="min-height:44px">검토 완료</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-reopened" type="button" aria-pressed="false" style="min-height:44px">검토 해제</button>
        </div>
-       <p id="ai-meeting-progress-receipt-preset-preview-source-changes-empty" role="status" hidden>이 유형의 검토 변경이 없습니다.</p>
+       <div class="receipt-quick-presets">
+        <label>변경 발언 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-search" type="search" style="min-height:44px"></label>
+        <label>회의 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-period" style="min-height:44px"><option value="all">전체 회의</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option></select></label>
+        <label>정렬 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-order" style="min-height:44px"><option value="type">변경 유형순</option><option value="meeting">회의·발언순</option></select></label>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-reset" type="button" style="min-height:44px">조건 초기화</button>
+       </div>
+       <p id="ai-meeting-progress-receipt-preset-preview-source-changes-count" role="status"></p>
+       <p id="ai-meeting-progress-receipt-preset-preview-source-changes-empty" role="status" hidden>현재 조건에 맞는 검토 변경이 없습니다.</p>
        <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-rows"></ul>
       </details>
       <button id="ai-meeting-progress-receipt-preset-preview-source-reveal" type="button" style="min-height:44px" hidden>마지막 원문 발언 표시</button>
@@ -3121,6 +3128,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   ["all","전체"],["completed","검토 완료"],["reopened","검토 해제"],
  ].map(([value,label])=>({value,label,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+value)}));
  const receiptQuickSourceChangesEmpty=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty");
+ const receiptQuickSourceChangeSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-search");
+ const receiptQuickSourceChangePeriod=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-period");
+ const receiptQuickSourceChangeOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-order");
+ const receiptQuickSourceChangeCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-count");
+ const receiptQuickSourceChangeReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-reset");
+ receiptQuickSourceChangeSearch?.addEventListener("input",renderReceiptQuickSourceChangeFilter);
+ receiptQuickSourceChangePeriod?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
+ receiptQuickSourceChangeOrder?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
+ receiptQuickSourceChangeReset?.addEventListener("click",resetReceiptQuickSourceChangeControls);
  let receiptQuickSourceChangeRows=[];
  let receiptQuickSourceChangeFilter="all";
  for(const {value,button} of receiptQuickSourceChangeFilters){
@@ -3366,12 +3382,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   clearReceiptQuickSourceFeedback();
   openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore));
  }
+ function resetReceiptQuickSourceChangeControls(){
+  receiptQuickSourceChangeFilter="all";
+  if(receiptQuickSourceChangeSearch)receiptQuickSourceChangeSearch.value="";
+  if(receiptQuickSourceChangePeriod)receiptQuickSourceChangePeriod.value="all";
+  if(receiptQuickSourceChangeOrder)receiptQuickSourceChangeOrder.value="type";
+  renderReceiptQuickSourceChangeFilter();
+ }
  function renderReceiptQuickSourceChangeFilter(){
   const total=receiptQuickSourceChangeRows.length;
-  const visible=receiptQuickSourceChangeRows.filter(({type})=>receiptQuickSourceChangeFilter==="all"||receiptQuickSourceChangeFilter===type);
+  const query=(receiptQuickSourceChangeSearch?.value??"").normalize("NFKC").trim().toLowerCase();
+  const period=receiptQuickSourceChangePeriod?.value||"all";
+  const matching=receiptQuickSourceChangeRows.filter(entry=>
+   (period==="all"||period===entry.period)&&entry.searchText.includes(query));
+  const visible=matching.filter(({type})=>receiptQuickSourceChangeFilter==="all"||receiptQuickSourceChangeFilter===type);
+  if(receiptQuickSourceChangeOrder?.value==="meeting"){
+   visible.sort((a,b)=>a.period.localeCompare(b.period)||a.id.localeCompare(b.id,undefined,{numeric:true}));
+  }
+  if(receiptQuickSourceChangeCount)receiptQuickSourceChangeCount.textContent=total?"표시 "+visible.length+"건 / 전체 "+total+"건":"";
   for(const {value,label,button} of receiptQuickSourceChangeFilters){
    if(!button)continue;
-   const count=value==="all"?total:receiptQuickSourceChangeRows.filter(({type})=>type===value).length;
+   const count=value==="all"?matching.length:matching.filter(({type})=>type===value).length;
    button.textContent=label+" ("+count+"건)";
    button.setAttribute("aria-pressed",String(value===receiptQuickSourceChangeFilter));
   }
@@ -3395,7 +3426,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     source.setAttribute("aria-label",statement+" 원문 다시 보기");
     source.addEventListener("click",()=>openReceiptQuickSource(key));
     row.append(source);
-    rows.push({row,type});
+    const searchText=(statement+" "+entry.statement.summary).normalize("NFKC").toLowerCase();
+    rows.push({row,type,period:entry.period,id:entry.statement.id,searchText});
    }
   }
   receiptQuickSourceChangeRows=rows;
@@ -3412,8 +3444,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    receiptQuickPreviewSourceChanges.open=false;
   }
   receiptQuickSourceChangeRows=[];
-  receiptQuickSourceChangeFilter="all";
-  renderReceiptQuickSourceChangeFilter();
+  resetReceiptQuickSourceChangeControls();
  }
  function updateReceiptQuickSourceReveal(){
   const feedback=receiptQuickPreviewSourceFeedback;
