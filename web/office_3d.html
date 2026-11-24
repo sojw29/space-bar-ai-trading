@@ -65,7 +65,8 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 #meeting-progress-stages:not([hidden]){display:flex}
 .receipt-quick-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:6px}
-.receipt-quick-presets button[aria-pressed="true"]{border-color:#87defa;background:#1b5265}
+.receipt-quick-presets button[aria-pressed="true"],
+#ai-meeting-progress-receipt-preset-preview-projected-rows button[aria-pressed="true"]{border-color:#87defa;background:#1b5265}
 </style>
 </head>
 <body>
@@ -2222,6 +2223,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <ol id="ai-meeting-progress-receipt-preset-preview-projected-rows"></ol>
       </details>
       <label>적용 후 이동 <select id="ai-meeting-progress-receipt-preset-preview-jump" style="min-height:44px;max-width:100%"></select></label>
+      <button id="ai-meeting-progress-receipt-preset-preview-jump-clear" type="button" style="min-height:44px" hidden>이동 선택 해제</button>
       <p id="ai-meeting-progress-receipt-preset-preview-jump-status" role="status"></p>
       <button id="ai-meeting-progress-receipt-preset-preview-apply" type="button" style="min-height:44px">조합 적용</button>
       <button id="ai-meeting-progress-receipt-preset-preview-cancel" type="button" style="min-height:44px">미리보기 취소</button>
@@ -3040,6 +3042,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickListCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-count");
  const applyReceiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-apply");
  const receiptQuickPreviewJump=document.getElementById("ai-meeting-progress-receipt-preset-preview-jump");
+ const receiptQuickPreviewJumpClear=document.getElementById("ai-meeting-progress-receipt-preset-preview-jump-clear");
+ const receiptQuickJumpButtons=new Map();
  const receiptQuickPreviewJumpStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-jump-status");
  const cancelReceiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-cancel");
  const receiptQuickPresets=[
@@ -3119,9 +3123,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     choose.style.minHeight="44px";
     choose.textContent="적용 후 이 발언으로 이동";
     choose.setAttribute("aria-label",choose.textContent+" · "+receiptQuickRowLabel(entry));
+    const value="statement:"+entry.key;
+    choose.setAttribute("aria-pressed",String(receiptQuickPreviewJump.value===value));
+    receiptQuickJumpButtons.set(value,choose);
     choose.addEventListener("click",()=>{
-     receiptQuickPreviewJump.value="statement:"+entry.key;
-     showReceiptQuickJumpStatus(receiptQuickRowLabel(entry));
+     const selected=receiptQuickPreviewJump.value!==value;
+     receiptQuickPreviewJump.value=selected?value:"";
+     showReceiptQuickJumpStatus(selected?receiptQuickRowLabel(entry):"");
     });
     details.append(choose);
    }
@@ -3129,9 +3137,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    return row;
   }));
  }
- function showReceiptQuickJumpStatus(label){
-  if(receiptQuickPreviewJumpStatus)receiptQuickPreviewJumpStatus.textContent=label?"적용 후 이동 · "+label:"";
+ function showReceiptQuickJumpStatus(label,lost=false){
+  const value=receiptQuickPreviewJump?.value;
+  if(receiptQuickPreviewJumpStatus)receiptQuickPreviewJumpStatus.textContent=lost?
+   "선택한 이동 위치가 변경된 조건에서 사라졌습니다. 적용 후 현재 화면을 유지합니다.":
+   label?"적용 후 이동 · "+label:"";
+  if(receiptQuickPreviewJumpClear)receiptQuickPreviewJumpClear.hidden=!value;
+  for(const [target,button] of receiptQuickJumpButtons)button.setAttribute("aria-pressed",String(target===value));
  }
+ receiptQuickPreviewJumpClear?.addEventListener("click",()=>{
+  if(!receiptQuickPreviewJump)return;
+  receiptQuickPreviewJump.value="";
+  receiptQuickPreviewJump.focus();
+  showReceiptQuickJumpStatus("");
+ });
  receiptQuickPreviewJump?.addEventListener("change",()=>{
   showReceiptQuickJumpStatus(receiptQuickPreviewJump.value?receiptQuickPreviewJump.selectedOptions[0]?.textContent:"");
  });
@@ -3161,7 +3180,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   options.push(...exactOptions);
   const selected=options.find(option=>option.value===previous&&!option.disabled);
   receiptQuickPreviewJump.value=selected?.value??"";
-  showReceiptQuickJumpStatus(selected?.textContent);
+  showReceiptQuickJumpStatus(selected?.textContent,Boolean(previous&&!selected));
  }
  function updateReceiptQuickPreview(entries,current){
   const pending=pendingQuickPreset;
@@ -3234,6 +3253,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   };
   const count=projected.length;
   const matching=visibleProgressReceiptEntries(projected,listFilters);
+  receiptQuickJumpButtons.clear();
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,{total:count,canJump:true});
   if(receiptQuickListCount)receiptQuickListCount.textContent=matching.length+" / "+count+"건"+
    (matching.length===0&&count?" · 목록 조건에 맞는 발언이 없습니다.":"");
