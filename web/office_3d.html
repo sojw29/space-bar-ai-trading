@@ -2210,6 +2210,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       </details>
       <details id="ai-meeting-progress-receipt-preset-preview-projected" hidden>
        <summary style="min-height:44px">변경 후 전체 발언</summary>
+       <label>미리보기 발언 검색 <input id="ai-meeting-progress-receipt-preset-preview-list-search" type="search" placeholder="번호, 에이전트, 요약" style="min-height:44px;max-width:100%"></label>
+       <label>검토 상태 <select id="ai-meeting-progress-receipt-preset-preview-list-state" style="min-height:44px">
+        <option value="all">전체</option>
+        <option value="unreviewed">미검토</option>
+        <option value="reviewed">검토 완료</option>
+       </select></label>
+       <label><input id="ai-meeting-progress-receipt-preset-preview-list-selected" type="checkbox"> 선택한 발언만</label>
+       <button id="ai-meeting-progress-receipt-preset-preview-list-reset" type="button" style="min-height:44px" disabled>목록 조건 초기화</button>
+       <p id="ai-meeting-progress-receipt-preset-preview-list-count" role="status"></p>
        <ol id="ai-meeting-progress-receipt-preset-preview-projected-rows"></ol>
       </details>
       <label>적용 후 이동 <select id="ai-meeting-progress-receipt-preset-preview-jump" style="min-height:44px;max-width:100%"></select></label>
@@ -3023,6 +3032,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const id="ai-meeting-progress-receipt-preset-preview-"+name;
   return [name,{container:document.getElementById(id),rows:document.getElementById(id+"-rows")}];
  }));
+ const receiptQuickListSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-search");
+ const receiptQuickListState=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-state");
+ const receiptQuickListSelected=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-selected");
+ const receiptQuickListReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-reset");
+ const receiptQuickListCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-count");
  const applyReceiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-apply");
  const receiptQuickPreviewJump=document.getElementById("ai-meeting-progress-receipt-preset-preview-jump");
  const cancelReceiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-cancel");
@@ -3077,9 +3091,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function receiptQuickRowLabel({period,statement}){
   return (period==="earlier"?"이전":"이후")+" ["+statement.id+"] "+statement.agent;
  }
- function renderReceiptQuickPreviewList({container,rows},entries){
+ function resetReceiptQuickListFilters(){
+  if(receiptQuickListSearch)receiptQuickListSearch.value="";
+  if(receiptQuickListState)receiptQuickListState.value="all";
+  if(receiptQuickListSelected)receiptQuickListSelected.checked=false;
+ }
+ function renderReceiptQuickPreviewList({container,rows},entries,total=entries.length){
   if(!container||!rows)return;
-  container.hidden=entries.length===0;
+  container.hidden=total===0;
   rows.replaceChildren(...entries.map(entry=>{
    const row=document.createElement("li");
    row.textContent=receiptQuickRowLabel(entry)+" · "+(entry.reviewed?"검토 완료":"미검토")+
@@ -3131,7 +3150,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const newlyHidden=visible.filter(entry=>!projectedKeys.has(entry.key));
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.shown,newlyVisible);
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.hidden,newlyHidden);
-  renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,projected);
+  renderProjectedReceiptQuickList(projected);
   const reviewed=projected.filter(entry=>entry.reviewed).length;
   const selected=projected.filter(entry=>selectedReceiptKeys.has(entry.key)).length;
   const cursor=entries.find(entry=>entry.key===lastReceiptPreviewKey);
@@ -3176,6 +3195,32 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   updateReceiptQuickPreview(entries,current);
  }
+ function renderProjectedReceiptQuickList(projected){
+  const listFilters={...emptyReceiptQuickFilters,
+   search:receiptQuickListSearch?.value??"",
+   state:receiptQuickListState?.value||"all",
+   selectedOnly:!!receiptQuickListSelected?.checked,
+  };
+  const count=projected.length;
+  const matching=visibleProgressReceiptEntries(projected,listFilters);
+  renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,count);
+  if(receiptQuickListCount)receiptQuickListCount.textContent=matching.length+" / "+count+"건"+
+   (matching.length===0&&count?" · 목록 조건에 맞는 발언이 없습니다.":"");
+  if(receiptQuickListReset)receiptQuickListReset.disabled=!listFilters.search&&listFilters.state==="all"&&!listFilters.selectedOnly;
+ }
+ function refreshReceiptQuickList(){
+  if(!pendingQuickPreset||pendingQuickPreset.restore!==lastProgressRestore)return;
+  const {after}=receiptQuickPresetChange(pendingQuickPreset.preset,progressReceiptFilters());
+  renderProjectedReceiptQuickList(visibleProgressReceiptEntries(progressReceiptEntries(),after));
+ }
+ receiptQuickListSearch?.addEventListener("input",refreshReceiptQuickList);
+ receiptQuickListState?.addEventListener("change",refreshReceiptQuickList);
+ receiptQuickListSelected?.addEventListener("change",refreshReceiptQuickList);
+ receiptQuickListReset?.addEventListener("click",()=>{
+  resetReceiptQuickListFilters();
+  receiptQuickListSearch?.focus();
+  refreshReceiptQuickList();
+ });
  combineReceiptQuickPreset?.addEventListener("change",updateProgressReceipt);
  receiptQuickPreviewMode?.addEventListener("change",()=>{
   if(!receiptQuickPreviewMode.checked)closeReceiptQuickPreview();
@@ -3207,6 +3252,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(button.disabled||!lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
    if(receiptQuickPreviewMode?.checked){
     pendingQuickPreset={preset,restore:lastProgressRestore};
+    resetReceiptQuickListFilters();
     for(const {container} of Object.values(receiptQuickPreviewLists))if(container)container.open=false;
     if(receiptQuickPreviewJump)receiptQuickPreviewJump.value="";
     updateReceiptQuickPreview(progressReceiptEntries(),progressReceiptFilters());
