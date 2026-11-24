@@ -2198,7 +2198,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      <legend>빠른 검토 조합</legend>
      <label><input id="ai-meeting-progress-receipt-preset-combine" type="checkbox"> 현재 조건에 조합 추가</label>
      <label><input id="ai-meeting-progress-receipt-preset-preview-mode" type="checkbox"> 조합 적용 전 미리보기</label>
-     <div id="ai-meeting-progress-receipt-preset-preview" hidden>
+     <div id="ai-meeting-progress-receipt-preset-preview" role="region" aria-label="빠른 검토 조합 미리보기" tabindex="-1" hidden>
       <p id="ai-meeting-progress-receipt-preset-preview-summary" role="status" style="white-space:pre-line;overflow-wrap:anywhere"></p>
       <label>적용 후 이동 <select id="ai-meeting-progress-receipt-preset-preview-jump" style="min-height:44px;max-width:100%"></select></label>
       <button id="ai-meeting-progress-receipt-preset-preview-apply" type="button" style="min-height:44px">조합 적용</button>
@@ -3033,10 +3033,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const after={...receiptQuickPresetBase(before),...(active?clear:filters)};
   return {before,after,active,fields:Object.keys(before).filter(key=>before[key]!==after[key])};
  }
- function closeReceiptQuickPreview(){
+ function closeReceiptQuickPreview(returnFocus=false){
+  const button=pendingQuickPreset?.preset.button;
+  const restoreFocus=returnFocus&&pendingQuickPreset;
   pendingQuickPreset=null;
   if(receiptQuickPreview)receiptQuickPreview.hidden=true;
   if(receiptQuickPreviewSummary)receiptQuickPreviewSummary.textContent="";
+  if(restoreFocus)(button?.disabled?receiptQuickPreviewMode:button)?.focus();
  }
  function receiptQuickJumpChoices(visibleKeys,projected){
   return [
@@ -3047,6 +3050,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    ["current","마지막 이동 위치",projected.find(entry=>entry.key===lastReceiptPreviewKey)],
   ];
  }
+ function receiptQuickRowLabel({period,statement}){
+  return (period==="earlier"?"이전":"이후")+" ["+statement.id+"] "+statement.agent;
+ }
  function updateReceiptQuickPreviewJump(choices){
   if(!receiptQuickPreviewJump)return;
   const previous=receiptQuickPreviewJump.value;
@@ -3056,7 +3062,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const options=choices.map(([value,label,entry])=>{
    const option=document.createElement("option");
    option.value=value;
-   option.textContent=label;
+   option.textContent=entry?label+" · "+receiptQuickRowLabel(entry):label;
    option.disabled=!entry;
    return option;
   });
@@ -3067,7 +3073,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const pending=pendingQuickPreset;
   if(!pending)return;
   if(!lastProgressRestore||pending.restore!==lastProgressRestore){
-   closeReceiptQuickPreview();
+   closeReceiptQuickPreview(receiptQuickPreview?.contains(document.activeElement));
    return;
   }
   const {after,active,fields}=receiptQuickPresetChange(pending.preset,current);
@@ -3079,14 +3085,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   updateReceiptQuickPreviewJump(receiptQuickJumpChoices(visibleKeys,projected));
   const newlyVisible=projected.filter(entry=>!visibleKeys.has(entry.key));
   const newlyHidden=visible.filter(entry=>!projectedKeys.has(entry.key));
-  const labelRows=rows=>rows.map(({period,statement})=>
-   (period==="earlier"?"이전":"이후")+" ["+statement.id+"] "+statement.agent).join(", ");
+  const labelRows=rows=>rows.map(receiptQuickRowLabel).join(", ");
   const reviewed=projected.filter(entry=>entry.reviewed).length;
   const selected=projected.filter(entry=>selectedReceiptKeys.has(entry.key)).length;
   const cursor=entries.find(entry=>entry.key===lastReceiptPreviewKey);
   if(receiptQuickPreview)receiptQuickPreview.hidden=false;
+  const blockedReason=!fields.length?"변경할 조건이 없습니다.":(!count&&!active?"표시할 발언이 없습니다. 검색어 또는 현재 조건을 조정하세요.":"");
   if(applyReceiptQuickPreview){
-   applyReceiptQuickPreview.disabled=!fields.length||(!count&&!active);
+   if(blockedReason&&document.activeElement===applyReceiptQuickPreview)receiptQuickPreview?.focus();
+   applyReceiptQuickPreview.disabled=Boolean(blockedReason);
    applyReceiptQuickPreview.textContent=active?"조합 해제":"조합 적용";
   }
   if(receiptQuickPreviewSummary)receiptQuickPreviewSummary.textContent=[
@@ -3099,7 +3106,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "변경 후 검토 완료 "+reviewed+"건 · 미검토 "+(count-reviewed)+"건",
    "변경 후 표시된 선택 "+selected+"건 · 가려진 선택 "+(selectedReceiptKeys.size-selected)+"건",
    "이동 위치 "+(cursor?labelRows([cursor])+" · "+(projectedKeys.has(cursor.key)?"목록에 표시":"필터에 가려짐"):"없음"),
-  ].join("\n");
+   blockedReason,
+  ].filter(Boolean).join("\n");
  }
  function updateReceiptQuickPresets(entries,current){
   if(lastReceiptQuickPreset?.restore!==lastProgressRestore){
@@ -3150,7 +3158,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     pendingQuickPreset={preset,restore:lastProgressRestore};
     if(receiptQuickPreviewJump)receiptQuickPreviewJump.value="";
     updateReceiptQuickPreview(progressReceiptEntries(),progressReceiptFilters());
-    (applyReceiptQuickPreview?.disabled?cancelReceiptQuickPreview:applyReceiptQuickPreview)?.focus?.();
+    receiptQuickPreview?.focus();
    }else applyQuickReceiptPreset(preset);
   });
  }
@@ -3159,10 +3167,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!pending||pending.restore!==lastProgressRestore||!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   applyQuickReceiptPreset(pending.preset,receiptQuickPreviewJump?.value);
  });
- cancelReceiptQuickPreview?.addEventListener("click",()=>{
-  const button=pendingQuickPreset?.preset.button;
-  closeReceiptQuickPreview();
-  (button?.disabled?receiptQuickPreviewMode:button)?.focus?.();
+ cancelReceiptQuickPreview?.addEventListener("click",()=>closeReceiptQuickPreview(true));
+ receiptQuickPreview?.addEventListener("keydown",event=>{
+  if(event.key!=="Escape"||event.defaultPrevented||!pendingQuickPreset)return;
+  event.preventDefault();
+  closeReceiptQuickPreview(true);
  });
  function eligibleReceiptQuickPresetFields(change,filters,redo){
   if(!change||change.applied===redo)return [];
