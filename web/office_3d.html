@@ -2259,6 +2259,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-restore-filters" type="button" style="min-height:44px" hidden>이전 조건 복원</button>
        </div>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-empty" role="status" hidden>현재 조건에 맞는 검토 변경이 없습니다.</p>
+       <div id="ai-meeting-progress-receipt-preset-preview-source-changes-empty-actions" class="receipt-quick-presets" role="group" aria-label="검색 결과 다시 찾기" hidden></div>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-empty-reset" type="button" style="min-height:44px" hidden>조건 초기화 후 다시 검색</button>
        <div class="receipt-quick-presets" role="group" aria-label="표시된 발언 요약">
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-expand" type="button" style="min-height:44px" disabled>요약 모두 펼치기</button>
@@ -3437,12 +3438,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    [receiptQuickSourceChangeVerdict,"verdict","","발언 판정"],
   ];
  }
- function receiptQuickSourceSearchWords(){
+ function receiptQuickSourceSearchWords(scope=receiptQuickSourceSearchScope?.value){
   const query=(receiptQuickSourceChangeSearch?.value??"").normalize("NFKC").toLowerCase().trim();
-  return receiptQuickSourceSearchScope?.value==="phrase"?(query?[query]:[]):query.split(/\s+/).filter(Boolean);
+  return scope==="phrase"?(query?[query]:[]):query.split(/\s+/).filter(Boolean);
  }
- function receiptQuickSourceSearchMatches(entry,words){
-  const scope=receiptQuickSourceSearchScope?.value;
+ function receiptQuickSourceSearchMatches(entry,words,scope=receiptQuickSourceSearchScope?.value){
   const text=scope==="metadata"?entry.metadataSearchText:
    scope==="summary"||scope==="phrase"?entry.summarySearchText:entry.searchText;
   return words.every(word=>text.includes(word));
@@ -3450,6 +3450,49 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceChangeReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-reset");
  const receiptQuickSourceChangeClearSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-clear-search");
  const receiptQuickSourceChangeEmptyReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty-reset");
+ const receiptQuickSourceEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty-actions");
+ function renderReceiptQuickSourceEmptyActions(show,words,facets){
+  if(!receiptQuickSourceEmptyActions)return;
+  const actions=[];
+  if(show){
+   const scope=receiptQuickSourceSearchScope?.value||"all";
+   const type=receiptQuickSourceChangeFilter;
+   const selectedOnly=!!receiptQuickSourceSelectedOnly?.checked;
+   const candidates=[
+    ["전체 발언 정보에서 검색",words.length&&scope!=="all",{scope:"all",words:receiptQuickSourceSearchWords("all")},
+     ()=>{receiptQuickSourceSearchScope.value="all"}],
+    ["검색어만 지우기",words.length,{words:[]},
+     ()=>{receiptQuickSourceChangeSearch.value=""}],
+    ["모든 변경 유형 보기",type!=="all",{type:"all"},
+     ()=>{receiptQuickSourceChangeFilter="all"}],
+    ["선택하지 않은 발언도 보기",selectedOnly,{selectedOnly:false},
+     ()=>{receiptQuickSourceSelectedOnly.checked=false}],
+    ["상세 필터만 해제",facets.length,{facets:[]},
+     ()=>{for(const [field,,all] of facets)field.value=all}],
+   ];
+   for(const [label,available,overrides,apply] of candidates){
+    if(!available)continue;
+    const settings={scope,type,selectedOnly,words,facets,...overrides};
+    const count=receiptQuickSourceChangeRows.filter(entry=>
+     settings.facets.every(([field,property])=>field.value===entry[property])&&
+     receiptQuickSourceSearchMatches(entry,settings.words,settings.scope)&&
+     (settings.type==="all"||settings.type===entry.type)&&(!settings.selectedOnly||entry.selection.checked)).length;
+    if(!count)continue;
+    const button=document.createElement("button");
+    button.type="button";
+    button.style.minHeight="44px";
+    button.textContent=label+" ("+count+"건)";
+    button.addEventListener("click",()=>{
+     apply();
+     renderReceiptQuickSourceChangeFilter();
+     jumpToFirstReceiptQuickSourceResult();
+    });
+    actions.push(button);
+   }
+  }
+  receiptQuickSourceEmptyActions.hidden=!actions.length;
+  receiptQuickSourceEmptyActions.replaceChildren(...actions);
+ }
  receiptQuickSourceChangeSearch?.addEventListener("input",renderReceiptQuickSourceChangeFilter);
  function clearReceiptQuickSourceSearch(){
   if(!receiptQuickSourceChangeSearch)return;
@@ -3971,6 +4014,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const showEmpty=total>0&&visible.length===0;
   if(receiptQuickSourceChangesEmpty)receiptQuickSourceChangesEmpty.hidden=!showEmpty;
+  renderReceiptQuickSourceEmptyActions(showEmpty,words,activeFacets);
   if(receiptQuickSourceChangeEmptyReset)receiptQuickSourceChangeEmptyReset.hidden=!showEmpty;
   if(receiptQuickSourceChangeClearSearch)receiptQuickSourceChangeClearSearch.disabled=!receiptQuickSourceChangeSearch?.value;
   const highlightWords=receiptQuickSourceSearchScope?.value==="metadata"?[]:words;
