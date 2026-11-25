@@ -2254,6 +2254,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-count" role="status"></p>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-status" role="status" hidden></p>
        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-undo-recovery" type="button" style="min-height:44px" hidden>이전 검색 조건으로 돌아가기</button>
+       <button id="ai-meeting-progress-receipt-preset-preview-source-changes-redo-recovery" type="button" style="min-height:44px" hidden>검색 조건 완화 다시 적용</button>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-last-status" role="status" hidden></p>
        <div class="receipt-quick-presets">
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-jump-last" type="button" style="min-height:44px" hidden>마지막으로 읽은 발언으로 이동</button>
@@ -3455,16 +3456,40 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty-actions");
  const receiptQuickSourceRecoveryStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-status");
  const receiptQuickSourceUndoRecovery=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-undo-recovery");
+ const receiptQuickSourceRedoRecovery=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-redo-recovery");
  let receiptQuickSourceRecovery=null;
- receiptQuickSourceUndoRecovery?.addEventListener("click",()=>{
-  if(!receiptQuickSourceRecovery)return;
-  const {fields,type,selectedOnly}=receiptQuickSourceRecovery;
-  receiptQuickSourceRecovery=null;
+ let receiptQuickSourceRecoveryRedo=null;
+ function receiptQuickSourceRecoveryConditions(){
+  return {
+   fields:receiptQuickSourceChangeFields().filter(([field])=>field!==receiptQuickSourceChangeOrder),
+   type:receiptQuickSourceChangeFilter,
+   selectedOnly:!!receiptQuickSourceSelectedOnly?.checked,
+  };
+ }
+ function applyReceiptQuickSourceRecoveryConditions({fields,type,selectedOnly}){
   for(const [field,value] of fields)field.value=value;
   receiptQuickSourceChangeFilter=type;
   if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=selectedOnly;
+ }
+ function receiptQuickSourceRecoveryMatches({fields,type,selectedOnly}){
+  return type===receiptQuickSourceChangeFilter&&selectedOnly===!!receiptQuickSourceSelectedOnly?.checked&&
+   fields.every(([field,value])=>field.value===value);
+ }
+ receiptQuickSourceUndoRecovery?.addEventListener("click",()=>{
+  if(!receiptQuickSourceRecovery)return;
+  receiptQuickSourceRecoveryRedo=receiptQuickSourceRecovery;
+  receiptQuickSourceRecovery=null;
+  applyReceiptQuickSourceRecoveryConditions(receiptQuickSourceRecoveryRedo.before);
   renderReceiptQuickSourceChangeFilter();
   receiptQuickSourceChangeSearch?.focus();
+ });
+ receiptQuickSourceRedoRecovery?.addEventListener("click",()=>{
+  if(!receiptQuickSourceRecoveryRedo)return;
+  receiptQuickSourceRecovery=receiptQuickSourceRecoveryRedo;
+  receiptQuickSourceRecoveryRedo=null;
+  applyReceiptQuickSourceRecoveryConditions(receiptQuickSourceRecovery.after);
+  renderReceiptQuickSourceChangeFilter();
+  jumpToFirstReceiptQuickSourceResult();
  });
  function renderReceiptQuickSourceEmptyActions(show,words,facets){
   if(!receiptQuickSourceEmptyActions)return;
@@ -3504,8 +3529,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     button.style.minHeight="44px";
     button.textContent=label+" ("+count+"건)";
     button.addEventListener("click",()=>{
-     receiptQuickSourceRecovery={fields:receiptQuickSourceChangeFields(),type,selectedOnly,label,count};
+     const before=receiptQuickSourceRecoveryConditions();
      apply();
+     receiptQuickSourceRecoveryRedo=null;
+     receiptQuickSourceRecovery={before,after:receiptQuickSourceRecoveryConditions(),label,count};
      renderReceiptQuickSourceChangeFilter();
      jumpToFirstReceiptQuickSourceResult();
     });
@@ -3943,6 +3970,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function resetReceiptQuickSourceChangeControls(selectedOnly=false){
   receiptQuickSourceRecovery=null;
+  receiptQuickSourceRecoveryRedo=null;
   previousReceiptQuickSourceFilters=null;
   receiptQuickSourceChangeFilter="all";
   if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=selectedOnly;
@@ -4058,6 +4086,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickSourceChangesEmpty)receiptQuickSourceChangesEmpty.hidden=!showEmpty;
   renderReceiptQuickSourceEmptyActions(showEmpty,words,activeFacets);
   const recovery=receiptQuickSourceRecovery;
+  if(receiptQuickSourceRecoveryRedo&&!receiptQuickSourceRecoveryMatches(receiptQuickSourceRecoveryRedo.before)){
+   receiptQuickSourceRecoveryRedo=null;
+  }
+  if(receiptQuickSourceRedoRecovery){
+   const redo=receiptQuickSourceRecoveryRedo;
+   receiptQuickSourceRedoRecovery.hidden=!redo;
+   receiptQuickSourceRedoRecovery.textContent=redo?"다시 적용 ("+redo.count+"건)":"검색 조건 완화 다시 적용";
+  }
   if(receiptQuickSourceUndoRecovery)receiptQuickSourceUndoRecovery.hidden=!recovery;
   if(receiptQuickSourceRecoveryStatus){
    receiptQuickSourceRecoveryStatus.hidden=!recovery;
