@@ -2284,6 +2284,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selected-json" type="button" style="min-height:44px" disabled>선택 전체 JSON</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selected-txt" type="button" style="min-height:44px" disabled>선택 전체 TXT</button>
        </div>
+       <div id="ai-meeting-progress-receipt-preset-preview-source-changes-match-actions" class="receipt-quick-presets" role="group" aria-label="검색어가 있는 요약 선택 및 저장" hidden>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-select-matches" type="button" style="min-height:44px" disabled>일치 요약 선택</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-unselect-matches" type="button" style="min-height:44px" disabled>일치 요약 선택 해제</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-matched-csv" type="button" style="min-height:44px" disabled>일치 요약 CSV</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-matched-json" type="button" style="min-height:44px" disabled>일치 요약 JSON</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-matched-txt" type="button" style="min-height:44px" disabled>일치 요약 TXT</button>
+       </div>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-save-status" role="status"></p>
       </details>
       <button id="ai-meeting-progress-receipt-preset-preview-source-reveal" type="button" style="min-height:44px" hidden>마지막 원문 발언 표시</button>
@@ -3455,8 +3462,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let receiptQuickSourceChangeRows=[];
  let receiptQuickSourceChangeFilter="all";
  const receiptQuickSourceChangeSaveStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-save-status");
- const receiptQuickSourceChangeSaveButtons=["visible","selected"].flatMap(scope=>["CSV","JSON","TXT"].map(format=>({
-  scope,format,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+(scope==="selected"?"selected-":"")+format.toLowerCase()),
+ const receiptQuickSourceChangeSaveButtons=["visible","selected","matched"].flatMap(scope=>["CSV","JSON","TXT"].map(format=>({
+  scope,format,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+(scope==="visible"?"":scope+"-")+format.toLowerCase()),
  })));
  let visibleReceiptQuickSourceChanges=[];
  const receiptQuickSourceSelectedOnly=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selected-only");
@@ -3546,8 +3553,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  receiptQuickSourceSelectedOnly?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
  receiptQuickSourceSelectVisible?.addEventListener("click",()=>setVisibleReceiptQuickSourceSelection(true));
  receiptQuickSourceUnselectVisible?.addEventListener("click",()=>setVisibleReceiptQuickSourceSelection(false));
- function setVisibleReceiptQuickSourceSelection(selected){
-  for(const {selection} of visibleReceiptQuickSourceChanges)selection.checked=selected;
+ const receiptQuickSourceMatchActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-actions");
+ const receiptQuickSourceSelectMatches=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-select-matches");
+ const receiptQuickSourceUnselectMatches=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-unselect-matches");
+ for(const [button,selected] of [[receiptQuickSourceSelectMatches,true],[receiptQuickSourceUnselectMatches,false]]){
+  button?.addEventListener("click",()=>{
+   setVisibleReceiptQuickSourceSelection(selected,visibleReceiptQuickSourceChanges.filter(entry=>entry.summaryMatches));
+   if(button.disabled&&(!receiptQuickSourceSelectedOnly?.checked||selected)){
+    (selected?receiptQuickSourceUnselectMatches:receiptQuickSourceSelectMatches)?.focus();
+   }
+  });
+ }
+ function setVisibleReceiptQuickSourceSelection(selected,entries=visibleReceiptQuickSourceChanges){
+  for(const {selection} of entries)selection.checked=selected;
   if(receiptQuickSourceSelectedOnly?.checked&&!selected)receiptQuickSourceSelectedOnly.focus();
   renderReceiptQuickSourceChangeFilter();
  }
@@ -3913,14 +3931,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const [,button] of receiptQuickSourceSummaryButtons)if(button)button.disabled=!visible.length;
   if(receiptQuickSourceRevealSelected)receiptQuickSourceRevealSelected.disabled=selected===visibleSelected;
   if(receiptQuickSourceClearSelected)receiptQuickSourceClearSelected.disabled=!selected;
+  const matchedSelected=matches.filter(({selection})=>selection.checked).length;
+  if(receiptQuickSourceMatchActions)receiptQuickSourceMatchActions.hidden=!matches.length;
+  if(receiptQuickSourceSelectMatches)receiptQuickSourceSelectMatches.disabled=matchedSelected===matches.length;
+  if(receiptQuickSourceUnselectMatches)receiptQuickSourceUnselectMatches.disabled=!matchedSelected;
+  const counts={visible:visible.length,selected,matched:matches.length};
   for(const {scope,button} of receiptQuickSourceChangeSaveButtons){
-   if(button)button.disabled=scope==="selected"?!selected:!visible.length;
+   if(button)button.disabled=!counts[scope];
   }
   if(receiptQuickSourceChangeSaveStatus)receiptQuickSourceChangeSaveStatus.textContent="";
  }
  function saveReceiptQuickSourceChanges(scope,format){
   if(!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
-  const entries=scope==="selected"?receiptQuickSourceChangeRows.filter(({selection})=>selection.checked):visibleReceiptQuickSourceChanges;
+  const entries=scope==="selected"?receiptQuickSourceChangeRows.filter(({selection})=>selection.checked):
+   scope==="matched"?visibleReceiptQuickSourceChanges.filter(entry=>entry.summaryMatches):visibleReceiptQuickSourceChanges;
   if(!entries.length)return;
   const {earlier,later}=comparisonReport;
   const rows=entries.map(({type,period,id,agent,phase,verdict,summary})=>({
