@@ -2316,6 +2316,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          </details>
          <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-active-filters" class="receipt-quick-presets" role="group" aria-label="적용 중인 예시 필터" hidden></div>
          <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-status" role="status" tabindex="-1"></p>
+         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-empty-actions" class="receipt-quick-presets" role="group" aria-label="예시 검색 결과 다시 찾기" hidden></div>
          <div class="receipt-quick-presets">
          <label>예시 발언 선택 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-picker" style="min-height:44px" disabled></select></label>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-open-summary" type="button" style="min-height:44px" disabled>현재 예시 요약 열기</button>
@@ -3674,6 +3675,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleExpand=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expand");
  const recoveryPreviewSampleCollapse=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-collapse");
  const recoveryPreviewSampleExpandedCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expanded-count");
+ const recoveryPreviewSampleEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-empty-actions");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4016,6 +4018,39 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    syncRecoveryPreviewSampleSummaries(state);
   });
  }
+ function renderRecoveryPreviewSampleAlternatives(results,hasMatches,{words,scope,facets,selectedOnly}){
+  if(!recoveryPreviewSampleEmptyActions)return;
+  const buttons=[];
+  function add(label,overrides,apply){
+   const {terms=words,searchScope=scope,activeFacets=facets,selected=selectedOnly}=overrides;
+   const count=results.filter(entry=>recoveryPreviewMatchesSearch(entry,searchScope,terms,selected)&&
+    activeFacets.every(({key,field})=>entry[key]===field.value)).length;
+   if(!count)return;
+   const button=document.createElement("button");
+   button.type="button";
+   button.style.minHeight="44px";
+   button.textContent=label+" ("+count+"건)";
+   button.addEventListener("click",()=>{
+    if(!pendingRecoveryPreview?.suggestionSample)return;
+    apply();
+    updateRecoveryPreviewSampleSearch();
+    const {resultIndex}=pendingRecoveryPreview.suggestionSample;
+    focusRecoveryPreviewSampleResult(resultIndex);
+   });
+   buttons.push(button);
+  }
+  if(!hasMatches){
+   if(scope==="phrase")add("요약에서 단어별 검색",{searchScope:"summary"},()=>{recoveryPreviewSampleScope.value="summary"});
+   if(scope!=="all")add("전체 발언 정보로 검색",{searchScope:"all"},()=>{recoveryPreviewSampleScope.value="all"});
+   if(words.length&&recoveryPreviewSampleSearch)add("예시 검색어만 지우기",{terms:[]},()=>{recoveryPreviewSampleSearch.value=""});
+   if(selectedOnly)add("선택하지 않은 예시도 보기",{selected:false},()=>{recoveryPreviewSampleSelected.checked=false});
+   if(facets.length)add("예시 상세 조건 풀기",{activeFacets:[]},()=>{
+    for(const {field} of facets)field.value="";
+   });
+  }
+  recoveryPreviewSampleEmptyActions.replaceChildren(...buttons);
+  recoveryPreviewSampleEmptyActions.hidden=!buttons.length;
+ }
  function renderRecoveryPreviewSample(retainedKey){
   const state=pendingRecoveryPreview.suggestionSample;
   const {label,results,apply,facetOptions,expanded,summaries}=state;
@@ -4033,6 +4068,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const eligible=selectedOnly?searched.filter(entry=>entry.selection.checked):searched;
   const matchesFacets=(entry,except)=>facets.every(({key,field})=>key===except||entry[key]===field.value);
   const matches=eligible.filter(entry=>matchesFacets(entry));
+  renderRecoveryPreviewSampleAlternatives(results,Boolean(matches.length),{words,scope,facets,selectedOnly});
   const active=[];
   for(const {key,field} of recoveryPreviewSampleFacets){
    const counts=new Map();
