@@ -2267,7 +2267,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <div class="receipt-quick-presets">
          <label>미리보기에서 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-search" type="search" style="min-height:44px"></label>
          <label>미리보기 검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option></select></label>
-         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear" type="button" style="min-height:44px" disabled>미리보기 검색어 지우기</button>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear" type="button" style="min-height:44px" disabled>미리보기 검색 초기화</button>
         </div>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
         <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-rows"></ul>
@@ -3501,6 +3501,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  recoveryPreviewClear?.addEventListener("click",()=>{
   if(!recoveryPreviewSearch)return;
   recoveryPreviewSearch.value="";
+  if(recoveryPreviewScope)recoveryPreviewScope.value="all";
   updateRecoveryPreviewSearch();
   recoveryPreviewSearch.focus();
  });
@@ -3515,11 +3516,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(button.disabled||!pendingRecoveryPreview)return;
    pendingRecoveryPreview.page+=step;
    renderReceiptQuickSourceRecoveryPreview();
-   if(button.disabled)(step>0?recoveryPreviewPrev:recoveryPreviewNext)?.focus();
+   const first=pendingRecoveryPreview.firstAction;
+   first?.focus({preventScroll:true});
+   first?.scrollIntoView({block:"nearest"});
   });
  }
  function renderReceiptQuickSourceRecoveryPreview(){
-  const {entries,label,page,commit,expanded}=pendingRecoveryPreview;
+  const {entries,label,page,commit,expanded,visibleDetails}=pendingRecoveryPreview;
+  for(const [key,details] of visibleDetails){
+   if(details.open)expanded.add(key);
+   else expanded.delete(key);
+  }
+  visibleDetails.clear();
   const query=(recoveryPreviewSearch?.value??"").normalize("NFKC").toLowerCase().trim();
   const words=query.split(/\s+/).filter(Boolean);
   const summaryOnly=recoveryPreviewScope?.value==="summary";
@@ -3534,10 +3542,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const start=page*recoveryPreviewPageSize;
   const sample=matches.slice(start,start+recoveryPreviewPageSize);
   const range=sample.length?(start+1)+"–"+(start+sample.length)+" / "+matches.length+"건":"일치 발언 0건";
-  recoveryPreviewStatus.textContent=label+" · "+range+(words.length?" · 전체 "+entries.length+"건":"");
+  const emptyHint=words.length&&!sample.length?" · 검색어를 바꾸거나 검색 조건을 초기화하세요.":"";
+  recoveryPreviewStatus.textContent=label+" · "+range+(words.length?" · 전체 "+entries.length+"건":"")+emptyHint;
   if(recoveryPreviewPrev)recoveryPreviewPrev.disabled=start===0;
   if(recoveryPreviewNext)recoveryPreviewNext.disabled=start+sample.length>=matches.length;
-  if(recoveryPreviewClear)recoveryPreviewClear.disabled=!recoveryPreviewSearch?.value;
+  if(recoveryPreviewClear)recoveryPreviewClear.disabled=!recoveryPreviewSearch?.value&&!summaryOnly;
   recoveryPreviewRows.replaceChildren(...sample.map((entry,index)=>{
    const {key,label,summary}=entry;
    const row=document.createElement("li");
@@ -3557,10 +3566,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    else text.textContent=summary;
    full.append(heading,text);
    full.open=expanded.has(key);
-   full.addEventListener("toggle",()=>{
-    if(full.open)expanded.add(key);
-    else expanded.delete(key);
-   });
+   visibleDetails.set(key,full);
    const jump=document.createElement("button");
    jump.type="button";
    jump.style.minHeight="44px";
@@ -3688,10 +3694,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     preview.addEventListener("click",()=>{
      if(recoveryPreviewSearch)recoveryPreviewSearch.value="";
      if(recoveryPreviewScope)recoveryPreviewScope.value="all";
-     pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0,expanded:new Set()};
+     pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0,expanded:new Set(),visibleDetails:new Map()};
      renderReceiptQuickSourceRecoveryPreview();
      recoveryPreview.hidden=false;
-     recoveryPreviewApply?.focus();
+     (recoveryPreviewSearch??recoveryPreviewApply)?.focus();
     });
     actions.push(preview);
    }
