@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -1114,6 +1114,26 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sourceChangeType('order').change();
    assert.equal(sourceChangeType('sort-status').textContent,'정렬: 회의·발언순');
    assert.equal(sourceChangeType('sort-status').hidden,false);
+   sourceChangeType('search').value='COMMANDER';
+   sourceChangeType('search').input();
+   sourceChangeType('completed').click();
+   sourceChangeType('selected-only').checked=true;
+   sourceChangeType('selected-only').change();
+   const basicConditions=sourceChangeType('basic-conditions');
+   assert.deepEqual(basicConditions.children.map(button=>button.textContent),[
+    '검색어: COMMANDER 해제','검토 완료 해제','선택 항목만 해제',
+   ]);
+   assert.equal(sourceChangeType('clear-filters').textContent,'필터만 해제 (4개)');
+   basicConditions.children[0].click();
+   assert.equal(sourceChangeType('search').value,'');
+   basicConditions.children[0].click();
+   assert.equal(sourceChangeType('all').attrs['aria-pressed'],'true');
+   basicConditions.children[0].click();
+   assert.equal(sourceChangeType('selected-only').checked,false);
+   sourceChangeType('clear-filters').click();
+   assert.equal(sourceChangeType('period').value,'all');
+   assert.equal(sourceChangeType('order').value,'meeting');
+   assert.equal(sourceChangeType('clear-filters').hidden,true);
    assert.equal(sourceChangeRows().length,1);
    sourceChangeType('search').value='no matching statement';
    sourceChangeType('search').input();
