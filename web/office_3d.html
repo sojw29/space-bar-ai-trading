@@ -2321,6 +2321,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-open-summary" type="button" style="min-height:44px" disabled>현재 예시 요약 열기</button>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-back-search" type="button" style="min-height:44px">예시 검색창으로 이동</button>
          </div>
+         <div class="receipt-quick-presets" role="group" aria-label="예시 요약 펼치기와 접기">
+          <label>요약 작업 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-summary-scope" style="min-height:44px"><option value="page">현재 페이지</option><option value="matches">예시 검색 결과 전체</option></select></label>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expand" type="button" style="min-height:44px" disabled>예시 요약 펼치기</button>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-collapse" type="button" style="min-height:44px" disabled>예시 요약 접기</button>
+          <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expanded-count" role="status"></span>
+         </div>
          <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-rows"></ul>
          <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-pages" class="receipt-quick-presets" role="group" aria-label="복구 예시 페이지" hidden>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-prev" type="button" style="min-height:44px" disabled>이전 예시</button>
@@ -3664,6 +3670,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSamplePicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-picker");
  const recoveryPreviewSampleOpenSummary=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-open-summary");
  const recoveryPreviewSampleBackSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-back-search");
+ const recoveryPreviewSampleSummaryScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-summary-scope");
+ const recoveryPreviewSampleExpand=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expand");
+ const recoveryPreviewSampleCollapse=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-collapse");
+ const recoveryPreviewSampleExpandedCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expanded-count");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -3979,6 +3989,33 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    closeRecoveryPreviewSample(true);
   }
  });
+ function syncRecoveryPreviewSampleSummaries(state){
+  for(const [key,{details,excerpt}] of state.summaries){
+   if(details.open)state.expanded.add(key);
+   else state.expanded.delete(key);
+   excerpt.hidden=details.open;
+  }
+  if(recoveryPreviewSampleExpandedCount){
+   const total=state.matches.length;
+   const count=state.matches.filter(entry=>state.expanded.has(entry.key)).length;
+   const text=total?"펼친 예시 요약 "+count+" / "+total+"건":"";
+   if(recoveryPreviewSampleExpandedCount.textContent!==text)recoveryPreviewSampleExpandedCount.textContent=text;
+  }
+ }
+ for(const [button,open] of [[recoveryPreviewSampleExpand,true],[recoveryPreviewSampleCollapse,false]]){
+  button?.addEventListener("click",()=>{
+   const state=pendingRecoveryPreview?.suggestionSample;
+   if(!state||button.disabled)return;
+   const keys=recoveryPreviewSampleSummaryScope?.value==="matches"?state.matches.map(({key})=>key):state.summaries.keys();
+   for(const key of keys){
+    if(open)state.expanded.add(key);
+    else state.expanded.delete(key);
+    const visible=state.summaries.get(key);
+    if(visible)visible.details.open=open;
+   }
+   syncRecoveryPreviewSampleSummaries(state);
+  });
+ }
  function renderRecoveryPreviewSample(retainedKey){
   const state=pendingRecoveryPreview.suggestionSample;
   const {label,results,apply,facetOptions,expanded,summaries}=state;
@@ -4045,6 +4082,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const {page}=state;
   state.actions=new Map();
   if(recoveryPreviewSampleOpenSummary)recoveryPreviewSampleOpenSummary.disabled=!matches.length;
+  if(recoveryPreviewSampleExpand)recoveryPreviewSampleExpand.disabled=!matches.length;
+  if(recoveryPreviewSampleCollapse)recoveryPreviewSampleCollapse.disabled=!matches.length;
   if(recoveryPreviewSamplePicker){
    const options=document.createDocumentFragment();
    for(const [index,entry] of matches.entries()){
@@ -4097,13 +4136,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    details.open=expanded.has(entry.key);
    excerpt.hidden=details.open;
    summaries.set(entry.key,{details,heading,excerpt});
-   details.addEventListener("toggle",()=>{excerpt.hidden=details.open});
+   details.addEventListener("toggle",()=>{
+    if(pendingRecoveryPreview?.suggestionSample===state&&state.summaries.get(entry.key)?.details===details){
+     syncRecoveryPreviewSampleSummaries(state);
+    }
+   });
    heading.addEventListener("keydown",event=>{
     if(event.key!=="Escape"||event.isComposing||!details.open)return;
     event.preventDefault();
     event.stopPropagation();
     details.open=false;
-    excerpt.hidden=false;
+    syncRecoveryPreviewSampleSummaries(state);
    });
    const jump=document.createElement("button");
    jump.type="button";
@@ -4141,6 +4184,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    row.append(title,excerpt,details,jump,context);
    return row;
   }));
+  syncRecoveryPreviewSampleSummaries(state);
   const range=sample.length?"발언 "+(start+1)+"–"+(start+sample.length)+" / "+matches.length+"건":"일치 발언 0건";
   const total=words.length||facets.length||selectedOnly?" · 복구 예시 전체 "+results.length+"건":"";
   recoveryPreviewSampleStatus.textContent=label+" · "+range+total+(pageCount>1?" · "+(page+1)+"/"+pageCount+" 페이지":"");
@@ -4165,7 +4209,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const summary=state?.summaries.get(state.matches[state.resultIndex]?.key);
   if(!summary)return;
   summary.details.open=true;
-  summary.excerpt.hidden=true;
+  syncRecoveryPreviewSampleSummaries(state);
   summary.heading.focus({preventScroll:true});
   summary.heading.scrollIntoView({block:"nearest"});
  });
@@ -4219,6 +4263,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleSearch)recoveryPreviewSampleSearch.value="";
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
   if(recoveryPreviewSampleOrder)recoveryPreviewSampleOrder.value="default";
+  if(recoveryPreviewSampleSummaryScope)recoveryPreviewSampleSummaryScope.value="page";
   for(const {key,field} of recoveryPreviewSampleFacets){
    facetOptions.set(key,populateRecoveryPreviewFacet(results,key,field));
   }
