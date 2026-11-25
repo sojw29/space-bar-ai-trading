@@ -2283,15 +2283,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         </details>
         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-active" class="receipt-quick-presets" role="group" aria-label="적용 중인 미리보기 필터" hidden></div>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results" type="button" style="min-height:44px" disabled>현재 페이지 첫 발언으로 이동</button>
         <div class="receipt-quick-presets" role="group" aria-label="현재 페이지의 발언 요약">
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expand" type="button" style="min-height:44px" disabled>이 페이지 요약 펼치기</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-collapse" type="button" style="min-height:44px" disabled>이 페이지 요약 접기</button>
         </div>
         <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-rows"></ul>
-        <div class="receipt-quick-presets" role="group" aria-label="미리보기 페이지">
+        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-pagination" class="receipt-quick-presets" role="group" aria-label="미리보기 페이지" hidden>
          <label>페이지 이동 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-page" style="min-height:44px" disabled></select></label>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-first" type="button" style="min-height:44px" disabled>첫 페이지</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-prev" type="button" style="min-height:44px" disabled>이전 발언 묶음</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-next" type="button" style="min-height:44px" disabled>다음 발언 묶음</button>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-last" type="button" style="min-height:44px" disabled>마지막 페이지</button>
         </div>
         <div class="receipt-quick-presets">
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-apply" type="button" style="min-height:44px">복구 조건 적용</button>
@@ -3527,6 +3530,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    field.value="";
   }
  }
+ const recoveryPreviewPagination=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-pagination");
+ const recoveryPreviewFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-first");
+ const recoveryPreviewLast=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-last");
+ const recoveryPreviewJumpResults=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3538,11 +3545,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  recoveryPreviewScope?.addEventListener("change",updateRecoveryPreviewSearch);
  for(const {field} of recoveryPreviewFacets)field.addEventListener("change",updateRecoveryPreviewSearch);
  recoveryPreviewSearch?.addEventListener("keydown",event=>{
-  const first=pendingRecoveryPreview?.firstAction;
-  if(event.key==="Enter"&&!event.isComposing&&first){
+  if(event.key==="Enter"&&!event.isComposing&&pendingRecoveryPreview?.firstAction){
    event.preventDefault();
-   first.focus({preventScroll:true});
-   first.scrollIntoView({block:"nearest"});
+   focusRecoveryPreviewFirstResult();
   }
  });
  recoveryPreviewSelected?.addEventListener("change",updateRecoveryPreviewSearch);
@@ -3574,20 +3579,30 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    dismissReceiptQuickSourceRecoveryPreview();
   }
  });
- for(const [button,step] of [[recoveryPreviewPrev,-1],[recoveryPreviewNext,1]]){
+ function focusRecoveryPreviewFirstResult(){
+  const first=pendingRecoveryPreview?.firstAction;
+  first?.focus({preventScroll:true});
+  first?.scrollIntoView({block:"nearest"});
+ }
+ function goToRecoveryPreviewPage(page){
+  if(!pendingRecoveryPreview||!Number.isInteger(page)||page<0||page>=pendingRecoveryPreview.pageCount)return;
+  pendingRecoveryPreview.page=page;
+  renderReceiptQuickSourceRecoveryPreview();
+  focusRecoveryPreviewFirstResult();
+ }
+ recoveryPreviewJumpResults?.addEventListener("click",focusRecoveryPreviewFirstResult);
+ for(const [button,target] of [
+  [recoveryPreviewFirst,()=>0],
+  [recoveryPreviewPrev,({page})=>page-1],
+  [recoveryPreviewNext,({page})=>page+1],
+  [recoveryPreviewLast,({pageCount})=>pageCount-1],
+ ]){
   button?.addEventListener("click",()=>{
-   if(button.disabled||!pendingRecoveryPreview)return;
-   pendingRecoveryPreview.page+=step;
-   renderReceiptQuickSourceRecoveryPreview();
-   const first=pendingRecoveryPreview.firstAction;
-   first?.focus({preventScroll:true});
-   first?.scrollIntoView({block:"nearest"});
+   if(!button.disabled&&pendingRecoveryPreview)goToRecoveryPreviewPage(target(pendingRecoveryPreview));
   });
  }
  recoveryPreviewPage?.addEventListener("change",()=>{
-  if(!pendingRecoveryPreview||recoveryPreviewPage.disabled)return;
-  pendingRecoveryPreview.page=Number(recoveryPreviewPage.value);
-  renderReceiptQuickSourceRecoveryPreview();
+  if(!recoveryPreviewPage.disabled)goToRecoveryPreviewPage(Number(recoveryPreviewPage.value));
  });
  for(const [button,open] of [[recoveryPreviewExpand,true],[recoveryPreviewCollapse,false]]){
   button?.addEventListener("click",()=>{
@@ -3661,6 +3676,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const pattern=alternatives.length?new RegExp(alternatives.join("|"),"gi"):null;
   pendingRecoveryPreview.firstAction=null;
   const pageCount=Math.ceil(matches.length/recoveryPreviewPageSize);
+  pendingRecoveryPreview.pageCount=pageCount;
+  if(recoveryPreviewPagination)recoveryPreviewPagination.hidden=pageCount<2;
+  if(recoveryPreviewFirst)recoveryPreviewFirst.disabled=page===0;
+  if(recoveryPreviewLast)recoveryPreviewLast.disabled=page+1>=pageCount;
+  if(recoveryPreviewJumpResults)recoveryPreviewJumpResults.disabled=!matches.length;
   if(recoveryPreviewPage){
    recoveryPreviewPage.replaceChildren(...Array.from({length:pageCount},(_,index)=>{
     const option=document.createElement("option");
