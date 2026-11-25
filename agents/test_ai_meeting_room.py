@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt','occurrence-count','excerpt-control','hide-excerpts','empty-actions','recovery-status','undo-recovery','redo-recovery','recovery-preview','recovery-preview-status','recovery-preview-rows','recovery-preview-apply','recovery-preview-close','recovery-preview-prev','recovery-preview-next']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt','occurrence-count','excerpt-control','hide-excerpts','empty-actions','recovery-status','undo-recovery','redo-recovery','recovery-preview','recovery-preview-status','recovery-preview-rows','recovery-preview-apply','recovery-preview-close','recovery-preview-prev','recovery-preview-next','recovery-preview-search','recovery-preview-clear']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -1268,7 +1268,20 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeType('recovery-preview-next').disabled,true);
    assert.match(sourceChangeType('recovery-preview-rows').children[0].children[0].textContent,/COMMANDER/);
    assert.ok(sourceChangeType('recovery-preview-rows').children[0].children[1].textContent);
-   sourceChangeType('recovery-preview-close').click();
+   const peekSearch=sourceChangeType('recovery-preview-search');
+   const peekSummary=sourceChangeType('recovery-preview-rows').children[0].children[2];
+   peekSummary.open=true;
+   peekSummary.toggle();
+   peekSearch.value='no preview results';
+   peekSearch.input();
+   assert.match(sourceChangeType('recovery-preview-status').textContent,/일치 발언 0건 · 전체 1건/);
+   assert.equal(sourceChangeType('recovery-preview-rows').children.length,0);
+   assert.equal(sourceChangeType('search').value,'no combined matches');
+   sourceChangeType('recovery-preview-clear').click();
+   assert.equal(peekSearch.value,'');
+   assert.equal(peekSearch.focused,true);
+   assert.equal(sourceChangeType('recovery-preview-rows').children[0].children[2].open,true);
+   sourceChangeType('recovery-preview').keydown({key:'Escape',preventDefault(){}});
    assert.equal(sourceChangeType('recovery-preview').hidden,true);
    assert.equal(combinedPreview.focused,true);
    combinedPreview.click();
