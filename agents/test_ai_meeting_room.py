@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt','occurrence-count']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt','occurrence-count','excerpt-control','hide-excerpts']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -969,6 +969,14 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(matchedSummary.children[0].textContent,/검색어 포함 \(\d+곳\)/);
    const sourceExcerpt=sourceChangeRows()[0].children[3];
    assert.equal(sourceExcerpt.hidden,false);
+   assert.equal(sourceChangeType('excerpt-control').hidden,false);
+   sourceChangeType('hide-excerpts').checked=true;
+   sourceChangeType('hide-excerpts').change();
+   assert.equal(sourceExcerpt.hidden,true);
+   assert.equal(sourceChangeRows()[0].children[4].hidden,true);
+   sourceChangeType('hide-excerpts').checked=false;
+   sourceChangeType('hide-excerpts').change();
+   assert.equal(sourceExcerpt.hidden,false);
    assert.ok(sourceExcerpt.children.some(mark=>mark.textContent===summarySearchTerm));
    sourceChangeRows()[0].children[4].click();
    assert.equal(matchedSummary.open,true);
@@ -1068,6 +1076,23 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeType('open-match').focused,true);
    sourceChangeType('previous-match').click();
    assert.equal(matchedSummary.open,true);
+   sourceChangeType('search-scope').value='metadata';
+   summarySearchInput.value='M07';
+   sourceChangeType('search-scope').change();
+   assert.equal(sourceChangeRows().length,1);
+   assert.equal(sourceChangeType('match-navigation').hidden,true);
+   sourceChangeType('search-scope').value='phrase';
+   summarySearchInput.value=sourceSummary.split(/\s+/).slice(0,2).join(' ');
+   sourceChangeType('search-scope').change();
+   assert.equal(sourceChangeRows().length,1);
+   summarySearchInput.value += ' no exact phrase';
+   summarySearchInput.input();
+   assert.equal(sourceChangeRows().length,0);
+   summarySearchInput.value=summarySearchTerm;
+   summarySearchInput.input();
+   sourceChangeType('order').value='occurrences';
+   sourceChangeType('order').change();
+   assert.equal(sourceChangeRows().length,1);
    sourceChangeType('search-scope').value='summary';
    sourceChangeType('search-scope').change();
    assert.equal(sourceChangeRows().length,1);
@@ -1306,6 +1331,11 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeRows()[0].children[1].children[0].attrs['aria-current'],'true');
    assert.ok(sourceChangeRows()[0].children[1].children[1].children.some(node=>node.focused&&node.attrs?.['aria-current']==='true'));
    assert.match(sourceChangeRows()[0].textContent,/마지막으로 읽음/);
+   sourceChangeType('order').value='last-read';
+   sourceChangeType('order').change();
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('order').value='agent';
+   sourceChangeType('order').change();
    assert.equal(sourceChangeType('jump-last').hidden,false);
    sourceChangeType('jump-last').click();
    assert.equal(sourceChangeRows()[0].scrolled,true);
