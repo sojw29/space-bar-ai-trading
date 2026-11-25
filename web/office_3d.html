@@ -65,6 +65,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 #meeting-progress-stages:not([hidden]){display:flex}
 .receipt-quick-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:6px}
+#ai-meeting-progress-receipt-preset-preview-projected-rows summary[aria-current="true"]{background:#1b5265;border-radius:4px}
 .receipt-quick-presets button[aria-pressed="true"],
 #ai-meeting-progress-receipt-preset-preview-projected-rows button[aria-pressed="true"]{border-color:#87defa;background:#1b5265}
 </style>
@@ -2255,10 +2256,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-list-open-last" type="button" style="min-height:44px">마지막 결과</button>
         <label>검색 결과 선택 <select id="ai-meeting-progress-receipt-preset-preview-list-picker" style="min-height:44px;max-width:100%"></select></label>
         <button id="ai-meeting-progress-receipt-preset-preview-list-back-search" type="button" style="min-height:44px">검색창으로 이동</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-reserve-current" type="button" style="min-height:44px" disabled>현재 결과를 적용 후 이동 대상으로 선택</button>
         <p id="ai-meeting-progress-receipt-preset-preview-list-position" role="status"></p>
        </div>
        <button id="ai-meeting-progress-receipt-preset-preview-list-expand" type="button" style="min-height:44px" disabled>검색 결과 펼치기</button>
        <button id="ai-meeting-progress-receipt-preset-preview-list-collapse" type="button" style="min-height:44px" disabled>검색 결과 접기</button>
+       <button id="ai-meeting-progress-receipt-preset-preview-list-open-jump" type="button" style="min-height:44px" hidden>선택한 이동 발언 열기</button>
+       <p id="ai-meeting-progress-receipt-preset-preview-list-hidden-jump" role="status" hidden>선택한 이동 발언이 현재 미리보기 목록 조건에 가려져 있습니다.</p>
        <ol id="ai-meeting-progress-receipt-preset-preview-projected-rows"></ol>
       </details>
       <label>적용 후 이동 <select id="ai-meeting-progress-receipt-preset-preview-jump" style="min-height:44px;max-width:100%"></select></label>
@@ -3101,6 +3105,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickListNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-navigation");
  const receiptQuickListPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-picker");
  const receiptQuickListBackSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-back-search");
+ const receiptQuickListReserveCurrent=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-reserve-current");
+ const receiptQuickListOpenJump=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-open-jump");
+ const receiptQuickListHiddenJump=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-hidden-jump");
  const receiptQuickListPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-position");
  const receiptQuickListNavigationButtons=Object.fromEntries(["first","prev","next","last"].map(action=>
   [action,document.getElementById("ai-meeting-progress-receipt-preset-preview-list-open-"+action)]));
@@ -3267,6 +3274,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    label?"적용 후 이동 · "+label:"";
   if(receiptQuickPreviewJumpClear)receiptQuickPreviewJumpClear.hidden=!value;
   for(const [target,button] of receiptQuickJumpButtons)button.setAttribute("aria-pressed",String(target===value));
+  renderReceiptQuickListJumpActions();
  }
  receiptQuickPreviewJumpClear?.addEventListener("click",()=>{
   if(!receiptQuickPreviewJump)return;
@@ -3514,7 +3522,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const index=keys.indexOf(receiptQuickListCurrentKey);
   if(receiptQuickListNavigation)receiptQuickListNavigation.hidden=!hasQuery||!keys.length;
   if(receiptQuickListPosition){
-   const position=hasQuery?(index>=0?(index+1)+" / "+keys.length+"번째 결과":keys.length+"건 검색됨"):"";
+   const position=hasQuery?(index>=0?(index+1)+" / "+keys.length+"번째 결과 · "+
+    rows.get(receiptQuickListCurrentKey).label:keys.length+"건 검색됨"):"";
    if(receiptQuickListPosition.textContent!==position)receiptQuickListPosition.textContent=position;
   }
   const disabled={
@@ -3537,15 +3546,44 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }):[]));
    receiptQuickListPicker.value=receiptQuickListCurrentKey??"";
   }
+  renderReceiptQuickListJumpActions();
  }
- function openReceiptQuickListResult(key){
-  if(receiptQuickListNavigation?.hidden)return;
+ function quickReservedStatementKey(){
+  const value=receiptQuickPreviewJump?.value;
+  return value?.startsWith("statement:")?value.slice("statement:".length):null;
+ }
+ function renderReceiptQuickListJumpActions(){
+  const reserved=quickReservedStatementKey();
+  const rows=receiptQuickPreviewLists.projected.rendered;
+  const visible=rows.has(reserved);
+  if(receiptQuickListReserveCurrent){
+   const current=rows.has(receiptQuickListCurrentKey);
+   receiptQuickListReserveCurrent.disabled=!current;
+   receiptQuickListReserveCurrent.setAttribute("aria-pressed",String(current&&reserved===receiptQuickListCurrentKey));
+  }
+  if(receiptQuickListOpenJump)receiptQuickListOpenJump.hidden=!visible;
+  if(receiptQuickListHiddenJump)receiptQuickListHiddenJump.hidden=!reserved||visible;
+ }
+ receiptQuickListReserveCurrent?.addEventListener("click",()=>{
+  const key=receiptQuickListCurrentKey;
+  const target=receiptQuickPreviewLists.projected.rendered.get(key);
+  if(!target||!receiptQuickPreviewJump)return;
+  const selected=quickReservedStatementKey()!==key;
+  receiptQuickPreviewJump.value=selected?"statement:"+key:"";
+  showReceiptQuickJumpStatus(selected?target.label:"");
+ });
+ receiptQuickListOpenJump?.addEventListener("click",()=>{
+  openReceiptQuickListResult(quickReservedStatementKey(),false);
+ });
+ function openReceiptQuickListResult(key,requireSearch=true){
+  const hasQuery=!receiptQuickListNavigation?.hidden;
+  if(requireSearch&&!hasQuery)return;
   const target=receiptQuickPreviewLists.projected.rendered.get(key);
   if(!target)return;
   receiptQuickListCurrentKey=key;
   target.details.open=true;
   target.heading.focus();
-  renderReceiptQuickListNavigation(true);
+  renderReceiptQuickListNavigation(hasQuery);
  }
  receiptQuickListPicker?.addEventListener("change",()=>{
   const key=receiptQuickListPicker.value;

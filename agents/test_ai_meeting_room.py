@@ -35,9 +35,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
+  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','reserve-current','open-jump','hidden-jump','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
-    children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
+    children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
   }
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
@@ -905,20 +905,34 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const secondResultKey=searchPicker.children[2].value;
    searchPicker.value=secondResultKey;searchPicker.change();
    assert.equal(projectedDetailsRows()[1].children[0].focused,true);
-   assert.equal(listFilter('position').textContent,'2 / 2번째 결과');
+   assert.match(listFilter('position').textContent,/^2 \/ 2번째 결과 · /);
    assert.equal(searchPicker.value,secondResultKey);
+   assert.match(listFilter('position').textContent,/이전 .*COMMANDER/);
+   listFilter('reserve-current').click();
+   assert.equal(quickPreviewJump.value,'statement:'+secondResultKey);
+   assert.equal(listFilter('reserve-current').attrs['aria-pressed'],'true');
+   assert.equal(listFilter('open-jump').hidden,false);
+   listFilter('side').value='later';listFilter('side').change();
+   assert.equal(listFilter('open-jump').hidden,true);
+   assert.equal(listFilter('hidden-jump').hidden,false);
+   assert.equal(quickPreviewJump.value,'statement:'+secondResultKey);
+   listFilter('side').value='all';listFilter('side').change();
+   listFilter('open-jump').click();
+   assert.equal(searchPicker.value,secondResultKey);
+   listFilter('reserve-current').click();
+   assert.equal(quickPreviewJump.value,'');
    projectedDetailsRows()[0].children[0].click();
    assert.equal(searchPicker.value,searchPicker.children[1].value);
-   assert.equal(listFilter('position').textContent,'1 / 2번째 결과');
+   assert.match(listFilter('position').textContent,/^1 \/ 2번째 결과 · /);
    listFilter('search').focused=false;listFilter('back-search').click();
    assert.equal(listFilter('search').focused,true);
    listFilter('open-first').click();
    assert.equal(projectedDetailsRows()[0].open,true);
    assert.equal(projectedDetailsRows()[0].children[0].focused,true);
-   assert.equal(listFilter('position').textContent,'1 / 2번째 결과');
+   assert.match(listFilter('position').textContent,/^1 \/ 2번째 결과 · /);
    assert.equal(projectedDetailsRows()[0].children[0].attrs['aria-current'],'true');
    listFilter('open-next').click();
-   assert.equal(listFilter('position').textContent,'2 / 2번째 결과');
+   assert.match(listFilter('position').textContent,/^2 \/ 2번째 결과 · /);
    assert.equal(projectedDetailsRows()[1].open,true);
    assert.equal(listFilter('open-next').disabled,true);
    listFilter('open-prev').click();
@@ -928,12 +942,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const currentResult=projectedDetailsRows()[1].children[0].children[0];
    receiptOrder.value='default';receiptOrder.change();
    assert.equal(projectedDetailsRows()[0].children[0].children[0],currentResult);
-   assert.equal(listFilter('position').textContent,'1 / 2번째 결과');
+   assert.match(listFilter('position').textContent,/^1 \/ 2번째 결과 · /);
    assert.equal(searchPicker.value,secondResultKey);
    assert.equal(searchPicker.children[1].value,secondResultKey);
    receiptOrder.value='later';receiptOrder.change();
    assert.equal(projectedDetailsRows()[1].children[0].children[0],currentResult);
-   assert.equal(listFilter('position').textContent,'2 / 2번째 결과');
+   assert.match(listFilter('position').textContent,/^2 \/ 2번째 결과 · /);
    projectedDetailsRows().forEach(details=>{details.open=false});
    listFilter('scope').value='agent';listFilter('scope').change();
    assert.equal(projectedRows().length,0);
