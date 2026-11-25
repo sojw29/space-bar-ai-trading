@@ -2237,6 +2237,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-match-navigation" class="receipt-quick-presets" role="group" aria-label="검색어가 있는 요약 이동" hidden>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-previous-match" type="button" style="min-height:44px">이전 일치 요약</button>
         <span id="ai-meeting-progress-receipt-preset-preview-source-changes-match-count" role="status"></span>
+        <span id="ai-meeting-progress-receipt-preset-preview-source-changes-occurrence-count" role="status"></span>
         <label>일치 요약 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-match-picker" style="min-height:44px"></select></label>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-next-match" type="button" style="min-height:44px">다음 일치 요약</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-open-match" type="button" style="min-height:44px" disabled>현재 일치 발언 원문 열기</button>
@@ -3262,6 +3263,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceCollapseMatches=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-collapse-matches");
  const receiptQuickSourceMatchNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-navigation");
  const receiptQuickSourceMatchCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-count");
+ const receiptQuickSourceOccurrenceCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-occurrence-count");
  const receiptQuickSourceOpenMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-open-match");
  const receiptQuickSourceMatchPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-picker");
  receiptQuickSourceMatchPicker?.addEventListener("change",()=>{
@@ -3852,6 +3854,42 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickSourceSearchScope)receiptQuickSourceSearchScope.value="all";
   renderReceiptQuickSourceChangeFilter();
  }
+ function receiptQuickSourceSummaryRanges(entry,pattern){
+  if(!pattern)return [];
+  const {summary,summarySearchText}=entry;
+  const matches=[...summarySearchText.matchAll(pattern)];
+  if(!matches.length)return [];
+  if(summary.normalize("NFKC")===summary&&summarySearchText.length===summary.length){
+   return matches.map(match=>[match.index,match.index+match[0].length]);
+  }
+  const offsets=[];
+  for(const {segment,index} of new Intl.Segmenter(undefined,{granularity:"grapheme"}).segment(summary)){
+   const length=segment.normalize("NFKC").toLowerCase().length;
+   for(let i=0;i<length;i++)offsets.push([index,index+segment.length]);
+  }
+  const ranges=[];
+  for(const match of matches){
+   const start=offsets[match.index]?.[0],end=offsets[match.index+match[0].length-1]?.[1];
+   if(start===undefined||end===undefined)continue;
+   const previous=ranges.at(-1);
+   if(previous&&start<previous[1])previous[1]=Math.max(previous[1],end);
+   else ranges.push([start,end]);
+  }
+  return ranges;
+ }
+ function receiptQuickSourceSummaryParts(summary,ranges,start=0,end=summary.length){
+  const parts=[];
+  let cursor=start;
+  for(const [from,to] of ranges){
+   if(to<=start||from>=end)continue;
+   const mark=document.createElement("mark");
+   mark.textContent=summary.slice(Math.max(start,from),Math.min(end,to));
+   parts.push(summary.slice(cursor,Math.max(start,from)),mark);
+   cursor=Math.min(end,to);
+  }
+  parts.push(summary.slice(cursor,end));
+  return parts;
+ }
  function renderReceiptQuickSourceChangeFilter(){
   const total=receiptQuickSourceChangeRows.length;
   const words=receiptQuickSourceSearchWords();
@@ -3890,19 +3928,32 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const alternatives=[...new Set(words)].sort((a,b)=>b.length-a.length)
    .map(word=>word.replace(/[.*+?^\${}()|[\]\\]/g,"\\$&"));
   const pattern=alternatives.length?new RegExp(alternatives.join("|"),"gi"):null;
+  let occurrences=0;
   for(const entry of visible){
-   entry.summaryMatches=words.some(word=>entry.summarySearchText.includes(word));
-   entry.summaryHeading.textContent=entry.summaryMatches?"발언 요약 · 검색어 포함":"발언 요약";
+   const ranges=receiptQuickSourceSummaryRanges(entry,pattern);
+   entry.summaryMatches=ranges.length>0;
+   occurrences+=ranges.length;
+   entry.summaryHeading.textContent=entry.summaryMatches?"발언 요약 · 검색어 포함 ("+ranges.length+"곳)":"발언 요약";
    entry.summaryText.textContent=entry.summary;
-   if(entry.summaryMatches){
-    const parts=receiptQuickMarkedText(entry.summary,pattern);
-    if(parts.length>1){
-     entry.summaryText.textContent="";
-     entry.summaryText.append(...parts);
-    }
+   entry.summaryExcerpt.hidden=!ranges.length;
+   entry.summaryExcerpt.replaceChildren();
+   entry.firstSummaryMark=null;
+   entry.summaryJump.hidden=!ranges.length;
+   if(ranges.length){
+    const parts=receiptQuickSourceSummaryParts(entry.summary,ranges);
+    entry.firstSummaryMark=parts[1];
+    entry.summaryText.textContent="";
+    entry.summaryText.append(...parts);
+    const start=Math.max(0,ranges[0][0]-24);
+    const end=Math.min(entry.summary.length,ranges[0][1]+40);
+    entry.summaryExcerpt.replaceChildren(start?"…":"",...receiptQuickSourceSummaryParts(entry.summary,ranges,start,end),
+     end<entry.summary.length?"…":"");
    }
   }
   const matches=visible.filter(entry=>entry.summaryMatches);
+  if(receiptQuickSourceOccurrenceCount){
+   receiptQuickSourceOccurrenceCount.textContent=occurrences?"검색어 표시 "+occurrences+"곳":"";
+  }
   if(receiptQuickSourceExpandMatches)receiptQuickSourceExpandMatches.hidden=!matches.length;
   if(receiptQuickSourceCollapseMatches)receiptQuickSourceCollapseMatches.hidden=!matches.length;
   receiptQuickPreviewSourceChangesRows?.replaceChildren(...visible.map(({row})=>row));
@@ -4035,12 +4086,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const selectionLabel=document.createElement("label");
     selectionLabel.append(selection," 선택");
     row.append(selectionLabel);
+    const excerpt=document.createElement("p");
+    excerpt.hidden=true;
+    row.append(excerpt);
+    const summaryJump=document.createElement("button");
+    summaryJump.type="button";
+    summaryJump.style.minHeight="44px";
+    summaryJump.textContent="첫 검색어로 이동";
+    summaryJump.hidden=true;
+    summaryJump.addEventListener("click",()=>{
+     if(!change.firstSummaryMark)return;
+     change.firstSummaryMark.tabIndex=-1;
+     change.firstSummaryMark.focus({preventScroll:true});
+     change.firstSummaryMark.scrollIntoView({block:"nearest"});
+    });
+    details.append(summaryJump);
     const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
     selection.checked=changeView?.selected.has(key)??false;
     details.open=changeView?.expanded.has(key)??false;
     const summarySearchText=summary.normalize("NFKC").toLowerCase();
     const change={key,row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,
-     summary,summaryHeading:heading,summaryText:text,summarySearchText,searchText};
+     summary,summaryHeading:heading,summaryText:text,summaryExcerpt:excerpt,summaryJump,summarySearchText,searchText};
     if(changeView?.currentKey===key)currentReceiptQuickSourceSelection=change;
     details.addEventListener("toggle",()=>{
      if(currentReceiptQuickSourceSelection===change&&visibleReceiptQuickSourceChanges.includes(change)){
