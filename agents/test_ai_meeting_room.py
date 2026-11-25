@@ -1090,6 +1090,17 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeRows().length,0);
    summarySearchInput.value=summarySearchTerm;
    summarySearchInput.input();
+   const phraseTerms=sourceSummary.split(/\s+/).slice(0,2);
+   summarySearchInput.value=phraseTerms.reverse().join(' ');
+   summarySearchInput.input();
+   assert.equal(sourceChangeRows().length,0);
+   const relaxPhrase=sourceChangeType('empty-actions').children.find(button=>button.textContent.startsWith('요약에서 단어별로'));
+   assert.ok(relaxPhrase);
+   relaxPhrase.click();
+   assert.equal(sourceChangeType('search-scope').value,'summary');
+   assert.equal(sourceChangeRows().length,1);
+   summarySearchInput.value=summarySearchTerm;
+   summarySearchInput.input();
    sourceChangeType('order').value='occurrences';
    sourceChangeType('order').change();
    assert.equal(sourceChangeRows().length,1);
@@ -1243,9 +1254,21 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeRows().length,0);
    assert.equal(sourceChangeType('count').textContent,'표시 0건 / 전체 1건');
    assert.equal(sourceChangeType('empty-reset').hidden,false);
-   const loosenDetailedFilters=sourceChangeType('empty-actions').children.find(button=>button.textContent.startsWith('상세 필터'));
+   const loosenDetailedFilters=sourceChangeType('empty-actions').children.find(button=>button.textContent.startsWith('회의 필터만 해제'));
    assert.ok(loosenDetailedFilters);
    loosenDetailedFilters.click();
+   for(const [filter,value,label] of [
+    ['agent','ATLAS','에이전트'],['phase','ANALYSIS','회의 단계'],['verdict','INSUFFICIENT_DATA','발언 판정'],
+   ]){
+    sourceChangeType(filter).value=value;
+    sourceChangeType(filter).change();
+    assert.equal(sourceChangeRows().length,0);
+    const recoverFacet=sourceChangeType('empty-actions').children.find(button=>button.textContent.startsWith(label+' 필터만 해제'));
+    assert.ok(recoverFacet,label);
+    recoverFacet.click();
+    assert.equal(sourceChangeType(filter).value,'');
+    assert.equal(sourceChangeRows().length,1);
+   }
    assert.equal(sourceChangeType('period').value,'all');
    assert.equal(sourceChangeRows().length,1);
    sourceChangeType('period').value='earlier';
