@@ -35,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
+  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -897,13 +897,32 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(projectedRows().length,2);
    const markedText=node=>node.children.filter(part=>typeof part!=='string').map(mark=>mark.textContent);
    assert.deepEqual(markedText(projectedDetailsRows()[0].children[0]),['M07']);
-   assert.equal(listFilter('open-first').hidden,false);
+   assert.equal(listFilter('navigation').hidden,false);
+   assert.equal(listFilter('open-prev').disabled,true);
    listFilter('open-first').click();
    assert.equal(projectedDetailsRows()[0].open,true);
    assert.equal(projectedDetailsRows()[0].children[0].focused,true);
-   projectedDetailsRows()[0].open=false;
+   assert.equal(listFilter('position').textContent,'1 / 2번째 결과');
+   assert.equal(projectedDetailsRows()[0].children[0].attrs['aria-current'],'true');
+   listFilter('open-next').click();
+   assert.equal(listFilter('position').textContent,'2 / 2번째 결과');
+   assert.equal(projectedDetailsRows()[1].open,true);
+   assert.equal(listFilter('open-next').disabled,true);
+   listFilter('open-prev').click();
+   assert.equal(projectedDetailsRows()[0].children[0].attrs['aria-current'],'true');
+   listFilter('open-last').click();
+   assert.equal(projectedDetailsRows()[1].children[0].attrs['aria-current'],'true');
+   const currentResult=projectedDetailsRows()[1].children[0].children[0];
+   receiptOrder.value='default';receiptOrder.change();
+   assert.equal(projectedDetailsRows()[0].children[0].children[0],currentResult);
+   assert.equal(listFilter('position').textContent,'1 / 2번째 결과');
+   receiptOrder.value='later';receiptOrder.change();
+   assert.equal(projectedDetailsRows()[1].children[0].children[0],currentResult);
+   assert.equal(listFilter('position').textContent,'2 / 2번째 결과');
+   projectedDetailsRows().forEach(details=>{details.open=false});
    listFilter('scope').value='agent';listFilter('scope').change();
    assert.equal(projectedRows().length,0);
+   assert.equal(listFilter('navigation').hidden,true);
    assert.deepEqual(recoveryButtons().map(button=>button.textContent),[
     '검색 m07 해제 · 2건 표시','에이전트 이름만 해제 · 2건 표시',
    ]);
