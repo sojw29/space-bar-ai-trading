@@ -2252,6 +2252,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        </div>
        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-jump-results" type="button" style="min-height:44px" disabled>첫 결과로 이동</button>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-count" role="status"></p>
+       <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-status" role="status" hidden></p>
+       <button id="ai-meeting-progress-receipt-preset-preview-source-changes-undo-recovery" type="button" style="min-height:44px" hidden>이전 검색 조건으로 돌아가기</button>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-last-status" role="status" hidden></p>
        <div class="receipt-quick-presets">
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-jump-last" type="button" style="min-height:44px" hidden>마지막으로 읽은 발언으로 이동</button>
@@ -3451,6 +3453,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceChangeClearSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-clear-search");
  const receiptQuickSourceChangeEmptyReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty-reset");
  const receiptQuickSourceEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty-actions");
+ const receiptQuickSourceRecoveryStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-status");
+ const receiptQuickSourceUndoRecovery=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-undo-recovery");
+ let receiptQuickSourceRecovery=null;
+ receiptQuickSourceUndoRecovery?.addEventListener("click",()=>{
+  if(!receiptQuickSourceRecovery)return;
+  const {fields,type,selectedOnly}=receiptQuickSourceRecovery;
+  receiptQuickSourceRecovery=null;
+  for(const [field,value] of fields)field.value=value;
+  receiptQuickSourceChangeFilter=type;
+  if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=selectedOnly;
+  renderReceiptQuickSourceChangeFilter();
+  receiptQuickSourceChangeSearch?.focus();
+ });
  function renderReceiptQuickSourceEmptyActions(show,words,facets){
   if(!receiptQuickSourceEmptyActions)return;
   const actions=[];
@@ -3476,24 +3491,44 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     ["상세 필터 모두 해제",facets.length>1,{facets:[]},
      ()=>{for(const [field,,all] of facets)field.value=all}],
    ];
-   for(const [label,available,overrides,apply] of candidates){
-    if(!available)continue;
+   const countResults=overrides=>{
     const settings={scope,type,selectedOnly,words,facets,...overrides};
-    const count=receiptQuickSourceChangeRows.filter(entry=>
+    return receiptQuickSourceChangeRows.filter(entry=>
      settings.facets.every(([field,property])=>field.value===entry[property])&&
      receiptQuickSourceSearchMatches(entry,settings.words,settings.scope)&&
      (settings.type==="all"||settings.type===entry.type)&&(!settings.selectedOnly||entry.selection.checked)).length;
-    if(!count)continue;
+   };
+   function addRecovery(label,count,apply){
     const button=document.createElement("button");
     button.type="button";
     button.style.minHeight="44px";
     button.textContent=label+" ("+count+"건)";
     button.addEventListener("click",()=>{
+     receiptQuickSourceRecovery={fields:receiptQuickSourceChangeFields(),type,selectedOnly,label,count};
      apply();
      renderReceiptQuickSourceChangeFilter();
      jumpToFirstReceiptQuickSourceResult();
     });
     actions.push(button);
+   }
+   const available=candidates.filter(([,enabled])=>enabled);
+   for(const [label,,overrides,apply] of available){
+    const count=countResults(overrides);
+    if(count)addRecovery(label,count,apply);
+   }
+   if(!actions.length){
+    const pairs=[];
+    for(const [index,[left,,a,applyLeft]] of available.entries()){
+     for(const [right,,b,applyRight] of available.slice(index+1)){
+      if(Object.keys(a).some(key=>key!=="facets"&&Object.hasOwn(b,key)))continue;
+      const overrides={...a,...b};
+      if(a.facets&&b.facets)overrides.facets=a.facets.filter(facet=>b.facets.includes(facet));
+      const count=countResults(overrides);
+      if(count)pairs.push({label:left+" + "+right,count,apply:()=>{applyLeft();applyRight()}});
+     }
+    }
+    pairs.sort((a,b)=>b.count-a.count);
+    for(const {label,count,apply} of pairs.slice(0,3))addRecovery(label,count,apply);
    }
   }
   receiptQuickSourceEmptyActions.hidden=!actions.length;
@@ -3907,6 +3942,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore,changeView));
  }
  function resetReceiptQuickSourceChangeControls(selectedOnly=false){
+  receiptQuickSourceRecovery=null;
   previousReceiptQuickSourceFilters=null;
   receiptQuickSourceChangeFilter="all";
   if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=selectedOnly;
@@ -4021,6 +4057,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const showEmpty=total>0&&visible.length===0;
   if(receiptQuickSourceChangesEmpty)receiptQuickSourceChangesEmpty.hidden=!showEmpty;
   renderReceiptQuickSourceEmptyActions(showEmpty,words,activeFacets);
+  const recovery=receiptQuickSourceRecovery;
+  if(receiptQuickSourceUndoRecovery)receiptQuickSourceUndoRecovery.hidden=!recovery;
+  if(receiptQuickSourceRecoveryStatus){
+   receiptQuickSourceRecoveryStatus.hidden=!recovery;
+   receiptQuickSourceRecoveryStatus.textContent=recovery?
+    "적용한 조건 · "+recovery.label+" · 복구 "+recovery.count+"건":"";
+  }
   if(receiptQuickSourceChangeEmptyReset)receiptQuickSourceChangeEmptyReset.hidden=!showEmpty;
   if(receiptQuickSourceChangeClearSearch)receiptQuickSourceChangeClearSearch.disabled=!receiptQuickSourceChangeSearch?.value;
   const highlightWords=receiptQuickSourceSearchScope?.value==="metadata"?[]:words;
