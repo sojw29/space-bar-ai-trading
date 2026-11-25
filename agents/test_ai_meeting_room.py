@@ -35,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
+  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -899,6 +899,19 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.deepEqual(markedText(projectedDetailsRows()[0].children[0]),['M07']);
    assert.equal(listFilter('navigation').hidden,false);
    assert.equal(listFilter('open-prev').disabled,true);
+   const searchPicker=listFilter('picker');
+   assert.equal(searchPicker.children.length,3);
+   assert.match(searchPicker.children[1].textContent,/1\. 이후 .*COMMANDER/);
+   const secondResultKey=searchPicker.children[2].value;
+   searchPicker.value=secondResultKey;searchPicker.change();
+   assert.equal(projectedDetailsRows()[1].children[0].focused,true);
+   assert.equal(listFilter('position').textContent,'2 / 2번째 결과');
+   assert.equal(searchPicker.value,secondResultKey);
+   projectedDetailsRows()[0].children[0].click();
+   assert.equal(searchPicker.value,searchPicker.children[1].value);
+   assert.equal(listFilter('position').textContent,'1 / 2번째 결과');
+   listFilter('search').focused=false;listFilter('back-search').click();
+   assert.equal(listFilter('search').focused,true);
    listFilter('open-first').click();
    assert.equal(projectedDetailsRows()[0].open,true);
    assert.equal(projectedDetailsRows()[0].children[0].focused,true);
@@ -916,6 +929,8 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    receiptOrder.value='default';receiptOrder.change();
    assert.equal(projectedDetailsRows()[0].children[0].children[0],currentResult);
    assert.equal(listFilter('position').textContent,'1 / 2번째 결과');
+   assert.equal(searchPicker.value,secondResultKey);
+   assert.equal(searchPicker.children[1].value,secondResultKey);
    receiptOrder.value='later';receiptOrder.change();
    assert.equal(projectedDetailsRows()[1].children[0].children[0],currentResult);
    assert.equal(listFilter('position').textContent,'2 / 2번째 결과');
