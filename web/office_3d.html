@@ -2241,6 +2241,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <div id="ai-meeting-progress-receipt-preset-preview-list-active" role="group" aria-label="적용 중인 미리보기 목록 조건" hidden></div>
        <button id="ai-meeting-progress-receipt-preset-preview-list-reset" type="button" style="min-height:44px" disabled>목록 조건 초기화</button>
        <p id="ai-meeting-progress-receipt-preset-preview-list-count" role="status"></p>
+       <div id="ai-meeting-progress-receipt-preset-preview-list-recovery" role="group" aria-label="검색 결과를 다시 표시할 조건" hidden></div>
        <button id="ai-meeting-progress-receipt-preset-preview-list-expand" type="button" style="min-height:44px" disabled>검색 결과 펼치기</button>
        <button id="ai-meeting-progress-receipt-preset-preview-list-collapse" type="button" style="min-height:44px" disabled>검색 결과 접기</button>
        <ol id="ai-meeting-progress-receipt-preset-preview-projected-rows"></ol>
@@ -3071,6 +3072,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickListMore=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more");
  const receiptQuickListMoreLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more-label");
  const receiptQuickListActive=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-active");
+ const receiptQuickListRecovery=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-recovery");
  const receiptQuickListReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-reset");
  const receiptQuickListExpansion=[
   [document.getElementById("ai-meeting-progress-receipt-preset-preview-list-expand"),true],
@@ -3304,22 +3306,51 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function renderReceiptQuickListFilters({search,side,agent,phase,verdict,state,selectedOnly},sort){
   const advanced=[
-   [side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),receiptQuickListFacets.side,"value","all"],
-   [agent!=="all"&&agent,receiptQuickListFacets.agent,"value","all"],
-   [receiptPhaseLabels[phase],receiptQuickListFacets.phase,"value","all"],
-   [labels[verdict],receiptQuickListFacets.verdict,"value","all"],
+   [side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),receiptQuickListFacets.side,"value","all","side"],
+   [agent!=="all"&&agent,receiptQuickListFacets.agent,"value","all","agent"],
+   [receiptPhaseLabels[phase],receiptQuickListFacets.phase,"value","all","phase"],
+   [labels[verdict],receiptQuickListFacets.verdict,"value","all","verdict"],
    [sort&&"정렬 "+sort.label,receiptQuickListOrder,"value","default"],
   ];
   const advancedCount=advanced.filter(([label,control])=>label&&control).length;
   if(receiptQuickListMoreLabel)receiptQuickListMoreLabel.textContent="목록 필터와 정렬 더 보기"+
    (advancedCount?" ("+advancedCount+"개 적용)":"");
-  if(!receiptQuickListActive)return;
-  renderReceiptFilterButtons(receiptQuickListActive,[
-   [search&&"검색 "+search,receiptQuickListSearch,"value",""],
-   [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),receiptQuickListState,"value","all"],
-   [selectedOnly&&"선택한 발언만",receiptQuickListSelected,"checked",false],
+  const conditions=[
+   [search&&"검색 "+search,receiptQuickListSearch,"value","","search"],
+   [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),receiptQuickListState,"value","all","state"],
+   [selectedOnly&&"선택한 발언만",receiptQuickListSelected,"checked",false,"selectedOnly"],
    ...advanced,
-  ],refreshReceiptQuickList,receiptQuickListSearch);
+  ];
+  if(receiptQuickListActive)renderReceiptFilterButtons(receiptQuickListActive,conditions,refreshReceiptQuickList,receiptQuickListSearch);
+  return conditions;
+ }
+ function renderReceiptQuickListRecovery(projected,filters,conditions){
+  if(!receiptQuickListRecovery)return false;
+  const suggestions=conditions
+   .filter(([label,control,,,key])=>label&&control&&key)
+   .map(([label,control,property,defaultValue,key])=>({
+    label,control,property,defaultValue,
+    count:visibleProgressReceiptEntries(projected,{...filters,[key]:defaultValue}).length,
+   }))
+   .filter(({count})=>count>0)
+   .sort((a,b)=>b.count-a.count);
+  receiptQuickListRecovery.hidden=suggestions.length===0;
+  receiptQuickListRecovery.replaceChildren(...suggestions.map(({label,control,property,defaultValue,count})=>{
+   const button=document.createElement("button");
+   button.type="button";
+   button.style.minHeight="44px";
+   button.style.maxWidth="100%";
+   button.style.overflowWrap="anywhere";
+   button.textContent=label+" 해제 · "+count+"건 표시";
+   button.addEventListener("click",()=>{
+    control[property]=defaultValue;
+    refreshReceiptQuickList();
+    const first=receiptQuickPreviewLists.projected.rendered.values().next().value;
+    (first?.heading??receiptQuickListSearch)?.focus();
+   });
+   return button;
+  }));
+  return suggestions.length>0;
  }
  function renderProjectedReceiptQuickList(projected){
   const facets=Object.fromEntries(Object.entries(receiptQuickListFacets).map(([name,select])=>[name,select?.value||"all"]));
@@ -3332,12 +3363,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const matching=visibleProgressReceiptEntries(projected,listFilters);
   const sort=receiptSorts[receiptQuickListOrder?.value];
   if(sort)matching.sort(sort.compare);
-  renderReceiptQuickListFilters(listFilters,sort);
+  const conditions=renderReceiptQuickListFilters(listFilters,sort);
+  const listEmpty=matching.length===0&&count>0;
+  const canRecover=renderReceiptQuickListRecovery(projected,listFilters,listEmpty?conditions:[]);
   receiptQuickJumpButtons.clear();
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,{total:count,canJump:true});
   for(const [button] of receiptQuickListExpansion)if(button)button.disabled=matching.length===0;
   if(receiptQuickListCount)receiptQuickListCount.textContent=matching.length+" / "+count+"건"+
-   (matching.length===0&&count?" · 목록 조건에 맞는 발언이 없습니다.":"");
+   (listEmpty?" · 목록 조건에 맞는 발언이 없습니다. "+
+    (canRecover?"아래 조건을 해제하면 발언을 다시 볼 수 있습니다.":"조건을 여러 개 해제하거나 목록 조건을 초기화하세요."):"");
   if(receiptQuickListReset)receiptQuickListReset.disabled=!listFilters.search&&listFilters.state==="all"&&
    !listFilters.selectedOnly&&!sort&&Object.values(facets).every(value=>value==="all");
  }
