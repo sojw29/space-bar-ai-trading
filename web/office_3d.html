@@ -2227,6 +2227,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <option value="reviewed">검토 완료</option>
        </select></label>
        <label><input id="ai-meeting-progress-receipt-preset-preview-list-selected" type="checkbox"> 선택한 발언만</label>
+       <div class="receipt-quick-presets" role="group" aria-label="회의 빠른 필터">
+        <button id="ai-meeting-progress-receipt-preset-preview-list-quick-earlier" type="button" aria-pressed="false" style="min-height:44px">이전 회의</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-quick-later" type="button" aria-pressed="false" style="min-height:44px">이후 회의</button>
+       </div>
+       <div class="receipt-quick-presets" role="group" aria-label="검토 상태 빠른 필터">
+        <button id="ai-meeting-progress-receipt-preset-preview-list-quick-unreviewed" type="button" aria-pressed="false" style="min-height:44px">미검토</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-list-quick-reviewed" type="button" aria-pressed="false" style="min-height:44px">검토 완료</button>
+       </div>
        <details id="ai-meeting-progress-receipt-preset-preview-list-more">
         <summary id="ai-meeting-progress-receipt-preset-preview-list-more-label" style="min-height:44px">목록 필터와 정렬 더 보기</summary>
         <label>회의 <select id="ai-meeting-progress-receipt-preset-preview-list-side" style="min-height:44px">
@@ -3116,6 +3124,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickListSelected=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-selected");
  const receiptQuickListFacets=Object.fromEntries(["side","agent","phase","verdict"].map(name=>
   [name,document.getElementById("ai-meeting-progress-receipt-preset-preview-list-"+name)]));
+ const receiptQuickListShortcuts=[
+  ["side","earlier","이전 회의",receiptQuickListFacets.side],
+  ["side","later","이후 회의",receiptQuickListFacets.side],
+  ["state","unreviewed","미검토",receiptQuickListState],
+  ["state","reviewed","검토 완료",receiptQuickListState],
+ ].map(([field,value,label,select])=>({
+  field,value,label,select,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-list-quick-"+value),
+ }));
  const receiptQuickListOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-order");
  const receiptQuickListMore=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more");
  const receiptQuickListMoreLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more-label");
@@ -3564,6 +3580,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  receiptQuickListRecoveryUndo?.addEventListener("click",()=>applyReceiptQuickListRecovery(false));
  receiptQuickListRecoveryRedo?.addEventListener("click",()=>applyReceiptQuickListRecovery(true));
+ function renderReceiptQuickListShortcuts(projected,filters){
+  for(const {field,value,label,button,select} of receiptQuickListShortcuts){
+   if(!button||!select)continue;
+   const active=filters[field]===value;
+   const count=visibleProgressReceiptEntries(projected,{...filters,[field]:value}).length;
+   button.textContent=label+" ("+count+"건)";
+   button.disabled=!active&&count===0;
+   button.setAttribute("aria-pressed",String(active));
+  }
+ }
+ for(const {value,button,select} of receiptQuickListShortcuts){
+  button?.addEventListener("click",()=>{
+   if(!select||button.disabled)return;
+   select.value=select.value===value?"all":value;
+   refreshReceiptQuickList();
+  });
+ }
  function renderProjectedReceiptQuickList(projected){
   const facets=Object.fromEntries(Object.entries(receiptQuickListFacets).map(([name,select])=>[name,select?.value||"all"]));
   const listFilters={...emptyReceiptQuickFilters,...facets,
@@ -3576,6 +3609,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const matching=visibleProgressReceiptEntries(projected,listFilters);
   const sort=receiptSorts[receiptQuickListOrder?.value];
   if(sort)matching.sort(sort.compare);
+  renderReceiptQuickListShortcuts(projected,listFilters);
   const conditions=renderReceiptQuickListFilters(listFilters,sort);
   receiptQuickListContext={projected,conditions,filters:listFilters};
   const listEmpty=matching.length===0&&count>0;

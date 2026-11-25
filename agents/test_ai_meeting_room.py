@@ -42,7 +42,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
   elements['ai-meeting-progress-receipt-preset-reopen']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','reserve-current','open-jump','hidden-jump','reveal-jump','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
+  for(const name of ['search','scope','state','selected','reset','count','expand','collapse','open-first','open-prev','open-next','open-last','navigation','position','picker','back-search','reserve-current','open-jump','hidden-jump','reveal-jump','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status','quick-earlier','quick-later','quick-unreviewed','quick-reviewed']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -951,6 +951,28 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const listFilter=name=>quickList('list-'+name);
    const projectedRows=()=>quickList('projected','-rows').children;
    const projectedDetailsRows=()=>projectedRows().map(row=>row.children[0]);
+   assert.match(listFilter('quick-earlier').textContent,/이전 회의 [(]1건[)]/);
+   assert.match(listFilter('quick-later').textContent,/이후 회의 [(]1건[)]/);
+   listFilter('quick-earlier').click();
+   assert.equal(listFilter('side').value,'earlier');
+   assert.equal(listFilter('quick-earlier').attrs['aria-pressed'],'true');
+   assert.equal(projectedRows().length,1);
+   listFilter('quick-later').click();
+   assert.equal(listFilter('side').value,'later');
+   assert.equal(listFilter('quick-earlier').attrs['aria-pressed'],'false');
+   listFilter('quick-unreviewed').click();
+   assert.equal(listFilter('state').value,'unreviewed');
+   assert.equal(projectedRows().length,1);
+   assert.equal(listFilter('quick-reviewed').disabled,true);
+   listFilter('state').value='reviewed';listFilter('state').change();
+   assert.equal(listFilter('quick-reviewed').disabled,false);
+   assert.equal(listFilter('quick-reviewed').attrs['aria-pressed'],'true');
+   listFilter('quick-reviewed').click();
+   assert.equal(listFilter('state').value,'all');
+   assert.equal(listFilter('side').value,'later');
+   listFilter('quick-later').click();
+   assert.equal(projectedRows().length,2);
+   assert.equal(receiptSide.value,'earlier');
    const recoveryButtons=()=>listFilter('recovery').children;
    listFilter('search').value='m07';listFilter('search').input();
    listFilter('scope').value='id';listFilter('scope').change();
