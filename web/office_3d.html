@@ -2219,7 +2219,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        </select></label>
        <label><input id="ai-meeting-progress-receipt-preset-preview-list-selected" type="checkbox"> 선택한 발언만</label>
        <details id="ai-meeting-progress-receipt-preset-preview-list-more">
-        <summary style="min-height:44px">목록 필터와 정렬 더 보기</summary>
+        <summary id="ai-meeting-progress-receipt-preset-preview-list-more-label" style="min-height:44px">목록 필터와 정렬 더 보기</summary>
         <label>회의 <select id="ai-meeting-progress-receipt-preset-preview-list-side" style="min-height:44px">
          <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
         </select></label>
@@ -2238,6 +2238,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          <option value="phase">최종 결론 먼저</option><option value="verdict">자료 부족 판정 먼저</option>
         </select></label>
        </details>
+       <div id="ai-meeting-progress-receipt-preset-preview-list-active" role="group" aria-label="적용 중인 미리보기 목록 조건" hidden></div>
        <button id="ai-meeting-progress-receipt-preset-preview-list-reset" type="button" style="min-height:44px" disabled>목록 조건 초기화</button>
        <p id="ai-meeting-progress-receipt-preset-preview-list-count" role="status"></p>
        <button id="ai-meeting-progress-receipt-preset-preview-list-expand" type="button" style="min-height:44px" disabled>검색 결과 펼치기</button>
@@ -3016,8 +3017,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),progressReceiptReviewState,"value","all"],
    [selectedOnly&&"선택한 발언만",progressReceiptSelectedOnly,"checked",false],
    [receiptSorts[order]?.label,progressReceiptOrder,"value","default"],
-  ].filter(([label,control])=>label&&control);
-  progressReceiptActiveFilters.hidden=active.length===0;
+  ];
+  renderReceiptFilterButtons(progressReceiptActiveFilters,active,updateProgressReceipt,progressReceiptSearch);
+ }
+ function renderReceiptFilterButtons(container,conditions,refresh,fallback){
+  const active=conditions.filter(([label,control])=>label&&control);
+  container.hidden=active.length===0;
   const buttons=active.map(([label,control,property,defaultValue],index)=>{
    const button=document.createElement("button");
    button.type="button";
@@ -3028,13 +3033,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    button.setAttribute("aria-label",label+" 해제");
    button.addEventListener("click",()=>{
     control[property]=defaultValue;
-    updateProgressReceipt();
-    const remaining=progressReceiptActiveFilters.children;
-    (remaining[Math.min(index,remaining.length-1)]||progressReceiptSearch)?.focus?.();
+    refresh();
+    const remaining=container.children;
+    (remaining[Math.min(index,remaining.length-1)]||fallback)?.focus?.();
    });
    return button;
   });
-  progressReceiptActiveFilters.replaceChildren(...buttons);
+  container.replaceChildren(...buttons);
  }
  const progressReceiptSelects={side:progressReceiptSide,phase:progressReceiptPhase,
   verdict:progressReceiptVerdict,state:progressReceiptReviewState,agent:progressReceiptAgent,searchScope:progressReceiptSearchScope};
@@ -3064,6 +3069,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   [name,document.getElementById("ai-meeting-progress-receipt-preset-preview-list-"+name)]));
  const receiptQuickListOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-order");
  const receiptQuickListMore=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more");
+ const receiptQuickListMoreLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more-label");
+ const receiptQuickListActive=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-active");
  const receiptQuickListReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-reset");
  const receiptQuickListExpansion=[
   [document.getElementById("ai-meeting-progress-receipt-preset-preview-list-expand"),true],
@@ -3295,6 +3302,25 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   updateReceiptQuickPreview(entries,current);
  }
+ function renderReceiptQuickListFilters({search,side,agent,phase,verdict,state,selectedOnly},sort){
+  const advanced=[
+   [side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),receiptQuickListFacets.side,"value","all"],
+   [agent!=="all"&&agent,receiptQuickListFacets.agent,"value","all"],
+   [receiptPhaseLabels[phase],receiptQuickListFacets.phase,"value","all"],
+   [labels[verdict],receiptQuickListFacets.verdict,"value","all"],
+   [sort&&"정렬 "+sort.label,receiptQuickListOrder,"value","default"],
+  ];
+  const advancedCount=advanced.filter(([label,control])=>label&&control).length;
+  if(receiptQuickListMoreLabel)receiptQuickListMoreLabel.textContent="목록 필터와 정렬 더 보기"+
+   (advancedCount?" ("+advancedCount+"개 적용)":"");
+  if(!receiptQuickListActive)return;
+  renderReceiptFilterButtons(receiptQuickListActive,[
+   [search&&"검색 "+search,receiptQuickListSearch,"value",""],
+   [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),receiptQuickListState,"value","all"],
+   [selectedOnly&&"선택한 발언만",receiptQuickListSelected,"checked",false],
+   ...advanced,
+  ],refreshReceiptQuickList,receiptQuickListSearch);
+ }
  function renderProjectedReceiptQuickList(projected){
   const facets=Object.fromEntries(Object.entries(receiptQuickListFacets).map(([name,select])=>[name,select?.value||"all"]));
   const listFilters={...emptyReceiptQuickFilters,...facets,
@@ -3306,6 +3332,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const matching=visibleProgressReceiptEntries(projected,listFilters);
   const sort=receiptSorts[receiptQuickListOrder?.value];
   if(sort)matching.sort(sort.compare);
+  renderReceiptQuickListFilters(listFilters,sort);
   receiptQuickJumpButtons.clear();
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,{total:count,canJump:true});
   for(const [button] of receiptQuickListExpansion)if(button)button.disabled=matching.length===0;
