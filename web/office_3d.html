@@ -2301,6 +2301,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-nav" class="receipt-quick-presets" role="group" aria-label="미리보기 발언 이동" hidden>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-prev" type="button" style="min-height:44px" disabled>이전 발언</button>
          <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-position" role="status"></span>
+         <label>발언 선택 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-picker" style="min-height:44px" disabled></select></label>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-next" type="button" style="min-height:44px" disabled>다음 발언</button>
         </div>
         <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-rows"></ul>
@@ -3582,6 +3583,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewResultPrev=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-prev");
  const recoveryPreviewResultNext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-next");
  const recoveryPreviewResultPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-position");
+ const recoveryPreviewResultPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-picker");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3637,10 +3639,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewResultNext)recoveryPreviewResultNext.disabled=!hasResults||resultIndex>=matches.length-1;
   const position=hasResults?"발언 "+(resultIndex+1)+" / "+matches.length:"";
   if(recoveryPreviewResultPosition&&recoveryPreviewResultPosition.textContent!==position)recoveryPreviewResultPosition.textContent=position;
+  if(recoveryPreviewResultPicker&&hasResults)recoveryPreviewResultPicker.value=String(resultIndex);
   for(const [index,action] of resultActions)action.setAttribute("aria-current",String(index===resultIndex));
  }
  function focusRecoveryPreviewResult(index){
-  if(!pendingRecoveryPreview||index<0||index>=pendingRecoveryPreview.matches.length)return;
+  if(!pendingRecoveryPreview||!Number.isInteger(index)||index<0||index>=pendingRecoveryPreview.matches.length)return;
   const state=pendingRecoveryPreview;
   const page=Math.floor(index/recoveryPreviewPageSize);
   state.resultIndex=index;
@@ -3652,6 +3655,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   action?.focus({preventScroll:true});
   action?.scrollIntoView({block:"nearest"});
  }
+ recoveryPreviewResultPicker?.addEventListener("change",()=>{
+  if(!recoveryPreviewResultPicker.disabled&&recoveryPreviewResultPicker.value!==""){
+   focusRecoveryPreviewResult(Number(recoveryPreviewResultPicker.value));
+  }
+ });
+ const recoveryPreviewResultKeys={
+  ArrowUp:index=>index-1,
+  ArrowDown:index=>index+1,
+  Home:()=>0,
+  End:(_,total)=>total-1,
+ };
  function focusRecoveryPreviewFirstResult(){
   if(pendingRecoveryPreview)focusRecoveryPreviewResult(pendingRecoveryPreview.page*recoveryPreviewPageSize);
  }
@@ -3851,6 +3865,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   else if(Object.hasOwn(sorters,order))matches.sort(sorters[order]);
   pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
   pendingRecoveryPreview.matches=matches;
+  if(recoveryPreviewResultPicker){
+   const options=document.createDocumentFragment();
+   for(const [index,entry] of matches.entries()){
+    const option=document.createElement("option");
+    option.value=String(index);
+    option.textContent=(index+1)+". "+entry.label;
+    options.append(option);
+   }
+   recoveryPreviewResultPicker.replaceChildren(options);
+   recoveryPreviewResultPicker.disabled=matches.length<2;
+  }
 
   const activeLabels=[];
   for(const {key,field} of recoveryPreviewFacets){
@@ -3954,9 +3979,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    jump.style.minHeight="44px";
    jump.textContent="적용하고 이 발언으로 이동";
    jump.setAttribute("aria-label",label+" · 적용하고 이 발언으로 이동");
+   jump.setAttribute("aria-keyshortcuts","ArrowUp ArrowDown Home End");
+   jump.title="↑ ↓ 이전·다음 발언 · Home 첫 발언 · End 마지막 발언";
    jump.addEventListener("click",()=>commit(key));
    const resultIndex=page*recoveryPreviewPageSize+index;
    pendingRecoveryPreview.resultActions.set(resultIndex,jump);
+   jump.addEventListener("keydown",event=>{
+    const state=pendingRecoveryPreview;
+    if(event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||
+     state?.resultActions.get(resultIndex)!==jump||!Object.hasOwn(recoveryPreviewResultKeys,event.key))return;
+    event.preventDefault();
+    focusRecoveryPreviewResult(recoveryPreviewResultKeys[event.key](resultIndex,state.matches.length));
+   });
    jump.addEventListener("focus",()=>{
     if(pendingRecoveryPreview?.resultActions.get(resultIndex)!==jump)return;
     pendingRecoveryPreview.resultIndex=resultIndex;
