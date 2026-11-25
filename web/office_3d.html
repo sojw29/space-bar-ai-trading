@@ -2317,6 +2317,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-active-filters" class="receipt-quick-presets" role="group" aria-label="적용 중인 예시 필터" hidden></div>
          <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-status" role="status" tabindex="-1"></p>
          <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-empty-actions" class="receipt-quick-presets" role="group" aria-label="예시 검색 결과 다시 찾기" hidden></div>
+         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-recovery-history" class="receipt-quick-presets" role="group" aria-label="예시 검색 복구 기록" hidden>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-undo" type="button" style="min-height:44px" disabled>예시 복구 되돌리기</button>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-redo" type="button" style="min-height:44px" disabled>예시 복구 다시 적용</button>
+          <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-recovery-feedback" role="status"></span>
+         </div>
          <div class="receipt-quick-presets">
          <label>예시 발언 선택 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-picker" style="min-height:44px" disabled></select></label>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-open-summary" type="button" style="min-height:44px" disabled>현재 예시 요약 열기</button>
@@ -3677,6 +3682,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleExpandedCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expanded-count");
  const recoveryPreviewSampleEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-empty-actions");
  const recoveryPreviewFacetNames={type:"검토 유형",agent:"에이전트",phase:"회의 단계",verdict:"발언 판정"};
+ const recoveryPreviewSampleRecoveryHistory=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-recovery-history");
+ const recoveryPreviewSampleUndo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-undo");
+ const recoveryPreviewSampleRedo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-redo");
+ const recoveryPreviewSampleRecoveryFeedback=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-recovery-feedback");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4019,40 +4028,79 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    syncRecoveryPreviewSampleSummaries(state);
   });
  }
+ function rankRecoveryPreviewSuggestions(candidates,findResults){
+  const suggestions=candidates.map(({label,overrides,apply})=>({label,apply,results:findResults(overrides)}))
+   .filter(({results})=>results.length);
+  if(!suggestions.length){
+   for(const [index,left] of candidates.entries()){
+    for(const right of candidates.slice(index+1)){
+     if(Object.keys(left.overrides).some(key=>key!=="omittedFacets"&&Object.hasOwn(right.overrides,key)))continue;
+     const omittedFacets=[...(left.overrides.omittedFacets??[]),...(right.overrides.omittedFacets??[])];
+     const results=findResults({...left.overrides,...right.overrides,omittedFacets});
+     if(results.length)suggestions.push({
+      label:left.label+" + "+right.label,results,
+      apply(){left.apply();right.apply()},
+     });
+    }
+   }
+  }
+  return suggestions.sort((a,b)=>b.results.length-a.results.length).slice(0,5);
+ }
+ function recoveryPreviewSampleConditions(){
+  return [
+   [recoveryPreviewSampleSearch,"value"],[recoveryPreviewSampleScope,"value"],[recoveryPreviewSampleSelected,"checked"],
+   ...recoveryPreviewSampleFacets.map(({field})=>[field,"value"]),
+  ].filter(([field])=>field).map(([field,property])=>[field,property,field[property]]);
+ }
+ function syncRecoveryPreviewSampleHistory(state){
+  let history=state.recoveryHistory;
+  const expected=history?.applied?history.after:history?.before;
+  if(expected?.some(([field,property,value])=>field[property]!==value)){
+   state.recoveryHistory=history=null;
+   if(recoveryPreviewSampleRecoveryFeedback)recoveryPreviewSampleRecoveryFeedback.textContent="";
+  }
+  if(recoveryPreviewSampleRecoveryHistory)recoveryPreviewSampleRecoveryHistory.hidden=!history;
+  if(recoveryPreviewSampleUndo)recoveryPreviewSampleUndo.disabled=!history?.applied;
+  if(recoveryPreviewSampleRedo)recoveryPreviewSampleRedo.disabled=!history||history.applied;
+ }
+ function reportRecoveryPreviewSampleHistory(state,action){
+  if(recoveryPreviewSampleRecoveryFeedback){
+   recoveryPreviewSampleRecoveryFeedback.textContent=action+" · "+state.recoveryHistory.label+" · 결과 "+state.matches.length+"건";
+  }
+ }
+ for(const [button,apply,destination] of [
+  [recoveryPreviewSampleUndo,false,recoveryPreviewSampleRedo],
+  [recoveryPreviewSampleRedo,true,recoveryPreviewSampleUndo],
+ ]){
+  button?.addEventListener("click",()=>{
+   const state=pendingRecoveryPreview?.suggestionSample;
+   const history=state?.recoveryHistory;
+   if(!history||button.disabled)return;
+   for(const [field,property,value] of apply?history.after:history.before)field[property]=value;
+   history.applied=apply;
+   updateRecoveryPreviewSampleSearch();
+   reportRecoveryPreviewSampleHistory(state,apply?"다시 적용":"되돌림");
+   destination?.focus();
+  });
+ }
  function renderRecoveryPreviewSampleAlternatives(results,hasMatches,{words,scope,facets,selectedOnly}){
   if(!recoveryPreviewSampleEmptyActions)return;
-  const buttons=[];
+  const candidates=[];
   function add(label,overrides,apply){
-   const {terms=words,searchScope=scope,activeFacets=facets,selected=selectedOnly}=overrides;
-   const count=results.filter(entry=>recoveryPreviewMatchesSearch(entry,searchScope,terms,selected)&&
-    activeFacets.every(({key,field})=>entry[key]===field.value)).length;
-   if(!count)return;
-   const button=document.createElement("button");
-   button.type="button";
-   button.style.minHeight="44px";
-   button.textContent=label+" ("+count+"건)";
-   button.addEventListener("click",()=>{
-    if(!pendingRecoveryPreview?.suggestionSample)return;
-    apply();
-    updateRecoveryPreviewSampleSearch();
-    const {resultIndex}=pendingRecoveryPreview.suggestionSample;
-    focusRecoveryPreviewSampleResult(resultIndex);
-   });
-   buttons.push(button);
+   candidates.push({label,overrides,apply});
+  }
+  function findResults({terms=words,searchScope=scope,omittedFacets=[],selected=selectedOnly}){
+   const activeFacets=facets.filter(({key})=>!omittedFacets.includes(key));
+   return results.filter(entry=>recoveryPreviewMatchesSearch(entry,searchScope,terms,selected)&&
+    activeFacets.every(({key,field})=>entry[key]===field.value));
   }
   if(!hasMatches){
    if(scope==="phrase")add("요약에서 단어별 검색",{searchScope:"summary"},()=>{recoveryPreviewSampleScope.value="summary"});
    if(scope!=="all")add("전체 발언 정보로 검색",{searchScope:"all"},()=>{recoveryPreviewSampleScope.value="all"});
    if(words.length&&recoveryPreviewSampleSearch)add("예시 검색어만 지우기",{terms:[]},()=>{recoveryPreviewSampleSearch.value=""});
    if(selectedOnly)add("선택하지 않은 예시도 보기",{selected:false},()=>{recoveryPreviewSampleSelected.checked=false});
-   const beforeFacets=buttons.length;
    for(const {key,field} of facets){
-    add(recoveryPreviewFacetNames[key]+" 필터만 해제",{activeFacets:facets.filter(facet=>facet.key!==key)},()=>{field.value=""});
-   }
-   if(facets.length>1&&buttons.length===beforeFacets){
-    add("예시 상세 조건 풀기",{activeFacets:[]},()=>{
-     for(const {field} of facets)field.value="";
-    });
+    add(recoveryPreviewFacetNames[key]+" 필터만 해제",{omittedFacets:[key]},()=>{field.value=""});
    }
    const original=recoveryPreviewSampleSearch?.value.trim()??"";
    const shorter=original.replace(/\s+\S+$/,"");
@@ -4061,6 +4109,30 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     add("예시 마지막 검색 단어 빼기",{terms},()=>{recoveryPreviewSampleSearch.value=shorter});
    }
   }
+  const suggestions=rankRecoveryPreviewSuggestions(candidates,findResults);
+  if(!hasMatches&&!suggestions.length&&facets.length>2){
+   const fallback=findResults({omittedFacets:facets.map(({key})=>key)});
+   if(fallback.length)suggestions.push({label:"예시 상세 조건 풀기",results:fallback,apply(){
+    for(const {field} of facets)field.value="";
+   }});
+  }
+  const buttons=suggestions.map(({label,apply,results:recovered})=>{
+   const button=document.createElement("button");
+   button.type="button";
+   button.style.minHeight="44px";
+   button.textContent=label+" ("+recovered.length+"건)";
+   button.addEventListener("click",()=>{
+    const state=pendingRecoveryPreview?.suggestionSample;
+    if(!state)return;
+    const before=recoveryPreviewSampleConditions();
+    apply();
+    state.recoveryHistory={before,after:recoveryPreviewSampleConditions(),label,applied:true};
+    updateRecoveryPreviewSampleSearch();
+    reportRecoveryPreviewSampleHistory(state,"적용");
+    focusRecoveryPreviewSampleResult(state.resultIndex);
+   });
+   return button;
+  });
   recoveryPreviewSampleEmptyActions.replaceChildren(...buttons);
   recoveryPreviewSampleEmptyActions.hidden=!buttons.length;
  }
@@ -4123,6 +4195,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   sortRecoveryPreviewMatches(matches,recoveryPreviewSampleOrder?.value);
   state.matches=matches;
+  syncRecoveryPreviewSampleHistory(state);
   if(retainedKey!==undefined){
    state.emptyResultKey=matches.length?null:retainedKey;
    state.resultIndex=Math.max(0,matches.findIndex(entry=>entry.key===retainedKey));
@@ -4313,6 +4386,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
   if(recoveryPreviewSampleOrder)recoveryPreviewSampleOrder.value="default";
   if(recoveryPreviewSampleSummaryScope)recoveryPreviewSampleSummaryScope.value="page";
+  if(recoveryPreviewSampleRecoveryFeedback)recoveryPreviewSampleRecoveryFeedback.textContent="";
   for(const {key,field} of recoveryPreviewSampleFacets){
    facetOptions.set(key,populateRecoveryPreviewFacet(results,key,field));
   }
@@ -4351,22 +4425,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    return entries.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,terms,selected)&&
     facets.every(({key,field})=>entry[key]===field.value));
   }
-  const suggestions=candidates.map(({label,overrides,apply})=>({label,apply,results:findResults(overrides)}))
-   .filter(({results})=>results.length);
-  if(!suggestions.length){
-   for(const [index,left] of candidates.entries()){
-    for(const right of candidates.slice(index+1)){
-     if(Object.keys(left.overrides).some(key=>key!=="omittedFacets"&&Object.hasOwn(right.overrides,key)))continue;
-     const omittedFacets=[...(left.overrides.omittedFacets??[]),...(right.overrides.omittedFacets??[])];
-     const results=findResults({...left.overrides,...right.overrides,omittedFacets});
-     if(results.length)suggestions.push({
-      label:left.label+" + "+right.label,results,
-      apply(){left.apply();right.apply()},
-     });
-    }
-   }
-  }
-  const buttons=suggestions.sort((a,b)=>b.results.length-a.results.length).slice(0,5).map(({label,results,apply})=>{
+  const buttons=rankRecoveryPreviewSuggestions(candidates,findResults).map(({label,results,apply})=>{
    const button=document.createElement("button");
    button.type="button";
    button.style.minHeight="44px";
