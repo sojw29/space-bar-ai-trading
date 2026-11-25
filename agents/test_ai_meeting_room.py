@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt','occurrence-count']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -94,7 +94,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   if(mode==='text-only')data.transcript[0].summary='<img src=x onerror=alert(1)>';
   const downloads=[];
   let savedBlob;
-  const document={activeElement:null,body:{appendChild(){}},hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:tag=>tag==='a'?{click(){downloads.push(this.download)},remove(){}}:({style:{},children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},focus(){this.focused=true},scrollIntoView(){this.scrolled=true},set innerHTML(_){throw Error('unsafe HTML sink')}})};
+  const document={activeElement:null,body:{appendChild(){}},hidden:false,getElementById:id=>elements[id],addEventListener:(name,fn)=>{events[name]=fn},createElement:tag=>tag==='a'?{click(){downloads.push(this.download)},remove(){}}:({style:{},children:[],attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(name,fn){this[name]=fn},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},focus(){this.focused=true},scrollIntoView(){this.scrolled=true},set innerHTML(_){throw Error('unsafe HTML sink')}})};
   vm.runInNewContext(input.script,{document,Blob,URL:{createObjectURL(blob){savedBlob=blob;return "blob:test"},revokeObjectURL(){}},setTimeout:()=>0,Date:class extends Date{static now(){return now}},setInterval:fn=>timers.push(fn),fetch:async()=>{requests++;return {ok:mode!=='missing'&&!noServer,text:async()=>JSON.stringify(data)}}});
   await new Promise(setImmediate);
   if(['missing','orders','stale','partial','invalid-final','malformed'].includes(mode)){
@@ -964,6 +964,15 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const matchedSummary=sourceChangeRows()[0].children[1];
    assert.match(matchedSummary.children[0].textContent,/검색어 포함/);
    assert.ok(matchedSummary.children[1].children.some(mark=>mark.textContent===summarySearchTerm));
+   assert.match(matchedSummary.children[0].textContent,/검색어 포함 \(\d+곳\)/);
+   const sourceExcerpt=sourceChangeRows()[0].children[3];
+   assert.equal(sourceExcerpt.hidden,false);
+   assert.ok(sourceExcerpt.children.some(mark=>mark.textContent===summarySearchTerm));
+   assert.match(sourceChangeType('occurrence-count').textContent,/검색어 표시 \d+곳/);
+   matchedSummary.children[2].click();
+   const firstSummaryMark=matchedSummary.children[1].children.find(mark=>mark.focused);
+   assert.equal(firstSummaryMark.textContent,summarySearchTerm);
+   assert.equal(firstSummaryMark.scrolled,true);
    sourceChangeType('expand-matches').click();
    assert.equal(matchedSummary.open,true);
    assert.equal(sourceChangeType('match-count').textContent,'일치 요약 1건');
