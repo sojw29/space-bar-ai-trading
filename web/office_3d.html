@@ -3192,11 +3192,35 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  receiptQuickSourceJumpLast?.addEventListener("click",focusLastReceiptQuickSourceChange);
  receiptQuickSourceRevealLast?.addEventListener("click",()=>{
   if(receiptQuickSourceRevealLast.hidden)return;
-  previousReceiptQuickSourceFilters={
+  const entry=receiptQuickSourceChangeRows.find(({key})=>key===lastReceiptQuickSourceChangeKey);
+  if(!entry)return;
+  previousReceiptQuickSourceFilters??={
    fields:receiptQuickSourceChangeFields(),type:receiptQuickSourceChangeFilter,
    selectedOnly:!!receiptQuickSourceSelectedOnly?.checked,
   };
-  resetReceiptQuickSourceChangeControls();
+  const cleared=[];
+  for(const [field,property,all,label] of receiptQuickSourceChangeFacets()){
+   if(field&&field.value&&field.value!==all&&field.value!==entry[property]){
+    field.value=all;
+    cleared.push(label);
+   }
+  }
+  if(receiptQuickSourceChangeSearch&&!receiptQuickSourceSearchMatches(entry,receiptQuickSourceSearchWords())){
+   receiptQuickSourceChangeSearch.value="";
+   cleared.push("검색어");
+  }
+  if(receiptQuickSourceChangeFilter!=="all"&&receiptQuickSourceChangeFilter!==entry.type){
+   receiptQuickSourceChangeFilter="all";
+   cleared.push("변경 유형");
+  }
+  if(receiptQuickSourceSelectedOnly?.checked&&!entry.selection.checked){
+   receiptQuickSourceSelectedOnly.checked=false;
+   cleared.push("선택 항목만");
+  }
+  previousReceiptQuickSourceFilters.cleared=[
+   ...new Set([...(previousReceiptQuickSourceFilters.cleared??[]),...cleared]),
+  ];
+  renderReceiptQuickSourceChangeFilter();
   focusLastReceiptQuickSourceChange();
  });
  receiptQuickSourceRestoreFilters?.addEventListener("click",()=>{
@@ -3215,6 +3239,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    receiptQuickSourceChangeAgent,receiptQuickSourceChangePhase,receiptQuickSourceChangeVerdict,
   ].filter(Boolean).map(field=>[field,field.value]);
  }
+ function receiptQuickSourceChangeFacets(){
+  return [
+   [receiptQuickSourceChangePeriod,"period","all","회의"],
+   [receiptQuickSourceChangeAgent,"agent","","에이전트"],
+   [receiptQuickSourceChangePhase,"phase","","회의 단계"],
+   [receiptQuickSourceChangeVerdict,"verdict","","발언 판정"],
+  ];
+ }
+ function receiptQuickSourceSearchWords(){
+  return (receiptQuickSourceChangeSearch?.value??"").normalize("NFKC").toLowerCase().split(/\s+/).filter(Boolean);
+ }
+ function receiptQuickSourceSearchMatches(entry,words){
+  return words.every(word=>entry.searchText.includes(word));
+ }
  const receiptQuickSourceChangeReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-reset");
  const receiptQuickSourceChangeClearSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-clear-search");
  const receiptQuickSourceChangeEmptyReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-empty-reset");
@@ -3231,7 +3269,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
  receiptQuickSourceChangePeriod?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
  receiptQuickSourceChangeOrder?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
- receiptQuickSourceChangeReset?.addEventListener("click",resetReceiptQuickSourceChangeControls);
+ receiptQuickSourceChangeReset?.addEventListener("click",()=>resetReceiptQuickSourceChangeControls());
  let receiptQuickSourceChangeRows=[];
  let receiptQuickSourceChangeFilter="all";
  const receiptQuickSourceChangeSaveStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-save-status");
@@ -3601,6 +3639,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore,changeView));
  }
  function resetReceiptQuickSourceChangeControls(selectedOnly=false){
+  previousReceiptQuickSourceFilters=null;
   receiptQuickSourceChangeFilter="all";
   if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=selectedOnly;
   if(receiptQuickSourceChangeAgent)receiptQuickSourceChangeAgent.value="";
@@ -3613,16 +3652,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function renderReceiptQuickSourceChangeFilter(){
   const total=receiptQuickSourceChangeRows.length;
-  const query=(receiptQuickSourceChangeSearch?.value??"").normalize("NFKC").trim().toLowerCase();
-  const words=query.split(/\s+/).filter(Boolean);
-  const period=receiptQuickSourceChangePeriod?.value||"all";
-  const agent=receiptQuickSourceChangeAgent?.value||"";
-  const phase=receiptQuickSourceChangePhase?.value||"";
-  const verdict=receiptQuickSourceChangeVerdict?.value||"";
+  const words=receiptQuickSourceSearchWords();
+  const activeFacets=receiptQuickSourceChangeFacets().filter(([field,,all])=>field?.value&&field.value!==all);
   const matching=receiptQuickSourceChangeRows.filter(entry=>
-   (period==="all"||period===entry.period)&&(!agent||agent===entry.agent)&&
-   (!phase||phase===entry.phase)&&(!verdict||verdict===entry.verdict)&&
-   words.every(word=>entry.searchText.includes(word)));
+   activeFacets.every(([field,property])=>field.value===entry[property])&&receiptQuickSourceSearchMatches(entry,words));
   const visible=matching.filter(({type,selection})=>
    (receiptQuickSourceChangeFilter==="all"||receiptQuickSourceChangeFilter===type)&&
    (!receiptQuickSourceSelectedOnly?.checked||selection.checked));
@@ -3655,8 +3688,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const lastVisible=!!last&&visible.includes(last);
   if(receiptQuickSourceLastStatus){
    receiptQuickSourceLastStatus.hidden=!last;
+   const cleared=previousReceiptQuickSourceFilters?.cleared;
    receiptQuickSourceLastStatus.textContent=last?
-    "마지막으로 읽은 발언 · "+last.label+(lastVisible?"":" · 현재 조건에서 숨겨짐"):"";
+    "마지막으로 읽은 발언 · "+last.label+(lastVisible?"":" · 현재 조건에서 숨겨짐")+
+    (cleared?.length?" · 임시 해제: "+cleared.join(", "):""):"";
   }
   if(receiptQuickSourceJumpLast)receiptQuickSourceJumpLast.hidden=!lastVisible;
   if(receiptQuickSourceRevealLast)receiptQuickSourceRevealLast.hidden=!last||lastVisible;
