@@ -68,6 +68,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 #ai-meeting-progress-receipt-preset-preview-projected-rows summary[aria-current="true"]{background:#1b5265;border-radius:4px}
 .receipt-quick-presets button[aria-pressed="true"],
 #ai-meeting-progress-receipt-preset-preview-projected-rows button[aria-pressed="true"]{border-color:#87defa;background:#1b5265}
+#ai-meeting-progress-receipt-preset-preview-source-changes-rows mark[aria-current="true"],
 #ai-meeting-progress-receipt-preset-preview-source-changes-rows summary[aria-current="true"],
 #ai-meeting-progress-receipt-preset-preview-source-changes-rows button[aria-current="true"]{outline:2px solid currentColor;outline-offset:2px}
 </style>
@@ -3890,6 +3891,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   parts.push(summary.slice(cursor,end));
   return parts;
  }
+ function updateReceiptQuickSourceHitNavigation(entry,index){
+  const {summaryMarks,summaryHitButtons,summaryHitPosition}=entry;
+  const total=summaryMarks.length;
+  entry.summaryHitIndex=index;
+  for(const {button,target} of summaryHitButtons){
+   const next=target(index,total);
+   button.hidden=!total;
+   button.disabled=next<0||next>=total||next===index;
+  }
+  summaryHitPosition.hidden=!total;
+  summaryHitPosition.textContent=total?(index<0?total+"곳":(index+1)+" / "+total+"곳"):"";
+  summaryMarks.forEach((mark,position)=>mark.setAttribute("aria-current",String(position===index)));
+ }
  function renderReceiptQuickSourceChangeFilter(){
   const total=receiptQuickSourceChangeRows.length;
   const words=receiptQuickSourceSearchWords();
@@ -3934,21 +3948,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    entry.summaryMatches=ranges.length>0;
    occurrences+=ranges.length;
    entry.summaryHeading.textContent=entry.summaryMatches?"발언 요약 · 검색어 포함 ("+ranges.length+"곳)":"발언 요약";
+   entry.summaryText.replaceChildren();
    entry.summaryText.textContent=entry.summary;
    entry.summaryExcerpt.hidden=!ranges.length;
    entry.summaryExcerpt.replaceChildren();
-   entry.firstSummaryMark=null;
-   entry.summaryJump.hidden=!ranges.length;
+   entry.summaryMarks=[];
    if(ranges.length){
     const parts=receiptQuickSourceSummaryParts(entry.summary,ranges);
-    entry.firstSummaryMark=parts[1];
-    entry.summaryText.textContent="";
-    entry.summaryText.append(...parts);
+    entry.summaryMarks=parts.filter((_,index)=>index%2===1);
+    entry.summaryText.replaceChildren(...parts);
     const start=Math.max(0,ranges[0][0]-24);
     const end=Math.min(entry.summary.length,ranges[0][1]+40);
     entry.summaryExcerpt.replaceChildren(start?"…":"",...receiptQuickSourceSummaryParts(entry.summary,ranges,start,end),
      end<entry.summary.length?"…":"");
    }
+   updateReceiptQuickSourceHitNavigation(entry,-1);
   }
   const matches=visible.filter(entry=>entry.summaryMatches);
   if(receiptQuickSourceOccurrenceCount){
@@ -4089,24 +4103,38 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const excerpt=document.createElement("p");
     excerpt.hidden=true;
     row.append(excerpt);
-    const summaryJump=document.createElement("button");
-    summaryJump.type="button";
-    summaryJump.style.minHeight="44px";
-    summaryJump.textContent="첫 검색어로 이동";
-    summaryJump.hidden=true;
-    summaryJump.addEventListener("click",()=>{
-     if(!change.firstSummaryMark)return;
-     change.firstSummaryMark.tabIndex=-1;
-     change.firstSummaryMark.focus({preventScroll:true});
-     change.firstSummaryMark.scrollIntoView({block:"nearest"});
+    const summaryHitPosition=document.createElement("span");
+    summaryHitPosition.setAttribute("role","status");
+    summaryHitPosition.hidden=true;
+    const summaryHitButtons=[
+     ["첫 검색어로 이동",()=>0],
+     ["이전 검색어",(index,total)=>index<0?total-1:index-1],
+     ["다음 검색어",index=>index+1],
+     ["마지막 검색어",(_,total)=>total-1],
+    ].map(([label,target])=>{
+     const button=document.createElement("button");
+     button.type="button";
+     button.style.minHeight="44px";
+     button.textContent=label;
+     button.hidden=true;
+     button.addEventListener("click",()=>{
+      const index=target(change.summaryHitIndex,change.summaryMarks.length);
+      const mark=change.summaryMarks[index];
+      if(button.disabled||!mark)return;
+      updateReceiptQuickSourceHitNavigation(change,index);
+      mark.tabIndex=-1;
+      mark.focus({preventScroll:true});
+      mark.scrollIntoView({block:"nearest"});
+     });
+     return {button,target};
     });
-    details.append(summaryJump);
+    details.append(...summaryHitButtons.map(({button})=>button),summaryHitPosition);
     const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
     selection.checked=changeView?.selected.has(key)??false;
     details.open=changeView?.expanded.has(key)??false;
     const summarySearchText=summary.normalize("NFKC").toLowerCase();
     const change={key,row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,
-     summary,summaryHeading:heading,summaryText:text,summaryExcerpt:excerpt,summaryJump,summarySearchText,searchText};
+     summary,summaryHeading:heading,summaryText:text,summaryExcerpt:excerpt,summaryHitButtons,summaryHitPosition,summarySearchText,searchText};
     if(changeView?.currentKey===key)currentReceiptQuickSourceSelection=change;
     details.addEventListener("toggle",()=>{
      if(currentReceiptQuickSourceSelection===change&&visibleReceiptQuickSourceChanges.includes(change)){
