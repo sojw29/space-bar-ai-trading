@@ -32,6 +32,11 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     };
    }
   }
+  for(const name of ['search','state','selected','reset','count']){
+   elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
+    addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
+   };
+  }
   if(mode==='live'){data.execution_mode='LIVE_PROVIDER';data.model_inference_performed=true;data.model='test-model'}
   if(mode==='orders')data.orders_enabled=true;
   if(mode==='stale')now+=9*3600000;
@@ -854,6 +859,28 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(quickPreviewSummary.textContent,/새로 보이는 발언 1건/);
    assert.match(quickList('shown','-rows').children[0].textContent,/이후 \[M07\] COMMANDER/);
    assert.equal(directTargets().children.length,2);
+   const listFilter=name=>quickList('list-'+name);
+   const projectedRows=()=>quickList('projected','-rows').children;
+   listFilter('search').value='m07';listFilter('search').input();
+   assert.equal(projectedRows().length,2);
+   listFilter('state').value='reviewed';listFilter('state').change();
+   assert.equal(projectedRows().length,0);
+   assert.match(listFilter('count').textContent,/0 \/ 2건 · 목록 조건에 맞는 발언이 없습니다/);
+   assert.equal(quickList('projected').hidden,false);
+   assert.equal(quickPreviewApply.disabled,false);
+   assert.equal(directTargets().children.length,2);
+   listFilter('state').value='unreviewed';listFilter('state').change();
+   listFilter('selected').checked=true;listFilter('selected').change();
+   assert.equal(projectedRows().length,0);
+   elements['ai-meeting-progress-receipt-select-visible'].click();
+   assert.equal(projectedRows().length,1);
+   listFilter('search').value='missing';listFilter('search').input();
+   assert.equal(projectedRows().length,0);
+   listFilter('reset').click();
+   assert.equal(projectedRows().length,2);
+   assert.equal(listFilter('reset').disabled,true);
+   assert.equal(listFilter('search').focused,true);
+   elements['ai-meeting-progress-receipt-clear-selection'].click();
    const quickJumpOption=value=>quickPreviewJump.children.find(option=>option.value===value);
    assert.equal(quickJumpOption('new').disabled,false);
    assert.match(quickJumpOption('last').textContent,/마지막 표시 발언 · 이전/);
