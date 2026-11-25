@@ -2284,9 +2284,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-active" class="receipt-quick-presets" role="group" aria-label="적용 중인 미리보기 필터" hidden></div>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results" type="button" style="min-height:44px" disabled>현재 페이지 첫 발언으로 이동</button>
-        <div class="receipt-quick-presets" role="group" aria-label="현재 페이지의 발언 요약">
-         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expand" type="button" style="min-height:44px" disabled>이 페이지 요약 펼치기</button>
-         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-collapse" type="button" style="min-height:44px" disabled>이 페이지 요약 접기</button>
+        <div class="receipt-quick-presets" role="group" aria-label="미리보기 발언 요약">
+         <label>요약 펼치기·접기 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-summary-scope" style="min-height:44px"><option value="page">현재 페이지</option><option value="matches">검색 결과 전체</option></select></label>
+         <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expanded-count" role="status"></span>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expand" type="button" style="min-height:44px" disabled>요약 펼치기</button>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-collapse" type="button" style="min-height:44px" disabled>요약 접기</button>
         </div>
         <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-rows"></ul>
         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-pagination" class="receipt-quick-presets" role="group" aria-label="미리보기 페이지" hidden>
@@ -3534,6 +3536,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-first");
  const recoveryPreviewLast=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-last");
  const recoveryPreviewJumpResults=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results");
+ const recoveryPreviewSummaryScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-summary-scope");
+ const recoveryPreviewExpandedCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expanded-count");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3604,15 +3608,35 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  recoveryPreviewPage?.addEventListener("change",()=>{
   if(!recoveryPreviewPage.disabled)goToRecoveryPreviewPage(Number(recoveryPreviewPage.value));
  });
+ function syncRecoveryPreviewSummaries(){
+  const {expanded,visibleDetails,matchingKeys}=pendingRecoveryPreview;
+  for(const [key,{details,excerpt}] of visibleDetails){
+   if(details.open)expanded.add(key);
+   else expanded.delete(key);
+   excerpt.hidden=details.open;
+  }
+  if(recoveryPreviewExpandedCount){
+   const count=matchingKeys.filter(key=>expanded.has(key)).length;
+   recoveryPreviewExpandedCount.textContent=matchingKeys.length?"펼친 요약 "+count+" / "+matchingKeys.length+"건":"";
+  }
+ }
  for(const [button,open] of [[recoveryPreviewExpand,true],[recoveryPreviewCollapse,false]]){
   button?.addEventListener("click",()=>{
    if(!pendingRecoveryPreview||button.disabled)return;
-   for(const details of pendingRecoveryPreview.visibleDetails.values())details.open=open;
+   const {visibleDetails,expanded,matchingKeys}=pendingRecoveryPreview;
+   const keys=recoveryPreviewSummaryScope?.value==="matches"?matchingKeys:visibleDetails.keys();
+   for(const key of keys){
+    if(open)expanded.add(key);
+    else expanded.delete(key);
+    const visible=visibleDetails.get(key);
+    if(visible)visible.details.open=open;
+   }
+   syncRecoveryPreviewSummaries();
   });
  }
  function renderReceiptQuickSourceRecoveryPreview(){
   const {entries,label,page,commit,expanded,visibleDetails}=pendingRecoveryPreview;
-  for(const [key,details] of visibleDetails){
+  for(const [key,{details}] of visibleDetails){
    if(details.open)expanded.add(key);
    else expanded.delete(key);
   }
@@ -3630,6 +3654,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
   const matchesFacets=(entry,except)=>activeFacets.every(({key,field})=>key===except||entry[key]===field.value);
   const matches=searched.filter(entry=>matchesFacets(entry));
+  pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
   const activeLabels=[];
   for(const {key,field} of recoveryPreviewFacets){
    const options=pendingRecoveryPreview.facetOptions.get(key);
@@ -3717,11 +3742,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const heading=document.createElement("summary");
    const text=document.createElement("p");
    heading.textContent="발언 요약 전체";
+   heading.setAttribute("aria-label",label+" · 발언 요약 전체");
    if(ranges.length)text.append(...receiptQuickSourceSummaryParts(summary,ranges));
    else text.textContent=summary;
    full.append(heading,text);
    full.open=expanded.has(key);
-   visibleDetails.set(key,full);
+   visibleDetails.set(key,{details:full,excerpt});
+   full.addEventListener("toggle",()=>{
+    if(pendingRecoveryPreview?.visibleDetails.get(key)?.details===full)syncRecoveryPreviewSummaries();
+   });
    const jump=document.createElement("button");
    jump.type="button";
    jump.style.minHeight="44px";
@@ -3735,6 +3764,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    row.append(title,excerpt,full,jump,context);
    return row;
   }));
+  syncRecoveryPreviewSummaries();
  }
  function closeReceiptQuickSourceRecoveryPreview(){
   pendingRecoveryPreview=null;
@@ -3855,6 +3885,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      if(recoveryPreviewScope)recoveryPreviewScope.value="all";
      if(recoveryPreviewSelected)recoveryPreviewSelected.checked=false;
      if(recoveryPreviewFilters)recoveryPreviewFilters.open=false;
+     if(recoveryPreviewSummaryScope)recoveryPreviewSummaryScope.value="page";
      pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0,expanded:new Set(),visibleDetails:new Map(),facetOptions:new Map()};
      populateRecoveryPreviewFacets(entries);
      renderReceiptQuickSourceRecoveryPreview();
