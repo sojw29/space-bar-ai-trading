@@ -2291,6 +2291,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          <option value="selected">선택한 발언 우선</option>
         </select></label>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
+        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-empty-actions" class="receipt-quick-presets" role="group" aria-label="미리보기 결과 다시 찾기" hidden></div>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results" type="button" style="min-height:44px" disabled>현재 페이지 첫 발언으로 이동</button>
         <div class="receipt-quick-presets" role="group" aria-label="미리보기 발언 요약">
          <label>요약 펼치기·접기 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-summary-scope" style="min-height:44px"><option value="page">현재 페이지</option><option value="matches">검색 결과 전체</option></select></label>
@@ -3588,6 +3589,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewResultPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-result-picker");
  const recoveryPreviewOpenSummary=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-open-summary");
  const recoveryPreviewBackSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-back-search");
+ const recoveryPreviewEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-empty-actions");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -3834,6 +3836,56 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   button?.addEventListener("click",()=>{if(!button.disabled)saveRecoveryPreviewResults(format)});
  }
  recoveryPreviewExportScope?.addEventListener("change",updateRecoveryPreviewExport);
+ function recoveryPreviewMatchesSearch(entry,searchScope,words,selectedOnly){
+  if(selectedOnly&&!entry.selection.checked)return false;
+  if(!words.length)return true;
+  if(searchScope==="phrase"){
+   return entry.summarySearchText.replace(/\s+/g," ").includes(words.join(" "));
+  }
+  const values={
+   summary:entry.summarySearchText,id:entry.id,agent:entry.agent,
+   phase:entry.phase+" "+receiptPhaseLabels[entry.phase],verdict:entry.verdict+" "+labels[entry.verdict],
+  };
+  const searchable=searchScope!=="all"?String(values[searchScope]??"").normalize("NFKC").toLowerCase():entry.searchText;
+  return words.every(word=>searchable.includes(word));
+ }
+ function renderRecoveryPreviewEmptyActions(entries,matches,{searchScope,words,selectedOnly,activeFacets}){
+  if(!recoveryPreviewEmptyActions)return;
+  const buttons=[];
+  function add(label,overrides,apply){
+   const {scope=searchScope,terms=words,selected=selectedOnly,facets=activeFacets}=overrides;
+   const count=entries.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,terms,selected)&&
+    facets.every(({key,field})=>entry[key]===field.value)).length;
+   if(!count)return;
+   const button=document.createElement("button");
+   button.type="button";
+   button.style.minHeight="44px";
+   button.textContent=label+" ("+count+"건)";
+   button.addEventListener("click",()=>{
+    if(!pendingRecoveryPreview)return;
+    apply();
+    updateRecoveryPreviewKeepingResult();
+    focusRecoveryPreviewResult(pendingRecoveryPreview.resultIndex);
+   });
+   buttons.push(button);
+  }
+  if(!matches.length){
+   if(searchScope==="phrase")add("요약에서 단어별 검색",{scope:"summary"},()=>{recoveryPreviewScope.value="summary"});
+   if(searchScope!=="all")add("전체 발언 정보로 검색",{scope:"all"},()=>{recoveryPreviewScope.value="all"});
+   if(selectedOnly)add("선택하지 않은 발언도 검색",{selected:false},()=>{recoveryPreviewSelected.checked=false});
+   if(activeFacets.length)add("상세 필터 해제",{facets:[]},()=>{
+    for(const {field} of activeFacets)field.value="";
+   });
+   const original=recoveryPreviewSearch?.value.trim()??"";
+   const shorter=original.replace(/\s+\S+$/,"");
+   if(shorter&&shorter!==original){
+    const terms=shorter.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
+    add("마지막 검색 단어 빼기",{terms},()=>{recoveryPreviewSearch.value=shorter});
+   }
+  }
+  recoveryPreviewEmptyActions.replaceChildren(...buttons);
+  recoveryPreviewEmptyActions.hidden=!buttons.length;
+ }
  function renderReceiptQuickSourceRecoveryPreview(retainedKey){
   const {entries,label,commit,expanded,visibleDetails}=pendingRecoveryPreview;
   for(const [key,{details}] of visibleDetails){
@@ -3852,19 +3904,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const selectedOnly=Boolean(recoveryPreviewSelected?.checked);
   const facetCount=activeFacets.length+Number(selectedOnly);
   const filtered=Boolean(words.length||facetCount);
-  const searched=entries.filter(entry=>{
-   if(selectedOnly&&!entry.selection.checked)return false;
-   if(!words.length)return true;
-   if(searchScope==="phrase"){
-    return entry.summarySearchText.replace(/\s+/g," ").includes(words.join(" "));
-   }
-   const values={
-    summary:entry.summarySearchText,id:entry.id,agent:entry.agent,
-    phase:entry.phase+" "+receiptPhaseLabels[entry.phase],verdict:entry.verdict+" "+labels[entry.verdict],
-   };
-   const searchable=scoped?String(values[searchScope]??"").normalize("NFKC").toLowerCase():entry.searchText;
-   return words.every(word=>searchable.includes(word));
-  });
+  const searched=entries.filter(entry=>recoveryPreviewMatchesSearch(entry,searchScope,words,selectedOnly));
   const matchesFacets=(entry,except)=>activeFacets.every(({key,field})=>key===except||entry[key]===field.value);
   const matches=searched.filter(entry=>matchesFacets(entry));
   const reviewOrder=["REVIEW_NEEDED","INSUFFICIENT_DATA","OBSERVATION_ONLY"];
@@ -3880,6 +3920,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   else if(Object.hasOwn(sorters,order))matches.sort(sorters[order]);
   pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
   pendingRecoveryPreview.matches=matches;
+  renderRecoveryPreviewEmptyActions(entries,matches,{searchScope,words,selectedOnly,activeFacets});
   if(retainedKey!==undefined){
    pendingRecoveryPreview.emptyResultKey=matches.length?null:retainedKey;
    pendingRecoveryPreview.resultIndex=Math.max(0,matches.findIndex(entry=>entry.key===retainedKey));
