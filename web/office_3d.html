@@ -2221,7 +2221,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        </div>
        <div class="receipt-quick-presets">
         <label>변경 발언 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-search" type="search" style="min-height:44px"></label>
-        <label>검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-search-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option></select></label>
+        <label>검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-search-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option><option value="metadata">발언 정보만</option><option value="phrase">요약에서 문구 그대로</option></select></label>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-clear-search" type="button" style="min-height:44px" disabled>검색어 지우기</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-reset" type="button" style="min-height:44px">조건 초기화</button>
        </div>
@@ -2232,13 +2232,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <label>에이전트 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-agent" style="min-height:44px"><option value="">전체 에이전트</option></select></label>
         <label>회의 단계 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-phase" style="min-height:44px"><option value="">전체 단계</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option></select></label>
         <label>발언 판정 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-verdict" style="min-height:44px"><option value="">전체 판정</option><option value="OBSERVATION_ONLY">관측 요약</option><option value="REVIEW_NEEDED">추가 검토 필요</option><option value="INSUFFICIENT_DATA">자료 부족</option></select></label>
-        <label>정렬 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-order" style="min-height:44px"><option value="type">변경 유형순</option><option value="meeting">회의·발언순</option><option value="agent">에이전트순</option><option value="later">이후 회의 먼저</option><option value="phase">최종 결론 먼저</option><option value="verdict">자료 부족 판정 먼저</option></select></label>
+        <label>정렬 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-order" style="min-height:44px"><option value="type">변경 유형순</option><option value="meeting">회의·발언순</option><option value="agent">에이전트순</option><option value="later">이후 회의 먼저</option><option value="phase">최종 결론 먼저</option><option value="verdict">자료 부족 판정 먼저</option><option value="occurrences">검색어가 많이 나온 순</option><option value="last-read">마지막으로 읽은 발언 먼저</option></select></label>
         </div>
        </details>
        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-active-filters" class="receipt-quick-presets" role="group" aria-label="적용 중인 상세 필터" hidden></div>
        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-basic-conditions" class="receipt-quick-presets" role="group" aria-label="검색 및 선택 조건" hidden></div>
        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-clear-filters" type="button" style="min-height:44px" hidden>필터만 해제</button>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-sort-status" hidden></p>
+       <label id="ai-meeting-progress-receipt-preset-preview-source-changes-excerpt-control" hidden><input id="ai-meeting-progress-receipt-preset-preview-source-changes-hide-excerpts" type="checkbox"> 검색 문맥 숨기기</label>
        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-expand-matches" type="button" style="min-height:44px" hidden>검색어가 있는 요약 펼치기</button>
        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-collapse-matches" type="button" style="min-height:44px" hidden>검색어가 있는 요약 접기</button>
        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-match-navigation" class="receipt-quick-presets" role="group" aria-label="검색어가 있는 요약 이동" hidden>
@@ -3267,6 +3268,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceJumpResults=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-jump-results");
  const receiptQuickSourceExpandMatches=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-expand-matches");
  const receiptQuickSourceSearchScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-search-scope");
+ const receiptQuickSourceExcerptControl=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-excerpt-control");
+ const receiptQuickSourceHideExcerpts=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-hide-excerpts");
+ receiptQuickSourceHideExcerpts?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
  const receiptQuickSourceCollapseMatches=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-collapse-matches");
  const receiptQuickSourceMatchNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-navigation");
  const receiptQuickSourceMatchCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-count");
@@ -3434,10 +3438,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   ];
  }
  function receiptQuickSourceSearchWords(){
-  return (receiptQuickSourceChangeSearch?.value??"").normalize("NFKC").toLowerCase().split(/\s+/).filter(Boolean);
+  const query=(receiptQuickSourceChangeSearch?.value??"").normalize("NFKC").toLowerCase().trim();
+  return receiptQuickSourceSearchScope?.value==="phrase"?(query?[query]:[]):query.split(/\s+/).filter(Boolean);
  }
  function receiptQuickSourceSearchMatches(entry,words){
-  const text=receiptQuickSourceSearchScope?.value==="summary"?entry.summarySearchText:entry.searchText;
+  const scope=receiptQuickSourceSearchScope?.value;
+  const text=scope==="metadata"?entry.metadataSearchText:
+   scope==="summary"||scope==="phrase"?entry.summarySearchText:entry.searchText;
   return words.every(word=>text.includes(word));
  }
  const receiptQuickSourceChangeReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-reset");
@@ -3966,7 +3973,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickSourceChangesEmpty)receiptQuickSourceChangesEmpty.hidden=!showEmpty;
   if(receiptQuickSourceChangeEmptyReset)receiptQuickSourceChangeEmptyReset.hidden=!showEmpty;
   if(receiptQuickSourceChangeClearSearch)receiptQuickSourceChangeClearSearch.disabled=!receiptQuickSourceChangeSearch?.value;
-  const alternatives=[...new Set(words)].sort((a,b)=>b.length-a.length)
+  const highlightWords=receiptQuickSourceSearchScope?.value==="metadata"?[]:words;
+  const alternatives=[...new Set(highlightWords)].sort((a,b)=>b.length-a.length)
    .map(word=>word.replace(/[.*+?^\${}()|[\]\\]/g,"\\$&"));
   const pattern=alternatives.length?new RegExp(alternatives.join("|"),"gi"):null;
   const hitQuery=pattern?.source??"";
@@ -4035,7 +4043,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }
    updateReceiptQuickSourceHitNavigation(entry,previousIndex<ranges.length?previousIndex:-1);
   }
+  if(order==="occurrences"&&words.length){
+   visible.sort((a,b)=>b.summaryMarks.length-a.summaryMarks.length);
+  }else if(order==="last-read"&&lastReceiptQuickSourceChangeKey){
+   visible.sort((a,b)=>Number(b.key===lastReceiptQuickSourceChangeKey)-Number(a.key===lastReceiptQuickSourceChangeKey));
+  }
   const matches=visible.filter(entry=>entry.summaryMatches);
+  const hideExcerpts=!!receiptQuickSourceHideExcerpts?.checked;
+  if(receiptQuickSourceExcerptControl)receiptQuickSourceExcerptControl.hidden=!matches.length;
+  for(const entry of visible){
+   entry.summaryExcerpt.hidden=entry.summaryExcerptJump.hidden=hideExcerpts||!entry.summaryMatches;
+  }
   if(receiptQuickSourceOccurrenceCount){
    receiptQuickSourceOccurrenceCount.textContent=occurrences?"검색어 표시 "+occurrences+"곳":"";
   }
@@ -4240,13 +4258,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     });
     summaryHitTools.append(summaryHitPickerLabel,summaryHitSource,summaryHitBack);
     details.append(summaryHitTools);
-    const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
+    const metadataSearchText=(statement+" "+context).normalize("NFKC").toLowerCase();
+    const searchText=metadataSearchText+" "+summary.normalize("NFKC").toLowerCase();
     selection.checked=changeView?.selected.has(key)??false;
     details.open=changeView?.expanded.has(key)??false;
     const summarySearchText=summary.normalize("NFKC").toLowerCase();
     const change={key,row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,
      summary,summaryHeading:heading,summaryText:text,summaryExcerpt:excerpt,summaryExcerptJump:excerptJump,summaryHitButtons,summaryHitPosition,
-     summaryHitPicker,summaryHitPickerLabel,summaryHitSource,summaryHitBack,summaryHitTools,summarySearchText,searchText};
+     summaryHitPicker,summaryHitPickerLabel,summaryHitSource,summaryHitBack,summaryHitTools,summarySearchText,metadataSearchText,searchText};
     Object.assign(change,changeView?.hits.get(key));
     if(changeView?.currentKey===key)currentReceiptQuickSourceSelection=change;
     details.addEventListener("toggle",()=>{
