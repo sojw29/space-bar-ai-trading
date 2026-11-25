@@ -2297,6 +2297,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
           <label>복구 예시 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-search" type="search" style="min-height:44px"></label>
           <label>예시 검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option><option value="id">발언 번호만</option><option value="agent">에이전트 이름만</option><option value="phase">회의 단계만</option><option value="verdict">발언 판정만</option><option value="phrase">요약에서 정확한 구절</option></select></label>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-reset-search" type="button" style="min-height:44px" disabled>예시 검색 초기화</button>
+          <label>예시 정렬 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-order" style="min-height:44px">
+           <option value="default">기존 순서</option><option value="reverse">기존 순서의 역순</option>
+           <option value="agent">에이전트 이름순</option><option value="phase">회의 진행 단계순</option>
+           <option value="verdict">추가 검토 필요 발언 우선</option><option value="selected">선택한 발언 우선</option>
+          </select></label>
          </div>
          <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-status" role="status" tabindex="-1"></p>
          <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-rows"></ul>
@@ -3627,6 +3632,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-search");
  const recoveryPreviewSampleScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-scope");
  const recoveryPreviewSampleResetSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-reset-search");
+ const recoveryPreviewSampleOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-order");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -3948,6 +3954,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const words=query.split(/\s+/).filter(Boolean);
   const scope=recoveryPreviewSampleScope?.value||"all";
   const matches=results.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,words,false));
+  sortRecoveryPreviewMatches(matches,recoveryPreviewSampleOrder?.value);
   const start=page*recoveryPreviewPageSize;
   const sample=matches.slice(start,start+recoveryPreviewPageSize);
   const pageCount=Math.ceil(matches.length/recoveryPreviewPageSize);
@@ -3996,6 +4003,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     ...(pattern&&scope==="phase"?receiptQuickMarkedText(phase,pattern):[phase]),
     " · ",
     ...(pattern&&scope==="verdict"?receiptQuickMarkedText(verdict,pattern):[verdict]),
+    ...(entry.selection.checked?[" · 선택됨"]:[]),
    );
    row.append(title,excerpt,details,jump,context);
    return row;
@@ -4011,6 +4019,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  recoveryPreviewSampleSearch?.addEventListener("input",updateRecoveryPreviewSampleSearch);
  recoveryPreviewSampleScope?.addEventListener("change",updateRecoveryPreviewSampleSearch);
+ recoveryPreviewSampleOrder?.addEventListener("change",updateRecoveryPreviewSampleSearch);
  recoveryPreviewSampleResetSearch?.addEventListener("click",()=>{
   if(recoveryPreviewSampleSearch)recoveryPreviewSampleSearch.value="";
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
@@ -4032,6 +4041,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   pendingRecoveryPreview.suggestionSample={trigger,label,results,apply,page:0};
   if(recoveryPreviewSampleSearch)recoveryPreviewSampleSearch.value="";
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
+  if(recoveryPreviewSampleOrder)recoveryPreviewSampleOrder.value="default";
   trigger.setAttribute("aria-expanded","true");
   renderRecoveryPreviewSample();
   recoveryPreviewSuggestionSample.hidden=false;
@@ -4115,6 +4125,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   recoveryPreviewEmptyActions.replaceChildren(...buttons);
   recoveryPreviewEmptyActions.hidden=!buttons.length;
  }
+ function sortRecoveryPreviewMatches(matches,order="default"){
+  const reviewOrder=["REVIEW_NEEDED","INSUFFICIENT_DATA","OBSERVATION_ONLY"];
+  const phaseOrder=Object.keys(receiptPhaseLabels);
+  const sorters={
+   agent:(a,b)=>a.agent.localeCompare(b.agent),
+   phase:(a,b)=>phaseOrder.indexOf(a.phase)-phaseOrder.indexOf(b.phase),
+   verdict:(a,b)=>reviewOrder.indexOf(a.verdict)-reviewOrder.indexOf(b.verdict),
+   selected:(a,b)=>Number(b.selection.checked)-Number(a.selection.checked),
+  };
+  if(order==="reverse")matches.reverse();
+  else if(Object.hasOwn(sorters,order))matches.sort(sorters[order]);
+ }
  function renderReceiptQuickSourceRecoveryPreview(retainedKey){
   const {entries,label,commit,expanded,visibleDetails}=pendingRecoveryPreview;
   for(const [key,{details}] of visibleDetails){
@@ -4136,17 +4158,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const searched=entries.filter(entry=>recoveryPreviewMatchesSearch(entry,searchScope,words,selectedOnly));
   const matchesFacets=(entry,except)=>activeFacets.every(({key,field})=>key===except||entry[key]===field.value);
   const matches=searched.filter(entry=>matchesFacets(entry));
-  const reviewOrder=["REVIEW_NEEDED","INSUFFICIENT_DATA","OBSERVATION_ONLY"];
-  const phaseOrder=Object.keys(receiptPhaseLabels);
-  const sorters={
-   agent:(a,b)=>a.agent.localeCompare(b.agent),
-   phase:(a,b)=>phaseOrder.indexOf(a.phase)-phaseOrder.indexOf(b.phase),
-   verdict:(a,b)=>reviewOrder.indexOf(a.verdict)-reviewOrder.indexOf(b.verdict),
-   selected:(a,b)=>Number(b.selection.checked)-Number(a.selection.checked),
-  };
-  const order=recoveryPreviewOrder?.value??"default";
-  if(order==="reverse")matches.reverse();
-  else if(Object.hasOwn(sorters,order))matches.sort(sorters[order]);
+  sortRecoveryPreviewMatches(matches,recoveryPreviewOrder?.value);
   pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
   pendingRecoveryPreview.matches=matches;
   renderRecoveryPreviewEmptyActions(entries,matches,{searchScope,words,selectedOnly,activeFacets});
