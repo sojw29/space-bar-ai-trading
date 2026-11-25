@@ -2282,6 +2282,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          </div>
         </details>
         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-active" class="receipt-quick-presets" role="group" aria-label="적용 중인 미리보기 필터" hidden></div>
+        <label>미리보기 정렬 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-order" style="min-height:44px">
+         <option value="default">기존 순서</option>
+         <option value="reverse">기존 순서의 역순</option>
+         <option value="agent">에이전트 이름순</option>
+         <option value="phase">회의 진행 단계순</option>
+         <option value="verdict">추가 검토 필요 발언 우선</option>
+         <option value="selected">선택한 발언 우선</option>
+        </select></label>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results" type="button" style="min-height:44px" disabled>현재 페이지 첫 발언으로 이동</button>
         <div class="receipt-quick-presets" role="group" aria-label="미리보기 발언 요약">
@@ -3538,6 +3546,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewJumpResults=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results");
  const recoveryPreviewSummaryScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-summary-scope");
  const recoveryPreviewExpandedCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expanded-count");
+ const recoveryPreviewOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-order");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3547,6 +3556,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  recoveryPreviewSearch?.addEventListener("input",updateRecoveryPreviewSearch);
  recoveryPreviewScope?.addEventListener("change",updateRecoveryPreviewSearch);
+ recoveryPreviewOrder?.addEventListener("change",updateRecoveryPreviewSearch);
  for(const {field} of recoveryPreviewFacets)field.addEventListener("change",updateRecoveryPreviewSearch);
  recoveryPreviewSearch?.addEventListener("keydown",event=>{
   if(event.key==="Enter"&&!event.isComposing&&pendingRecoveryPreview?.firstAction){
@@ -3654,6 +3664,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
   const matchesFacets=(entry,except)=>activeFacets.every(({key,field})=>key===except||entry[key]===field.value);
   const matches=searched.filter(entry=>matchesFacets(entry));
+  const reviewOrder=["REVIEW_NEEDED","INSUFFICIENT_DATA","OBSERVATION_ONLY"];
+  const phaseOrder=Object.keys(receiptPhaseLabels);
+  const sorters={
+   agent:(a,b)=>a.agent.localeCompare(b.agent),
+   phase:(a,b)=>phaseOrder.indexOf(a.phase)-phaseOrder.indexOf(b.phase),
+   verdict:(a,b)=>reviewOrder.indexOf(a.verdict)-reviewOrder.indexOf(b.verdict),
+   selected:(a,b)=>Number(b.selection.checked)-Number(a.selection.checked),
+  };
+  const order=recoveryPreviewOrder?.value??"default";
+  if(order==="reverse")matches.reverse();
+  else if(Object.hasOwn(sorters,order))matches.sort(sorters[order]);
   pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
   const activeLabels=[];
   for(const {key,field} of recoveryPreviewFacets){
@@ -3886,6 +3907,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      if(recoveryPreviewSelected)recoveryPreviewSelected.checked=false;
      if(recoveryPreviewFilters)recoveryPreviewFilters.open=false;
      if(recoveryPreviewSummaryScope)recoveryPreviewSummaryScope.value="page";
+     if(recoveryPreviewOrder)recoveryPreviewOrder.value="default";
      pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0,expanded:new Set(),visibleDetails:new Map(),facetOptions:new Map()};
      populateRecoveryPreviewFacets(entries);
      renderReceiptQuickSourceRecoveryPreview();
