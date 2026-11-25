@@ -1381,6 +1381,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(sourceChangeType('recovery-preview-status').textContent,/일치 발언 0건 · 전체 1건/);
    const peekAlternatives=sourceChangeType('recovery-preview-empty-actions');
    assert.equal(peekAlternatives.hidden,false);
+   assert.ok(peekAlternatives.children.some(button=>button.textContent==='검색어만 지우기 (1건)'));
    const peekRecovery=peekAlternatives.children.find(button=>button.textContent==='마지막 검색 단어 빼기 (1건)');
    assert.ok(peekRecovery);
    peekRecovery.click();
