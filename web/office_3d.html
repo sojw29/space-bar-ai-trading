@@ -3255,12 +3255,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!container||!rows)return;
   let focusedKey;
   let focusedAction;
-  for(const [key,{details,heading,choose}] of rendered){
+  for(const [key,{details,heading,choose,source}] of rendered){
    if(details.open)expanded.add(key);
    else expanded.delete(key);
-   if(document.activeElement===heading||(choose&&document.activeElement===choose)){
+   if([heading,choose,source].includes(document.activeElement)&&document.activeElement){
     focusedKey=key;
-    focusedAction=document.activeElement===choose?"choose":"heading";
+    focusedAction=document.activeElement===source?"source":document.activeElement===choose?"choose":"heading";
    }
   }
   rendered.clear();
@@ -3307,8 +3307,31 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     });
     details.append(choose);
    }
+   const source=document.createElement("button");
+   source.type="button";
+   source.style.minHeight="44px";
+   source.textContent="원문 보기";
+   source.setAttribute("aria-label",receiptQuickRowLabel(entry)+" 원문 보기");
+   source.addEventListener("click",()=>{
+    const pending=pendingQuickPreset;
+    openRestoredEvidence(entry.key,()=>{
+     if(!pending||pending!==pendingQuickPreset||!progressReceipt||progressReceipt.hidden)return false;
+     progressReceipt.open=true;
+     if(progressReceiptFilterTools)progressReceiptFilterTools.open=true;
+     const target=rendered.get(entry.key);
+     if(target){
+      container.open=true;
+      target.details.open=true;
+     }
+     const focus=target?.source??receiptQuickPreview;
+     focus?.focus({preventScroll:true});
+     focus?.scrollIntoView?.({block:"nearest"});
+     return true;
+    });
+   });
+   details.append(source);
    row.append(details);
-   rendered.set(entry.key,{details,heading,choose,label:receiptQuickRowLabel(entry)});
+   rendered.set(entry.key,{details,heading,choose,source,label:receiptQuickRowLabel(entry)});
    if(canJump)heading.addEventListener("click",()=>{
     if(!details.open&&!receiptQuickListNavigation?.hidden){
      receiptQuickListCurrentKey=entry.key;
@@ -3903,7 +3926,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    "건 · 이후 회의 "+(keys.length-earlier)+"건 · 현재 검토 "+entries.filter(entry=>entry.reviewed).length+
    " / "+keys.length+"건";
  }
- function openRestoredEvidence(key){
+ function openRestoredEvidence(key,returnToPreview){
   if(!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
   let cards=displayedEvidenceCards();
   let index=cards.findIndex(({card})=>card.reviewKey===key);
@@ -3913,7 +3936,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    cards=displayedEvidenceCards();
    index=cards.findIndex(({card})=>card.reviewKey===key);
   }
-  openEvidenceResult(cards,index,true);
+  openEvidenceResult(cards,index,true,returnToPreview);
  }
  function progressReceiptFilters(){
   return {search:progressReceiptSearch?.value??"",selectedOnly:!!progressReceiptSelectedOnly?.checked,...Object.fromEntries(
@@ -4981,7 +5004,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!entry)return;
   openEvidenceResult(cards,index);
  }
- function openEvidenceResult(cards,index,fromReceipt=false){
+ function openEvidenceResult(cards,index,fromReceipt=false,returnToPreview){
   const entry=cards[index];
   if(!entry||(!pairedArchives&&!canUseRecord()))return;
   if(activeEvidenceCard)activeEvidenceCard.back.hidden=true;
@@ -4989,7 +5012,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   openFinalConcern(entry.category,entry.index);
   activeEvidenceCard.back.hidden=false;
   activeEvidenceCard.fromReceipt=fromReceipt;
-  activeEvidenceCard.back.textContent=fromReceipt?"복원 내역으로 돌아가기":"근거 발언 이동 버튼으로 돌아가기";
+  activeEvidenceCard.returnToPreview=returnToPreview;
+  activeEvidenceCard.back.textContent=returnToPreview?"조합 미리보기로 돌아가기":
+   fromReceipt?"복원 내역으로 돌아가기":"근거 발언 이동 버튼으로 돌아가기";
   updateEvidenceNavigation(cards);
   if(evidencePicker)evidencePicker.value=String(index);
   if(openPickedEvidence)openPickedEvidence.disabled=false;
@@ -5594,6 +5619,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        back.textContent="근거 발언 이동 버튼으로 돌아가기";
        back.hidden=true;
        back.addEventListener("click",()=>{
+        if(activeEvidenceCard?.returnToPreview?.())return;
         if(activeEvidenceCard?.fromReceipt&&progressReceipt&&!progressReceipt.hidden){
          progressReceipt.open=true;
          const target=progressReceiptCards.get(activeEvidenceCard.reviewKey)?.button||progressReceiptHeading;
