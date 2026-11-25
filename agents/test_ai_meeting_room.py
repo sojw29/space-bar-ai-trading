@@ -34,7 +34,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','state','selected','reset','count','expand','collapse']){
+  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -890,6 +890,30 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const listFilter=name=>quickList('list-'+name);
    const projectedRows=()=>quickList('projected','-rows').children;
    const projectedDetailsRows=()=>projectedRows().map(row=>row.children[0]);
+   assert.equal(listFilter('more').open,false);
+   listFilter('side').value='earlier';listFilter('side').change();
+   assert.equal(projectedRows().length,1);
+   assert.match(projectedDetailsRows()[0].children[0].textContent,/이전/);
+   listFilter('agent').value='ATLAS';listFilter('agent').change();
+   assert.equal(projectedRows().length,0);
+   listFilter('agent').value='COMMANDER';listFilter('agent').change();
+   listFilter('phase').value='ANALYSIS';listFilter('phase').change();
+   assert.equal(projectedRows().length,0);
+   listFilter('phase').value='CONCLUSION';listFilter('phase').change();
+   assert.equal(projectedRows().length,1);
+   listFilter('verdict').value='INSUFFICIENT_DATA';listFilter('verdict').change();
+   assert.equal(projectedRows().length,0);
+   listFilter('reset').click();
+   assert.equal(projectedRows().length,2);
+   assert.equal(listFilter('verdict').value,'all');
+   receiptOrder.value='default';receiptOrder.change();
+   listFilter('order').value='later';listFilter('order').change();
+   assert.match(projectedDetailsRows()[0].children[0].textContent,/이후/);
+   assert.match(directTargets().children[0].textContent,/이전/);
+   assert.equal(receiptOrder.value,'default');
+   listFilter('reset').click();
+   assert.equal(listFilter('order').value,'default');
+   receiptOrder.value='later';receiptOrder.change();
    listFilter('expand').click();
    assert.ok(projectedDetailsRows().every(details=>details.open));
    listFilter('collapse').click();
