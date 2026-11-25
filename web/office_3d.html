@@ -3459,6 +3459,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const type=receiptQuickSourceChangeFilter;
    const selectedOnly=!!receiptQuickSourceSelectedOnly?.checked;
    const candidates=[
+    ["요약에서 단어별로 검색",words.length&&scope==="phrase",{scope:"summary",words:receiptQuickSourceSearchWords("summary")},
+     ()=>{receiptQuickSourceSearchScope.value="summary"}],
+    ...facets.map((facet,index)=>{
+     const [field,,all,label]=facet;
+     return [label+" 필터만 해제",true,{facets:facets.filter((_,position)=>position!==index)},()=>{field.value=all}];
+    }),
     ["전체 발언 정보에서 검색",words.length&&scope!=="all",{scope:"all",words:receiptQuickSourceSearchWords("all")},
      ()=>{receiptQuickSourceSearchScope.value="all"}],
     ["검색어만 지우기",words.length,{words:[]},
@@ -3467,7 +3473,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      ()=>{receiptQuickSourceChangeFilter="all"}],
     ["선택하지 않은 발언도 보기",selectedOnly,{selectedOnly:false},
      ()=>{receiptQuickSourceSelectedOnly.checked=false}],
-    ["상세 필터만 해제",facets.length,{facets:[]},
+    ["상세 필터 모두 해제",facets.length>1,{facets:[]},
      ()=>{for(const [field,,all] of facets)field.value=all}],
    ];
    for(const [label,available,overrides,apply] of candidates){
