@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt','occurrence-count','excerpt-control','hide-excerpts']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt','occurrence-count','excerpt-control','hide-excerpts','empty-actions']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -1099,9 +1099,15 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    summarySearchInput.value='M07';
    summarySearchInput.input();
    assert.equal(sourceChangeRows().length,0);
-   sourceChangeType('search-scope').value='all';
-   sourceChangeType('search-scope').change();
+   const emptySourceActions=sourceChangeType('empty-actions');
+   assert.equal(emptySourceActions.hidden,false);
+   const broadenSourceSearch=emptySourceActions.children.find(button=>button.textContent.startsWith('전체 발언 정보'));
+   assert.match(broadenSourceSearch.textContent,/1건/);
+   broadenSourceSearch.click();
+   assert.equal(sourceChangeType('search-scope').value,'all');
    assert.equal(sourceChangeRows().length,1);
+   assert.equal(emptySourceActions.hidden,true);
+   assert.equal(sourceChangeRows()[0].children[0].focused,true);
    summarySearchInput.keydown({key:'Enter',preventDefault(){}});
    assert.equal(sourceChangeRows()[0].children[0].focused,true);
    summarySearchInput.keydown({key:'Escape',preventDefault(){}});
@@ -1237,6 +1243,13 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeRows().length,0);
    assert.equal(sourceChangeType('count').textContent,'표시 0건 / 전체 1건');
    assert.equal(sourceChangeType('empty-reset').hidden,false);
+   const loosenDetailedFilters=sourceChangeType('empty-actions').children.find(button=>button.textContent.startsWith('상세 필터'));
+   assert.ok(loosenDetailedFilters);
+   loosenDetailedFilters.click();
+   assert.equal(sourceChangeType('period').value,'all');
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('period').value='earlier';
+   sourceChangeType('period').change();
    sourceChangeType('clear-search').click();
    assert.equal(sourceChangeType('search').value,'');
    assert.equal(sourceChangeType('search').focused,true);
