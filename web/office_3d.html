@@ -2304,15 +2304,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
           </select></label>
          </div>
          <details>
-          <summary>예시 상세 필터</summary>
+          <summary id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-heading">예시 상세 필터</summary>
           <div class="receipt-quick-presets">
            <label>검토 유형 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-type" style="min-height:44px"></select></label>
            <label>에이전트 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-agent" style="min-height:44px"></select></label>
            <label>회의 단계 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-phase" style="min-height:44px"></select></label>
            <label>발언 판정 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-verdict" style="min-height:44px"></select></label>
-           <label><input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-selected" type="checkbox"> 선택한 발언만</label>
+           <label><input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-selected" type="checkbox"> <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-selected-label">선택한 발언만</span></label>
+           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-clear-facets" type="button" style="min-height:44px" disabled>예시 상세 필터만 초기화</button>
           </div>
          </details>
+         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-active-filters" class="receipt-quick-presets" role="group" aria-label="적용 중인 예시 필터" hidden></div>
          <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-status" role="status" tabindex="-1"></p>
          <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-rows"></ul>
          <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-pages" class="receipt-quick-presets" role="group" aria-label="복구 예시 페이지" hidden>
@@ -3650,6 +3652,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   key,field:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-"+key),
  })).filter(({field})=>field);
  const recoveryPreviewSampleSelected=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-selected");
+ const recoveryPreviewSampleFilterHeading=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-filter-heading");
+ const recoveryPreviewSampleSelectedLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-selected-label");
+ const recoveryPreviewSampleClearFacets=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-clear-facets");
+ const recoveryPreviewSampleActiveFilters=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-active-filters");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -3966,14 +3972,55 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
  });
  function renderRecoveryPreviewSample(){
-  const {label,results,apply,page}=pendingRecoveryPreview.suggestionSample;
+  const {label,results,apply,page,facetOptions}=pendingRecoveryPreview.suggestionSample;
   const query=(recoveryPreviewSampleSearch?.value??"").normalize("NFKC").toLowerCase().trim();
   const words=query.split(/\s+/).filter(Boolean);
   const scope=recoveryPreviewSampleScope?.value||"all";
   const facets=recoveryPreviewSampleFacets.filter(({field})=>field.value);
   const selectedOnly=Boolean(recoveryPreviewSampleSelected?.checked);
-  const matches=results.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,words,selectedOnly)&&
-   facets.every(({key,field})=>entry[key]===field.value));
+  const searched=results.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,words,false));
+  const eligible=selectedOnly?searched.filter(entry=>entry.selection.checked):searched;
+  const matchesFacets=(entry,except)=>facets.every(({key,field})=>key===except||entry[key]===field.value);
+  const matches=eligible.filter(entry=>matchesFacets(entry));
+  const active=[];
+  for(const {key,field} of recoveryPreviewSampleFacets){
+   const counts=new Map();
+   let total=0;
+   for(const entry of eligible){
+    if(!matchesFacets(entry,key))continue;
+    total++;
+    counts.set(entry[key],(counts.get(entry[key])??0)+1);
+   }
+   for(const {option,label} of facetOptions.get(key)){
+    option.textContent=label+" ("+(option.value?(counts.get(option.value)??0):total)+"건)";
+    if(option.value&&option.value===field.value)active.push([label,()=>{field.value=""}]);
+   }
+  }
+  if(selectedOnly)active.push(["선택한 발언만",()=>{recoveryPreviewSampleSelected.checked=false}]);
+  if(recoveryPreviewSampleSelectedLabel){
+   const count=searched.filter(entry=>entry.selection.checked&&matchesFacets(entry)).length;
+   recoveryPreviewSampleSelectedLabel.textContent="선택한 발언만 ("+count+"건)";
+  }
+  if(recoveryPreviewSampleFilterHeading){
+   recoveryPreviewSampleFilterHeading.textContent="예시 상세 필터"+(active.length?" ("+active.length+")":"");
+  }
+  if(recoveryPreviewSampleClearFacets)recoveryPreviewSampleClearFacets.disabled=!active.length;
+  if(recoveryPreviewSampleActiveFilters){
+   recoveryPreviewSampleActiveFilters.hidden=!active.length;
+   recoveryPreviewSampleActiveFilters.replaceChildren(...active.map(([label,clear],index)=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.style.minHeight="44px";
+    button.textContent=label+" 해제";
+    button.addEventListener("click",()=>{
+     clear();
+     updateRecoveryPreviewSampleSearch();
+     const remaining=recoveryPreviewSampleActiveFilters.children;
+     (remaining[Math.min(index,remaining.length-1)]??recoveryPreviewSampleFilterHeading)?.focus();
+    });
+    return button;
+   }));
+  }
   sortRecoveryPreviewMatches(matches,recoveryPreviewSampleOrder?.value);
   const start=page*recoveryPreviewPageSize;
   const sample=matches.slice(start,start+recoveryPreviewPageSize);
@@ -4044,11 +4091,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  recoveryPreviewSampleOrder?.addEventListener("change",updateRecoveryPreviewSampleSearch);
  for(const {field} of recoveryPreviewSampleFacets)field.addEventListener("change",updateRecoveryPreviewSampleSearch);
  recoveryPreviewSampleSelected?.addEventListener("change",updateRecoveryPreviewSampleSearch);
+ function clearRecoveryPreviewSampleFacets(){
+  for(const {field} of recoveryPreviewSampleFacets)field.value="";
+  if(recoveryPreviewSampleSelected)recoveryPreviewSampleSelected.checked=false;
+ }
+ recoveryPreviewSampleClearFacets?.addEventListener("click",()=>{
+  clearRecoveryPreviewSampleFacets();
+  updateRecoveryPreviewSampleSearch();
+  recoveryPreviewSampleFilterHeading?.focus();
+ });
  recoveryPreviewSampleResetSearch?.addEventListener("click",()=>{
   if(recoveryPreviewSampleSearch)recoveryPreviewSampleSearch.value="";
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
-  for(const {field} of recoveryPreviewSampleFacets)field.value="";
-  if(recoveryPreviewSampleSelected)recoveryPreviewSampleSelected.checked=false;
+  clearRecoveryPreviewSampleFacets();
   updateRecoveryPreviewSampleSearch();
   recoveryPreviewSampleSearch?.focus();
  });
@@ -4064,11 +4119,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function openRecoveryPreviewSample(trigger,label,results,apply){
   if(!pendingRecoveryPreview||!recoveryPreviewSuggestionSample||!recoveryPreviewSampleRows||!recoveryPreviewSampleStatus)return;
   closeRecoveryPreviewSample();
-  pendingRecoveryPreview.suggestionSample={trigger,label,results,apply,page:0};
+  const facetOptions=new Map();
+  pendingRecoveryPreview.suggestionSample={trigger,label,results,apply,page:0,facetOptions};
   if(recoveryPreviewSampleSearch)recoveryPreviewSampleSearch.value="";
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
   if(recoveryPreviewSampleOrder)recoveryPreviewSampleOrder.value="default";
-  for(const {key,field} of recoveryPreviewSampleFacets)populateRecoveryPreviewFacet(results,key,field);
+  for(const {key,field} of recoveryPreviewSampleFacets){
+   facetOptions.set(key,populateRecoveryPreviewFacet(results,key,field));
+  }
   if(recoveryPreviewSampleSelected)recoveryPreviewSampleSelected.checked=false;
   trigger.setAttribute("aria-expanded","true");
   renderRecoveryPreviewSample();
