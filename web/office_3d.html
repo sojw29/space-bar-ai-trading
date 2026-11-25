@@ -2266,6 +2266,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <section id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview" aria-label="검색 결과 미리보기" hidden>
         <div class="receipt-quick-presets">
          <label>미리보기에서 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-search" type="search" style="min-height:44px"></label>
+         <label>미리보기 검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option></select></label>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear" type="button" style="min-height:44px" disabled>미리보기 검색어 지우기</button>
         </div>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
@@ -3479,6 +3480,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewNext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-next");
  const recoveryPreviewSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-search");
  const recoveryPreviewClear=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear");
+ const recoveryPreviewScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-scope");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3487,6 +3489,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   renderReceiptQuickSourceRecoveryPreview();
  }
  recoveryPreviewSearch?.addEventListener("input",updateRecoveryPreviewSearch);
+ recoveryPreviewScope?.addEventListener("change",updateRecoveryPreviewSearch);
+ recoveryPreviewSearch?.addEventListener("keydown",event=>{
+  const first=pendingRecoveryPreview?.firstAction;
+  if(event.key==="Enter"&&!event.isComposing&&first){
+   event.preventDefault();
+   first.focus({preventScroll:true});
+   first.scrollIntoView({block:"nearest"});
+  }
+ });
  recoveryPreviewClear?.addEventListener("click",()=>{
   if(!recoveryPreviewSearch)return;
   recoveryPreviewSearch.value="";
@@ -3511,7 +3522,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const {entries,label,page,commit,expanded}=pendingRecoveryPreview;
   const query=(recoveryPreviewSearch?.value??"").normalize("NFKC").toLowerCase().trim();
   const words=query.split(/\s+/).filter(Boolean);
-  const matches=entries.filter(({searchText})=>words.every(word=>searchText.includes(word)));
+  const summaryOnly=recoveryPreviewScope?.value==="summary";
+  const matches=entries.filter(entry=>{
+   const searchable=summaryOnly?entry.summarySearchText:entry.searchText;
+   return words.every(word=>searchable.includes(word));
+  });
+  const alternatives=[...new Set(words)].sort((a,b)=>b.length-a.length)
+   .map(word=>word.replace(/[.*+?^{}$()|[\]\\]/g,"\\$&"));
+  const pattern=alternatives.length?new RegExp(alternatives.join("|"),"gi"):null;
+  pendingRecoveryPreview.firstAction=null;
   const start=page*recoveryPreviewPageSize;
   const sample=matches.slice(start,start+recoveryPreviewPageSize);
   const range=sample.length?(start+1)+"–"+(start+sample.length)+" / "+matches.length+"건":"일치 발언 0건";
@@ -3519,18 +3538,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewPrev)recoveryPreviewPrev.disabled=start===0;
   if(recoveryPreviewNext)recoveryPreviewNext.disabled=start+sample.length>=matches.length;
   if(recoveryPreviewClear)recoveryPreviewClear.disabled=!recoveryPreviewSearch?.value;
-  recoveryPreviewRows.replaceChildren(...sample.map(({key,label,summary})=>{
+  recoveryPreviewRows.replaceChildren(...sample.map((entry,index)=>{
+   const {key,label,summary}=entry;
    const row=document.createElement("li");
    const title=document.createElement("strong");
    const excerpt=document.createElement("p");
-   title.textContent=label;
-   const characters=Array.from(summary);
-   excerpt.textContent=characters.slice(0,100).join("")+(characters.length>100?"…":"");
+   if(pattern&&!summaryOnly)title.append(...receiptQuickMarkedText(label,pattern));
+   else title.textContent=label;
+   const ranges=receiptQuickSourceSummaryRanges(entry,pattern);
+   const start=ranges.length?Math.max(0,ranges[0][0]-25):0;
+   const end=Math.min(summary.length,Math.max(start+100,ranges[0]?.[1]??0));
+   excerpt.append(start?"…":"",...receiptQuickSourceSummaryParts(summary,ranges,start,end),end<summary.length?"…":"");
    const full=document.createElement("details");
    const heading=document.createElement("summary");
    const text=document.createElement("p");
    heading.textContent="발언 요약 전체";
-   text.textContent=summary;
+   if(ranges.length)text.append(...receiptQuickSourceSummaryParts(summary,ranges));
+   else text.textContent=summary;
    full.append(heading,text);
    full.open=expanded.has(key);
    full.addEventListener("toggle",()=>{
@@ -3543,6 +3567,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    jump.textContent="적용하고 이 발언으로 이동";
    jump.setAttribute("aria-label",label+" · 적용하고 이 발언으로 이동");
    jump.addEventListener("click",()=>commit(key));
+   if(index===0)pendingRecoveryPreview.firstAction=jump;
    row.append(title,excerpt,full,jump);
    return row;
   }));
@@ -3552,6 +3577,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreview)recoveryPreview.hidden=true;
   if(recoveryPreviewStatus)recoveryPreviewStatus.textContent="";
   if(recoveryPreviewSearch)recoveryPreviewSearch.value="";
+  if(recoveryPreviewScope)recoveryPreviewScope.value="all";
   recoveryPreviewRows?.replaceChildren();
  }
  recoveryPreviewApply?.addEventListener("click",()=>pendingRecoveryPreview?.commit());
@@ -3661,6 +3687,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     preview.textContent="미리보기 · "+label;
     preview.addEventListener("click",()=>{
      if(recoveryPreviewSearch)recoveryPreviewSearch.value="";
+     if(recoveryPreviewScope)recoveryPreviewScope.value="all";
      pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0,expanded:new Set()};
      renderReceiptQuickSourceRecoveryPreview();
      recoveryPreview.hidden=false;
