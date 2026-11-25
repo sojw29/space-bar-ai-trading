@@ -3903,7 +3903,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    button.disabled=next<0||next>=total||next===index;
   }
   summaryHitPosition.hidden=!total;
-  summaryHitPosition.textContent=total?(index<0?total+"곳":(index+1)+" / "+total+"곳"):"";
+  const current=summaryMarks[index];
+  summaryHitPosition.textContent=total?(index<0?total+"곳":(index+1)+" / "+total+"곳 · "+current.textContent):"";
+  entry.summaryHitPicker.value=index<0?"":String(index);
+  entry.summaryHitPickerLabel.hidden=total<2;
+  entry.summaryHitSource.hidden=!total;
+  entry.summaryHitSource.disabled=!current;
+  entry.summaryHitBack.hidden=!current;
+  entry.summaryExcerptJump.hidden=!total;
   summaryMarks.forEach((mark,position)=>mark.setAttribute("aria-current",String(position===index)));
  }
  function focusReceiptQuickSourceHit(mark){
@@ -3976,9 +3983,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    entry.summaryExcerpt.hidden=!ranges.length;
    entry.summaryExcerpt.replaceChildren();
    entry.summaryMarks=[];
+   const prompt=document.createElement("option");
+   prompt.value="";
+   prompt.textContent="강조 위치 선택";
+   prompt.disabled=true;
+   entry.summaryHitPicker.replaceChildren(prompt);
    if(ranges.length){
     const parts=receiptQuickSourceSummaryParts(entry.summary,ranges);
     entry.summaryMarks=parts.filter((_,index)=>index%2===1);
+    entry.summaryHitPicker.append(...entry.summaryMarks.map((mark,index)=>{
+     const option=document.createElement("option");
+     option.value=String(index);
+     option.textContent=(index+1)+" · "+mark.textContent;
+     return option;
+    }));
     entry.summaryMarks.forEach((mark,index)=>{
      mark.setAttribute("aria-keyshortcuts","ArrowLeft ArrowRight Home End Enter Escape");
      mark.addEventListener("click",()=>{
@@ -4150,6 +4168,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const excerpt=document.createElement("p");
     excerpt.hidden=true;
     row.append(excerpt);
+    const excerptJump=document.createElement("button");
+    excerptJump.type="button";
+    excerptJump.style.minHeight="44px";
+    excerptJump.textContent="이 문맥으로 이동";
+    excerptJump.hidden=true;
+    excerptJump.addEventListener("click",()=>{
+     if(!change.summaryMarks?.length)return;
+     details.open=true;
+     moveReceiptQuickSourceHit(change,0);
+    });
+    row.append(excerptJump);
     const summaryHitPosition=document.createElement("span");
     summaryHitPosition.setAttribute("role","status");
     summaryHitPosition.hidden=true;
@@ -4171,12 +4200,39 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      return {button,target};
     });
     details.append(...summaryHitButtons.map(({button})=>button),summaryHitPosition);
+    const summaryHitPicker=document.createElement("select");
+    summaryHitPicker.style.minHeight="44px";
+    summaryHitPicker.addEventListener("change",()=>{
+     if(summaryHitPicker.value!=="")moveReceiptQuickSourceHit(change,Number(summaryHitPicker.value));
+    });
+    const summaryHitPickerLabel=document.createElement("label");
+    summaryHitPickerLabel.hidden=true;
+    summaryHitPickerLabel.append("강조 위치 ",summaryHitPicker);
+    const summaryHitSource=document.createElement("button");
+    summaryHitSource.type="button";
+    summaryHitSource.style.minHeight="44px";
+    summaryHitSource.textContent="강조 위치에서 원문 열기";
+    summaryHitSource.hidden=true;
+    summaryHitSource.addEventListener("click",()=>{
+     if(!summaryHitSource.disabled)openReceiptQuickSource(key,receiptQuickPreviewSourceChanges);
+    });
+    const summaryHitBack=document.createElement("button");
+    summaryHitBack.type="button";
+    summaryHitBack.style.minHeight="44px";
+    summaryHitBack.textContent="요약 제목으로 돌아가기";
+    summaryHitBack.hidden=true;
+    summaryHitBack.addEventListener("click",()=>{
+     heading.focus({preventScroll:true});
+     heading.scrollIntoView({block:"nearest"});
+    });
+    details.append(summaryHitPickerLabel,summaryHitSource,summaryHitBack);
     const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
     selection.checked=changeView?.selected.has(key)??false;
     details.open=changeView?.expanded.has(key)??false;
     const summarySearchText=summary.normalize("NFKC").toLowerCase();
     const change={key,row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,
-     summary,summaryHeading:heading,summaryText:text,summaryExcerpt:excerpt,summaryHitButtons,summaryHitPosition,summarySearchText,searchText};
+     summary,summaryHeading:heading,summaryText:text,summaryExcerpt:excerpt,summaryExcerptJump:excerptJump,summaryHitButtons,summaryHitPosition,
+     summaryHitPicker,summaryHitPickerLabel,summaryHitSource,summaryHitBack,summarySearchText,searchText};
     Object.assign(change,changeView?.hits.get(key));
     if(changeView?.currentKey===key)currentReceiptQuickSourceSelection=change;
     details.addEventListener("toggle",()=>{
