@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker','match-actions','select-matches','unselect-matches','matched-csv','matched-json','matched-txt']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -967,6 +967,20 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sourceChangeType('expand-matches').click();
    assert.equal(matchedSummary.open,true);
    assert.equal(sourceChangeType('match-count').textContent,'일치 요약 1건');
+   assert.equal(sourceChangeType('match-actions').hidden,false);
+   sourceChangeType('select-matches').click();
+   assert.equal(sourceChangeRows()[0].children[2].children[0].checked,true);
+   assert.equal(sourceChangeType('select-matches').disabled,true);
+   sourceChangeType('unselect-matches').click();
+   assert.equal(sourceChangeRows()[0].children[2].children[0].checked,false);
+   for(const format of ['csv','json','txt']){
+    const button=sourceChangeType('matched-'+format);
+    assert.equal(button.disabled,false);
+    button.click();
+    assert.match(downloads.at(-1),/matched-source-review-changes/);
+    assert.ok(downloads.at(-1).endsWith('.'+format));
+    assert.match(await savedBlob.text(),/COMMANDER/);
+   }
    sourceChangeType('collapse-matches').click();
    assert.equal(matchedSummary.open,false);
    sourceChangeType('next-match').click();
@@ -1004,6 +1018,11 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    summarySearchInput.keydown({key:'Escape',preventDefault(){}});
    assert.equal(summarySearchInput.value,'');
    assert.equal(sourceChangeType('expand-matches').hidden,true);
+   assert.equal(sourceChangeType('match-actions').hidden,true);
+   assert.equal(sourceChangeType('matched-json').disabled,true);
+   const beforeNoMatchExport=downloads.length;
+   sourceChangeType('matched-json').click();
+   assert.equal(downloads.length,beforeNoMatchExport);
    matchedSummary.open=false;
    const selectSourceRow=sourceChangeRows()[0].children[2].children[0];
    selectSourceRow.checked=true;
