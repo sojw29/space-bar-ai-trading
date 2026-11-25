@@ -2292,6 +2292,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         </select></label>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
         <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-empty-actions" class="receipt-quick-presets" role="group" aria-label="미리보기 결과 다시 찾기" hidden></div>
+        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-recovery-history" class="receipt-quick-presets" role="group" aria-label="미리보기 검색 복구 기록" hidden>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-undo-recovery" type="button" style="min-height:44px" disabled>미리보기 복구 되돌리기</button>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-redo-recovery" type="button" style="min-height:44px" disabled>미리보기 복구 다시 적용</button>
+         <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-recovery-feedback" role="status"></span>
+        </div>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-jump-results" type="button" style="min-height:44px" disabled>현재 페이지 첫 발언으로 이동</button>
         <div class="receipt-quick-presets" role="group" aria-label="미리보기 발언 요약">
          <label>요약 펼치기·접기 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-summary-scope" style="min-height:44px"><option value="page">현재 페이지</option><option value="matches">검색 결과 전체</option></select></label>
@@ -3590,6 +3595,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewOpenSummary=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-open-summary");
  const recoveryPreviewBackSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-back-search");
  const recoveryPreviewEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-empty-actions");
+ const recoveryPreviewRecoveryHistory=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-recovery-history");
+ const recoveryPreviewUndoRecovery=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-undo-recovery");
+ const recoveryPreviewRedoRecovery=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-redo-recovery");
+ const recoveryPreviewRecoveryFeedback=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-recovery-feedback");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -3849,25 +3858,45 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const searchable=searchScope!=="all"?String(values[searchScope]??"").normalize("NFKC").toLowerCase():entry.searchText;
   return words.every(word=>searchable.includes(word));
  }
+ function recoveryPreviewSearchConditions(){
+  return [
+   [recoveryPreviewSearch,"value"],[recoveryPreviewScope,"value"],[recoveryPreviewSelected,"checked"],
+   ...recoveryPreviewFacets.map(({field})=>[field,"value"]),
+  ].filter(([field])=>field).map(([field,property])=>[field,property,field[property]]);
+ }
+ function syncRecoveryPreviewRecoveryHistory(){
+  let history=pendingRecoveryPreview.recoveryHistory;
+  const expected=history?.applied?history.after:history?.before;
+  if(expected?.some(([field,property,value])=>field[property]!==value)){
+   pendingRecoveryPreview.recoveryHistory=history=null;
+   if(recoveryPreviewRecoveryFeedback)recoveryPreviewRecoveryFeedback.textContent="";
+  }
+  if(recoveryPreviewRecoveryHistory)recoveryPreviewRecoveryHistory.hidden=!history;
+  if(recoveryPreviewUndoRecovery)recoveryPreviewUndoRecovery.disabled=!history?.applied;
+  if(recoveryPreviewRedoRecovery)recoveryPreviewRedoRecovery.disabled=!history||history.applied;
+ }
+ for(const [button,apply,destination] of [
+  [recoveryPreviewUndoRecovery,false,recoveryPreviewRedoRecovery],
+  [recoveryPreviewRedoRecovery,true,recoveryPreviewUndoRecovery],
+ ]){
+  button?.addEventListener("click",()=>{
+   const history=pendingRecoveryPreview?.recoveryHistory;
+   if(!history||button.disabled)return;
+   for(const [field,property,value] of apply?history.after:history.before)field[property]=value;
+   history.applied=apply;
+   updateRecoveryPreviewKeepingResult();
+   if(recoveryPreviewRecoveryFeedback){
+    const count=pendingRecoveryPreview.matches.length;
+    recoveryPreviewRecoveryFeedback.textContent=(apply?"다시 적용":"되돌림")+" · "+history.label+" · 결과 "+count+"건";
+   }
+   destination?.focus();
+  });
+ }
  function renderRecoveryPreviewEmptyActions(entries,matches,{searchScope,words,selectedOnly,activeFacets}){
   if(!recoveryPreviewEmptyActions)return;
-  const buttons=[];
+  const candidates=[];
   function add(label,overrides,apply){
-   const {scope=searchScope,terms=words,selected=selectedOnly,facets=activeFacets}=overrides;
-   const count=entries.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,terms,selected)&&
-    facets.every(({key,field})=>entry[key]===field.value)).length;
-   if(!count)return;
-   const button=document.createElement("button");
-   button.type="button";
-   button.style.minHeight="44px";
-   button.textContent=label+" ("+count+"건)";
-   button.addEventListener("click",()=>{
-    if(!pendingRecoveryPreview)return;
-    apply();
-    updateRecoveryPreviewKeepingResult();
-    focusRecoveryPreviewResult(pendingRecoveryPreview.resultIndex);
-   });
-   buttons.push(button);
+   candidates.push({label,overrides,apply});
   }
   if(!matches.length){
    if(searchScope==="phrase")add("요약에서 단어별 검색",{scope:"summary"},()=>{recoveryPreviewScope.value="summary"});
@@ -3883,6 +3912,40 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     add("마지막 검색 단어 빼기",{terms},()=>{recoveryPreviewSearch.value=shorter});
    }
   }
+  function measure({scope=searchScope,terms=words,selected=selectedOnly,facets=activeFacets}){
+   return entries.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,terms,selected)&&
+    facets.every(({key,field})=>entry[key]===field.value)).length;
+  }
+  const suggestions=candidates.map(({label,overrides,apply})=>({label,apply,count:measure(overrides)}))
+   .filter(({count})=>count);
+  if(!suggestions.length){
+   for(const [index,left] of candidates.entries()){
+    for(const right of candidates.slice(index+1)){
+     if(Object.keys(left.overrides).some(key=>Object.hasOwn(right.overrides,key)))continue;
+     const count=measure({...left.overrides,...right.overrides});
+     if(count)suggestions.push({
+      label:left.label+" + "+right.label,count,
+      apply(){left.apply();right.apply()},
+     });
+    }
+   }
+  }
+  const buttons=suggestions.sort((a,b)=>b.count-a.count).slice(0,5).map(({label,count,apply})=>{
+   const button=document.createElement("button");
+   button.type="button";
+   button.style.minHeight="44px";
+   button.textContent=label+" ("+count+"건)";
+   button.addEventListener("click",()=>{
+    if(!pendingRecoveryPreview)return;
+    const before=recoveryPreviewSearchConditions();
+    apply();
+    pendingRecoveryPreview.recoveryHistory={before,after:recoveryPreviewSearchConditions(),label,applied:true};
+    updateRecoveryPreviewKeepingResult();
+    if(recoveryPreviewRecoveryFeedback)recoveryPreviewRecoveryFeedback.textContent="적용 · "+label+" · 결과 "+pendingRecoveryPreview.matches.length+"건";
+    focusRecoveryPreviewResult(pendingRecoveryPreview.resultIndex);
+   });
+   return button;
+  });
   recoveryPreviewEmptyActions.replaceChildren(...buttons);
   recoveryPreviewEmptyActions.hidden=!buttons.length;
  }
@@ -3921,6 +3984,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
   pendingRecoveryPreview.matches=matches;
   renderRecoveryPreviewEmptyActions(entries,matches,{searchScope,words,selectedOnly,activeFacets});
+  syncRecoveryPreviewRecoveryHistory();
   if(retainedKey!==undefined){
    pendingRecoveryPreview.emptyResultKey=matches.length?null:retainedKey;
    pendingRecoveryPreview.resultIndex=Math.max(0,matches.findIndex(entry=>entry.key===retainedKey));
@@ -4083,6 +4147,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function closeReceiptQuickSourceRecoveryPreview(){
   pendingRecoveryPreview=null;
   if(recoveryPreview)recoveryPreview.hidden=true;
+  if(recoveryPreviewRecoveryFeedback)recoveryPreviewRecoveryFeedback.textContent="";
   if(recoveryPreviewStatus)recoveryPreviewStatus.textContent="";
   if(recoveryPreviewSearch)recoveryPreviewSearch.value="";
   if(recoveryPreviewScope)recoveryPreviewScope.value="all";
