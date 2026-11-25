@@ -2348,10 +2348,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-md" type="button" style="min-height:44px" disabled>Markdown 저장</button>
           </div>
           <div class="receipt-quick-presets">
-           <label>예시 복사 형식 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-copy-format" style="min-height:44px"><option value="txt">TXT</option><option value="csv">CSV</option><option value="json">JSON</option><option value="md">Markdown</option></select></label>
+           <label>예시 복사·미리보기 형식 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-copy-format" style="min-height:44px"><option value="txt">TXT</option><option value="csv">CSV</option><option value="json">JSON</option><option value="md">Markdown</option></select></label>
            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-copy" type="button" style="min-height:44px" disabled>예시 클립보드에 복사</button>
           </div>
           <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-targets" hidden></p>
+          <details id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-preview">
+           <summary>예시 파일 내용 미리보기</summary>
+           <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-info" role="status"></p>
+           <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="예시 파일 내용" hidden></pre>
+           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-save" type="button" style="min-height:44px" disabled>이 형식으로 저장</button>
+          </details>
           <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-status" role="status"></p>
          </details>
          <div class="receipt-quick-presets">
@@ -3712,6 +3718,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let recoveryPreviewSampleExportRevision=0;
  const recoveryPreviewSampleExportTargets=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-targets");
  const recoveryPreviewSampleExportLabels={page:"현재 페이지",matches:"예시 검색 결과 전체",selected:"검색 결과 중 선택한 발언",statement:"현재 발언"};
+ const recoveryPreviewSampleFilePreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-preview");
+ const recoveryPreviewSampleFileInfo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-info");
+ const recoveryPreviewSampleFileText=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text");
+ const recoveryPreviewSampleFileSave=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-save");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4196,6 +4206,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    recoveryPreviewSampleExportStatus.textContent=entries.length?"저장 대상 "+entries.length+"건":empty;
   }
   for(const [,button] of recoveryPreviewSampleExportButtons)if(button)button.disabled=!entries.length;
+  renderRecoveryPreviewSampleFile();
  }
  function formatRecoveryPreviewSampleExport(format,state){
   const {entries,scope}=recoveryPreviewSampleExportSelection();
@@ -4210,6 +4221,40 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const pageCount=Math.ceil(matches.length/recoveryPreviewPageSize);
   return formatRecoveryPreviewExport(format,{entries,scope,page,pageCount,label,view,example:true});
  }
+ function renderRecoveryPreviewSampleFile(){
+  const state=pendingRecoveryPreview?.suggestionSample;
+  if(!state||!recoveryPreviewSampleFilePreview?.open)return;
+  const format=recoveryPreviewSampleCopyFormat?.value||"txt";
+  const file=formatRecoveryPreviewSampleExport(format,state);
+  if(recoveryPreviewSampleFileSave)recoveryPreviewSampleFileSave.disabled=!file;
+  if(!file){
+   if(recoveryPreviewSampleFileInfo)recoveryPreviewSampleFileInfo.textContent="미리 볼 예시 발언이 없습니다.";
+   if(recoveryPreviewSampleFileText){
+    recoveryPreviewSampleFileText.hidden=true;
+    recoveryPreviewSampleFileText.textContent="";
+   }
+   return;
+  }
+  const limit=2400;
+  let text="",count=0,truncated=false;
+  for(const character of file.content){
+   if(count===limit){truncated=true;break}
+   text+=character;
+   count++;
+  }
+  if(recoveryPreviewSampleFileInfo){
+   recoveryPreviewSampleFileInfo.textContent=file.filename+" · "+new Blob([file.content]).size.toLocaleString("ko-KR")+"바이트"+
+    (truncated?" · 앞부분 "+limit.toLocaleString("ko-KR")+"자 표시":"");
+  }
+  if(recoveryPreviewSampleFileText){
+   recoveryPreviewSampleFileText.textContent=text+(truncated?"\n…":"");
+   recoveryPreviewSampleFileText.hidden=false;
+  }
+ }
+ recoveryPreviewSampleFilePreview?.addEventListener("toggle",renderRecoveryPreviewSampleFile);
+ recoveryPreviewSampleFileSave?.addEventListener("click",()=>{
+  if(!recoveryPreviewSampleFileSave.disabled)saveRecoveryPreviewSampleExport(recoveryPreviewSampleCopyFormat?.value||"txt");
+ });
  recoveryPreviewSampleExportScope?.addEventListener("change",updateRecoveryPreviewSampleExport);
  recoveryPreviewSampleCopyFormat?.addEventListener("change",updateRecoveryPreviewSampleExport);
  recoveryPreviewSampleCopy?.addEventListener("click",async()=>{
@@ -4230,20 +4275,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    recoveryPreviewSampleExportStatus.textContent=message;
   }
  });
+ function saveRecoveryPreviewSampleExport(format){
+  const state=pendingRecoveryPreview?.suggestionSample;
+  if(!state)return;
+  const file=formatRecoveryPreviewSampleExport(format,state);
+  if(!file)return;
+  recoveryPreviewSampleExportRevision++;
+  const name=format==="md"?"Markdown":format.toUpperCase();
+  try{
+   saveMeetingFile(file.content,file.filename,file.mime);
+   if(recoveryPreviewSampleExportStatus)recoveryPreviewSampleExportStatus.textContent=name+" 저장 요청 · "+file.count+"건";
+  }catch(_){
+   if(recoveryPreviewSampleExportStatus)recoveryPreviewSampleExportStatus.textContent=name+" 저장을 시작하지 못했습니다.";
+  }
+ }
  for(const [format,button] of recoveryPreviewSampleExportButtons){
   button?.addEventListener("click",()=>{
-   const state=pendingRecoveryPreview?.suggestionSample;
-   if(!state||button.disabled)return;
-   const file=formatRecoveryPreviewSampleExport(format,state);
-   if(!file)return;
-   recoveryPreviewSampleExportRevision++;
-   const name=format==="md"?"Markdown":format.toUpperCase();
-   try{
-    saveMeetingFile(file.content,file.filename,file.mime);
-    if(recoveryPreviewSampleExportStatus)recoveryPreviewSampleExportStatus.textContent=name+" 저장 요청 · "+file.count+"건";
-   }catch(_){
-    if(recoveryPreviewSampleExportStatus)recoveryPreviewSampleExportStatus.textContent=name+" 저장을 시작하지 못했습니다.";
-   }
+   if(!button.disabled)saveRecoveryPreviewSampleExport(format);
   });
  }
  function renderRecoveryPreviewSample(retainedKey){
@@ -4501,6 +4549,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleSummaryScope)recoveryPreviewSampleSummaryScope.value="page";
   if(recoveryPreviewSampleExportScope)recoveryPreviewSampleExportScope.value="page";
   if(recoveryPreviewSampleCopyFormat)recoveryPreviewSampleCopyFormat.value="txt";
+  if(recoveryPreviewSampleFilePreview)recoveryPreviewSampleFilePreview.open=false;
   if(recoveryPreviewSampleRecoveryFeedback)recoveryPreviewSampleRecoveryFeedback.textContent="";
   for(const {key,field} of recoveryPreviewSampleFacets){
    facetOptions.set(key,populateRecoveryPreviewFacet(results,key,field));
