@@ -2316,7 +2316,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          </details>
          <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-active-filters" class="receipt-quick-presets" role="group" aria-label="적용 중인 예시 필터" hidden></div>
          <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-status" role="status" tabindex="-1"></p>
+         <div class="receipt-quick-presets">
          <label>예시 발언 선택 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-picker" style="min-height:44px" disabled></select></label>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-open-summary" type="button" style="min-height:44px" disabled>현재 예시 요약 열기</button>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-back-search" type="button" style="min-height:44px">예시 검색창으로 이동</button>
+         </div>
          <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-rows"></ul>
          <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-pages" class="receipt-quick-presets" role="group" aria-label="복구 예시 페이지" hidden>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-prev" type="button" style="min-height:44px" disabled>이전 예시</button>
@@ -3658,6 +3662,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleClearFacets=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-clear-facets");
  const recoveryPreviewSampleActiveFilters=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-active-filters");
  const recoveryPreviewSamplePicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-picker");
+ const recoveryPreviewSampleOpenSummary=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-open-summary");
+ const recoveryPreviewSampleBackSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-back-search");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -3975,7 +3981,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
  function renderRecoveryPreviewSample(retainedKey){
   const state=pendingRecoveryPreview.suggestionSample;
-  const {label,results,apply,facetOptions}=state;
+  const {label,results,apply,facetOptions,expanded,summaries}=state;
+  for(const [key,{details}] of summaries){
+   if(details.open)expanded.add(key);
+   else expanded.delete(key);
+  }
+  summaries.clear();
   const query=(recoveryPreviewSampleSearch?.value??"").normalize("NFKC").toLowerCase().trim();
   const words=query.split(/\s+/).filter(Boolean);
   const scope=recoveryPreviewSampleScope?.value||"all";
@@ -4033,6 +4044,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const {page}=state;
   state.actions=new Map();
+  if(recoveryPreviewSampleOpenSummary)recoveryPreviewSampleOpenSummary.disabled=!matches.length;
   if(recoveryPreviewSamplePicker){
    const options=document.createDocumentFragment();
    for(const [index,entry] of matches.entries()){
@@ -4082,6 +4094,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(ranges.length)full.append(...receiptQuickSourceSummaryParts(entry.summary,ranges));
    else full.textContent=entry.summary;
    details.append(heading,full);
+   details.open=expanded.has(entry.key);
+   excerpt.hidden=details.open;
+   summaries.set(entry.key,{details,heading,excerpt});
+   details.addEventListener("toggle",()=>{excerpt.hidden=details.open});
+   heading.addEventListener("keydown",event=>{
+    if(event.key!=="Escape"||event.isComposing||!details.open)return;
+    event.preventDefault();
+    event.stopPropagation();
+    details.open=false;
+    excerpt.hidden=false;
+   });
    const jump=document.createElement("button");
    jump.type="button";
    jump.style.minHeight="44px";
@@ -4092,11 +4115,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    jump.title="↑ ↓ 이전·다음 발언 · Home 첫 발언 · End 마지막 발언";
    const resultIndex=start+index;
    state.actions.set(resultIndex,jump);
-   jump.addEventListener("focus",()=>{
+   function selectResult(){
     if(pendingRecoveryPreview?.suggestionSample!==state||state.actions.get(resultIndex)!==jump)return;
     state.resultIndex=resultIndex;
     if(recoveryPreviewSamplePicker)recoveryPreviewSamplePicker.value=String(resultIndex);
-   });
+   }
+   heading.addEventListener("focus",selectResult);
+   jump.addEventListener("focus",selectResult);
    jump.addEventListener("keydown",event=>{
     if(event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||
      pendingRecoveryPreview?.suggestionSample!==state||state.actions.get(resultIndex)!==jump||
@@ -4134,6 +4159,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   action?.focus({preventScroll:true});
   action?.scrollIntoView({block:"nearest"});
  }
+ recoveryPreviewSampleBackSearch?.addEventListener("click",()=>recoveryPreviewSampleSearch?.focus());
+ recoveryPreviewSampleOpenSummary?.addEventListener("click",()=>{
+  const state=pendingRecoveryPreview?.suggestionSample;
+  const summary=state?.summaries.get(state.matches[state.resultIndex]?.key);
+  if(!summary)return;
+  summary.details.open=true;
+  summary.excerpt.hidden=true;
+  summary.heading.focus({preventScroll:true});
+  summary.heading.scrollIntoView({block:"nearest"});
+ });
  recoveryPreviewSamplePicker?.addEventListener("change",()=>{
   if(!recoveryPreviewSamplePicker.disabled&&recoveryPreviewSamplePicker.value!==""){
    focusRecoveryPreviewSampleResult(Number(recoveryPreviewSamplePicker.value));
@@ -4180,7 +4215,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!pendingRecoveryPreview||!recoveryPreviewSuggestionSample||!recoveryPreviewSampleRows||!recoveryPreviewSampleStatus)return;
   closeRecoveryPreviewSample();
   const facetOptions=new Map();
-  pendingRecoveryPreview.suggestionSample={trigger,label,results,apply,page:0,resultIndex:0,facetOptions};
+  pendingRecoveryPreview.suggestionSample={trigger,label,results,apply,page:0,resultIndex:0,facetOptions,expanded:new Set(),summaries:new Map()};
   if(recoveryPreviewSampleSearch)recoveryPreviewSampleSearch.value="";
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
   if(recoveryPreviewSampleOrder)recoveryPreviewSampleOrder.value="default";
