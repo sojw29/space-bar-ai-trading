@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -972,6 +972,12 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sourceChangeType('next-match').click();
    assert.match(sourceChangeType('match-count').textContent,/1 \/ 1.*COMMANDER/);
    assert.equal(matchedSummary.children[0].focused,true);
+   assert.equal(matchedSummary.children[0].attrs['aria-current'],'true');
+   assert.equal(sourceChangeType('open-match').disabled,false);
+   let matchEscapeHandled=false;
+   matchedSummary.children[0].keydown({key:'Escape',preventDefault(){matchEscapeHandled=true}});
+   assert.equal(matchEscapeHandled,true);
+   assert.equal(sourceChangeType('open-match').focused,true);
    sourceChangeType('previous-match').click();
    assert.equal(matchedSummary.open,true);
    sourceChangeType('search-scope').value='summary';
@@ -1187,7 +1193,10 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sourceChangeType('search').input();
    sourceChangeType('order').value='agent';
    sourceChangeType('order').change();
-   sourceChangeType('selection-open').click();
+   sourceChangeType('search').value=summarySearchTerm;
+   sourceChangeType('search').input();
+   sourceChangeType('next-match').click();
+   sourceChangeType('open-match').click();
    assert.equal(sourceChanges.hidden,true);
    assert.equal(receiptBack.textContent,'조합 미리보기로 돌아가기');
    reviewButton.click();
@@ -1195,6 +1204,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(sourceStatus.textContent,/COMMANDER · 미검토 · 검토 해제 1건/);
    assert.match(sourceChangeRows()[0].textContent,/검토 해제 · 이후 .*COMMANDER/);
    assert.equal(sourceChanges.open,true);
+   assert.match(sourceChangeType('match-count').textContent,/1 \/ 1.*COMMANDER/);
+   assert.equal(sourceChangeRows()[0].children[1].children[0].attrs['aria-current'],'true');
+   assert.equal(sourceChangeRows()[0].children[1].children[0].focused,true);
    assert.match(sourceChangeRows()[0].textContent,/마지막으로 읽음/);
    assert.equal(sourceChangeType('jump-last').hidden,false);
    sourceChangeType('jump-last').click();
