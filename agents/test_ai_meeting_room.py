@@ -35,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery']){
+  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -898,8 +898,20 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    listFilter('side').value='earlier';listFilter('side').change();
    assert.deepEqual(recoveryButtons().map(button=>button.textContent),['검색 no-preview-match 해제 · 1건 표시']);
    listFilter('agent').value='ATLAS';listFilter('agent').change();
-   assert.equal(listFilter('recovery').hidden,true);
-   assert.match(listFilter('count').textContent,/조건을 여러 개 해제/);
+   assert.deepEqual(recoveryButtons().map(button=>button.textContent),['검색 no-preview-match + ATLAS 해제 · 1건 표시']);
+   listFilter('phase').value='ANALYSIS';listFilter('phase').change();
+   assert.deepEqual(recoveryButtons().map(button=>button.textContent),['검색 no-preview-match + ATLAS + 초기 분석 해제 · 1건 표시']);
+   listFilter('phase').value='all';listFilter('phase').change();
+   listFilter('order').value='later';listFilter('order').change();
+   recoveryButtons()[0].click();
+   assert.equal(listFilter('agent').value,'all');
+   assert.equal(listFilter('order').value,'later');
+   assert.equal(listFilter('recovery-undo').hidden,false);
+   listFilter('recovery-undo').click();
+   assert.equal(listFilter('agent').value,'ATLAS');
+   assert.equal(listFilter('search').value,'no-preview-match');
+   assert.equal(recoveryButtons()[0].focused,true);
+   assert.equal(listFilter('recovery-undo').hidden,true);
    listFilter('agent').value='all';listFilter('agent').change();
    recoveryButtons()[0].click();
    assert.equal(listFilter('search').value,'');
