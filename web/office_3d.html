@@ -2266,6 +2266,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <section id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview" aria-label="검색 결과 미리보기" hidden>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
         <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-rows"></ul>
+        <div class="receipt-quick-presets" role="group" aria-label="미리보기 페이지">
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-prev" type="button" style="min-height:44px" disabled>이전 발언 묶음</button>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-next" type="button" style="min-height:44px" disabled>다음 발언 묶음</button>
+        </div>
         <div class="receipt-quick-presets">
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-apply" type="button" style="min-height:44px">이 조건 적용</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-close" type="button" style="min-height:44px">미리보기 닫기</button>
@@ -3467,7 +3471,48 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewRows=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-rows");
  const recoveryPreviewApply=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-apply");
  const recoveryPreviewClose=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-close");
+ const recoveryPreviewPrev=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-prev");
+ const recoveryPreviewNext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-next");
+ const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
+ for(const [button,step] of [[recoveryPreviewPrev,-1],[recoveryPreviewNext,1]]){
+  button?.addEventListener("click",()=>{
+   if(button.disabled||!pendingRecoveryPreview)return;
+   pendingRecoveryPreview.page+=step;
+   renderReceiptQuickSourceRecoveryPreview();
+   if(button.disabled)(step>0?recoveryPreviewPrev:recoveryPreviewNext)?.focus();
+  });
+ }
+ function renderReceiptQuickSourceRecoveryPreview(){
+  const {entries,label,page,commit}=pendingRecoveryPreview;
+  const start=page*recoveryPreviewPageSize;
+  const sample=entries.slice(start,start+recoveryPreviewPageSize);
+  recoveryPreviewStatus.textContent=label+" · "+(start+1)+"–"+(start+sample.length)+" / "+entries.length+"건";
+  if(recoveryPreviewPrev)recoveryPreviewPrev.disabled=start===0;
+  if(recoveryPreviewNext)recoveryPreviewNext.disabled=start+sample.length>=entries.length;
+  recoveryPreviewRows.replaceChildren(...sample.map(({key,label,summary})=>{
+   const row=document.createElement("li");
+   const title=document.createElement("strong");
+   const excerpt=document.createElement("p");
+   title.textContent=label;
+   const characters=Array.from(summary);
+   excerpt.textContent=characters.slice(0,100).join("")+(characters.length>100?"…":"");
+   const full=document.createElement("details");
+   const heading=document.createElement("summary");
+   const text=document.createElement("p");
+   heading.textContent="발언 요약 전체";
+   text.textContent=summary;
+   full.append(heading,text);
+   const jump=document.createElement("button");
+   jump.type="button";
+   jump.style.minHeight="44px";
+   jump.textContent="적용하고 이 발언으로 이동";
+   jump.setAttribute("aria-label",label+" · 적용하고 이 발언으로 이동");
+   jump.addEventListener("click",()=>commit(key));
+   row.append(title,excerpt,full,jump);
+   return row;
+  }));
+ }
  function closeReceiptQuickSourceRecoveryPreview(){
   pendingRecoveryPreview=null;
   if(recoveryPreview)recoveryPreview.hidden=true;
@@ -3556,15 +3601,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     button.type="button";
     button.style.minHeight="44px";
     button.textContent=label+" ("+count+"건)";
-    function commit(){
+    function commit(key){
      const before=receiptQuickSourceRecoveryConditions();
      apply();
      receiptQuickSourceRecoveryRedo=null;
      receiptQuickSourceRecovery={before,after:receiptQuickSourceRecoveryConditions(),label,count};
      renderReceiptQuickSourceChangeFilter();
-     jumpToFirstReceiptQuickSourceResult();
+     const entry=visibleReceiptQuickSourceChanges.find(row=>row.key===key);
+     if(entry){
+      entry.details.open=true;
+      entry.source.focus({preventScroll:true});
+      entry.row.scrollIntoView({block:"nearest"});
+     }else{
+      jumpToFirstReceiptQuickSourceResult();
+     }
     }
-    button.addEventListener("click",commit);
+    button.addEventListener("click",()=>commit());
     actions.push(button);
     if(!recoveryPreview||!recoveryPreviewRows||!recoveryPreviewStatus)return;
     const preview=document.createElement("button");
@@ -3572,20 +3624,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     preview.style.minHeight="44px";
     preview.textContent="미리보기 · "+label;
     preview.addEventListener("click",()=>{
-     const sample=entries.slice(0,3);
-     recoveryPreviewStatus.textContent=label+" · "+count+"건"+
-      (count>sample.length?" · 외 "+(count-sample.length)+"건":"");
-     recoveryPreviewRows.replaceChildren(...sample.map(({label,summary})=>{
-      const row=document.createElement("li");
-      const title=document.createElement("strong");
-      const excerpt=document.createElement("p");
-      title.textContent=label;
-      const characters=Array.from(summary);
-      excerpt.textContent=characters.slice(0,100).join("")+(characters.length>100?"…":"");
-      row.append(title,excerpt);
-      return row;
-     }));
-     pendingRecoveryPreview={commit,trigger:preview};
+     pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0};
+     renderReceiptQuickSourceRecoveryPreview();
      recoveryPreview.hidden=false;
      recoveryPreviewApply?.focus();
     });
