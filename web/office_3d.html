@@ -2275,6 +2275,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      <button id="ai-meeting-progress-receipt-preset-undo" type="button" style="min-height:44px" disabled>직전 조합 되돌리기</button>
      <button id="ai-meeting-progress-receipt-preset-redo" type="button" style="min-height:44px" disabled>직전 조합 다시 적용</button>
      <p id="ai-meeting-progress-receipt-preset-status" role="status"></p>
+     <button id="ai-meeting-progress-receipt-preset-reopen" type="button" style="min-height:44px" hidden>이동한 발언 다시 열기</button>
      <div class="receipt-quick-presets">
       <button id="ai-meeting-progress-receipt-preset-earlier" type="button" aria-pressed="false" style="min-height:44px">이전 회의 미검토</button>
       <button id="ai-meeting-progress-receipt-preset-later" type="button" aria-pressed="false" style="min-height:44px">이후 회의 미검토</button>
@@ -3071,6 +3072,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   {button:undoReceiptQuickPreset,redo:false,label:"직전 조합 되돌리기"},
   {button:redoReceiptQuickPreset,redo:true,label:"직전 조합 다시 적용"},
  ];
+ const receiptQuickPresetReopen=document.getElementById("ai-meeting-progress-receipt-preset-reopen");
+ receiptQuickPresetReopen?.addEventListener("click",()=>{
+  const change=lastReceiptQuickPreset;
+  if(!change?.applied||change.restore!==lastProgressRestore)return;
+  const card=progressReceiptCards.get(change.jumpKey);
+  if(card)focusReceiptPreview([change.jumpKey,card]);
+ });
  const receiptQuickPresetStatus=document.getElementById("ai-meeting-progress-receipt-preset-status");
  const emptyReceiptQuickFilters={search:"",selectedOnly:false,side:"all",phase:"all",verdict:"all",
   state:"all",agent:"all",searchScope:"all"};
@@ -3363,6 +3371,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    lastReceiptQuickPreset=null;
    if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent="";
   }
+  if(receiptQuickPresetReopen){
+   const change=lastReceiptQuickPreset;
+   const target=change?.applied&&entries.find(entry=>entry.key===change.jumpKey);
+   receiptQuickPresetReopen.hidden=!target||!visibleProgressReceiptEntries([target],current).length;
+   if(target)receiptQuickPresetReopen.textContent="다시 열기 · "+receiptQuickRowLabel(target);
+  }
   for(const {button,redo,label} of receiptQuickHistoryControls){
    if(!button)continue;
    const count=eligibleReceiptQuickPresetFields(lastReceiptQuickPreset,current,redo).length;
@@ -3651,20 +3665,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const change=receiptQuickPresetChange(preset,progressReceiptFilters());
   if(!change.fields.length)return;
   const entries=progressReceiptEntries();
+  const before=visibleProgressReceiptEntries(entries,change.before);
   const projected=visibleProgressReceiptEntries(entries,change.after);
   if(!change.active&&!projected.length)return;
   let target;
   if(jump.startsWith("statement:")){
    target=projected.find(entry=>"statement:"+entry.key===jump);
   }else if(jump){
-   const visibleKeys=new Set(visibleProgressReceiptEntries(entries,change.before).map(entry=>entry.key));
+   const visibleKeys=new Set(before.map(entry=>entry.key));
    target=receiptQuickJumpChoices(visibleKeys,projected).find(([value])=>value===jump)?.[2];
   }
   closeReceiptQuickPreview();
-  lastReceiptQuickPreset={...change,restore:lastProgressRestore,label:preset.label,applied:true};
+  lastReceiptQuickPreset={...change,restore:lastProgressRestore,label:preset.label,applied:true,jumpKey:target?.key};
   applyReceiptViewParts({filters:change.after},["filters"]);
-  if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent=preset.label+(change.active?" 조합 해제":" 조합 적용");
   const card=target&&progressReceiptCards.get(target.key);
+  if(receiptQuickPresetStatus)receiptQuickPresetStatus.textContent=
+   preset.label+(change.active?" 조합 해제":" 조합 적용")+" · "+change.fields.length+"개 조건 변경"+
+   " · 표시 발언 "+before.length+"건 → "+progressReceiptCards.size+"건"+
+   (card?" · 이동 "+receiptQuickRowLabel(target):jump?" · 이동 위치를 열 수 없어 현재 화면 유지":"");
   if(card)focusReceiptPreview([target.key,card]);
   else (preset.button?.disabled?receiptQuickPreviewMode:preset.button)?.focus?.();
  }
