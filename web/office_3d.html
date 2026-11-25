@@ -3902,17 +3902,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(searchScope==="phrase")add("요약에서 단어별 검색",{scope:"summary"},()=>{recoveryPreviewScope.value="summary"});
    if(searchScope!=="all")add("전체 발언 정보로 검색",{scope:"all"},()=>{recoveryPreviewScope.value="all"});
    if(selectedOnly)add("선택하지 않은 발언도 검색",{selected:false},()=>{recoveryPreviewSelected.checked=false});
-   if(activeFacets.length)add("상세 필터 해제",{facets:[]},()=>{
-    for(const {field} of activeFacets)field.value="";
-   });
+   const facetNames={type:"검토 유형",agent:"에이전트",phase:"회의 단계",verdict:"발언 판정"};
+   for(const {key,field} of activeFacets){
+    add(facetNames[key]+" 필터만 해제",{omittedFacets:[key]},()=>{field.value=""});
+   }
    const original=recoveryPreviewSearch?.value.trim()??"";
+   if(words.length&&recoveryPreviewSearch){
+    add("검색어만 지우기",{terms:[]},()=>{recoveryPreviewSearch.value=""});
+   }
    const shorter=original.replace(/\s+\S+$/,"");
    if(shorter&&shorter!==original){
     const terms=shorter.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
     add("마지막 검색 단어 빼기",{terms},()=>{recoveryPreviewSearch.value=shorter});
    }
   }
-  function measure({scope=searchScope,terms=words,selected=selectedOnly,facets=activeFacets}){
+  function measure({scope=searchScope,terms=words,selected=selectedOnly,omittedFacets=[]}){
+   const facets=activeFacets.filter(({key})=>!omittedFacets.includes(key));
    return entries.filter(entry=>recoveryPreviewMatchesSearch(entry,scope,terms,selected)&&
     facets.every(({key,field})=>entry[key]===field.value)).length;
   }
@@ -3921,8 +3926,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!suggestions.length){
    for(const [index,left] of candidates.entries()){
     for(const right of candidates.slice(index+1)){
-     if(Object.keys(left.overrides).some(key=>Object.hasOwn(right.overrides,key)))continue;
-     const count=measure({...left.overrides,...right.overrides});
+     if(Object.keys(left.overrides).some(key=>key!=="omittedFacets"&&Object.hasOwn(right.overrides,key)))continue;
+     const omittedFacets=[...(left.overrides.omittedFacets??[]),...(right.overrides.omittedFacets??[])];
+     const count=measure({...left.overrides,...right.overrides,omittedFacets});
      if(count)suggestions.push({
       label:left.label+" + "+right.label,count,
       apply(){left.apply();right.apply()},
