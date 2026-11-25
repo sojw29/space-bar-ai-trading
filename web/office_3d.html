@@ -3590,19 +3590,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewBackSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-back-search");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
- function updateRecoveryPreviewSearch(){
-  if(!pendingRecoveryPreview)return;
-  pendingRecoveryPreview.page=0;
-  pendingRecoveryPreview.resultIndex=0;
-  renderReceiptQuickSourceRecoveryPreview();
- }
- recoveryPreviewSearch?.addEventListener("input",updateRecoveryPreviewSearch);
- recoveryPreviewScope?.addEventListener("change",updateRecoveryPreviewSearch);
  function updateRecoveryPreviewKeepingResult(){
   if(!pendingRecoveryPreview)return;
-  const {matches,resultIndex}=pendingRecoveryPreview;
-  renderReceiptQuickSourceRecoveryPreview(matches[resultIndex]?.key??null);
+  const {matches,resultIndex,emptyResultKey}=pendingRecoveryPreview;
+  renderReceiptQuickSourceRecoveryPreview(matches[resultIndex]?.key??emptyResultKey??null);
  }
+ recoveryPreviewSearch?.addEventListener("input",updateRecoveryPreviewKeepingResult);
+ recoveryPreviewScope?.addEventListener("change",updateRecoveryPreviewKeepingResult);
  recoveryPreviewOrder?.addEventListener("change",updateRecoveryPreviewKeepingResult);
  for(const {field} of recoveryPreviewFacets)field.addEventListener("change",updateRecoveryPreviewKeepingResult);
  recoveryPreviewSearch?.addEventListener("keydown",event=>{
@@ -3625,7 +3619,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
  recoveryPreviewClearQuery?.addEventListener("click",()=>{
   recoveryPreviewSearch.value="";
-  updateRecoveryPreviewSearch();
+  updateRecoveryPreviewKeepingResult();
   recoveryPreviewSearch.focus();
  });
  function clearRecoveryPreviewFacets(){
@@ -3634,15 +3628,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  recoveryPreviewClearFacets?.addEventListener("click",()=>{
   clearRecoveryPreviewFacets();
-  updateRecoveryPreviewSearch();
+  updateRecoveryPreviewKeepingResult();
   recoveryPreviewFilterHeading?.focus();
  });
  recoveryPreviewClear?.addEventListener("click",()=>{
-  if(!recoveryPreviewSearch)return;
+  if(!recoveryPreviewSearch||!pendingRecoveryPreview)return;
   recoveryPreviewSearch.value="";
   if(recoveryPreviewScope)recoveryPreviewScope.value="all";
   clearRecoveryPreviewFacets();
-  updateRecoveryPreviewSearch();
+  renderReceiptQuickSourceRecoveryPreview(null);
   recoveryPreviewSearch.focus();
  });
  recoveryPreview?.addEventListener("keydown",event=>{
@@ -3887,6 +3881,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
   pendingRecoveryPreview.matches=matches;
   if(retainedKey!==undefined){
+   pendingRecoveryPreview.emptyResultKey=matches.length?null:retainedKey;
    pendingRecoveryPreview.resultIndex=Math.max(0,matches.findIndex(entry=>entry.key===retainedKey));
    pendingRecoveryPreview.page=Math.floor(pendingRecoveryPreview.resultIndex/recoveryPreviewPageSize);
   }
@@ -3936,7 +3931,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     button.textContent=label+" 해제";
     button.addEventListener("click",()=>{
      clear();
-     updateRecoveryPreviewSearch();
+     updateRecoveryPreviewKeepingResult();
      const replacement=recoveryPreviewActive.children[Math.min(index,recoveryPreviewActive.children.length-1)];
      (replacement??recoveryPreviewFilterHeading??recoveryPreviewSearch)?.focus();
     });
