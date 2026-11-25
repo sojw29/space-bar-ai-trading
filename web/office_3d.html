@@ -2338,6 +2338,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-prev" type="button" style="min-height:44px" disabled>이전 예시</button>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-next" type="button" style="min-height:44px" disabled>다음 예시</button>
          </div>
+         <details>
+          <summary>복구 예시 저장</summary>
+          <div class="receipt-quick-presets">
+           <label>예시 저장 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-scope" style="min-height:44px"><option value="page">현재 페이지</option><option value="matches">예시 검색 결과 전체</option></select></label>
+           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-txt" type="button" style="min-height:44px" disabled>TXT 저장</button>
+           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-csv" type="button" style="min-height:44px" disabled>CSV 저장</button>
+           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-json" type="button" style="min-height:44px" disabled>JSON 저장</button>
+           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-md" type="button" style="min-height:44px" disabled>Markdown 저장</button>
+          </div>
+          <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-status" role="status"></p>
+         </details>
          <div class="receipt-quick-presets">
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-apply" type="button" style="min-height:44px">이 복구 제안 적용</button>
           <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-close" type="button" style="min-height:44px">예시 닫기</button>
@@ -3686,6 +3697,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleUndo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-undo");
  const recoveryPreviewSampleRedo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-redo");
  const recoveryPreviewSampleRecoveryFeedback=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-recovery-feedback");
+ const recoveryPreviewSampleExportScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-scope");
+ const recoveryPreviewSampleExportStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-status");
+ const recoveryPreviewSampleExportButtons=["txt","csv","json","md"].map(format=>[
+  format,document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-"+format),
+ ]);
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -3852,13 +3868,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!pendingRecoveryPreview)return;
   const {page,pageCount,label}=pendingRecoveryPreview;
   const {entries,scope}=recoveryPreviewExportSelection();
-  if(!entries.length)return;
-  const fields=["meeting","statement_id","agent","phase","verdict","change","selected","summary"];
-  const rows=entries.map(entry=>({
-   meeting:entry.period,statement_id:entry.id,agent:entry.agent,phase:entry.phase,
-   verdict:entry.verdict,change:entry.type,selected:Boolean(entry.selection.checked),summary:entry.summary,
-  }));
-  const title={page:"미리보기 현재 페이지 "+(page+1)+"/"+pageCount,matches:"미리보기 검색 결과 전체",selected:"미리보기 선택 발언"}[scope];
   const filters=Object.fromEntries(recoveryPreviewFacets.filter(({field})=>field.value).map(({key,field})=>[key,field.value]));
   const view={
    query:recoveryPreviewSearch?.value??"",
@@ -3867,7 +3876,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    filters,
    order:recoveryPreviewOrder?.value||"default",
   };
-  const filterSummary=Object.entries(filters).map(([key,value])=>key+"="+value);
+  return formatRecoveryPreviewExport(format,{entries,scope,page,pageCount,label,view});
+ }
+ function formatRecoveryPreviewExport(format,{entries,scope,page,pageCount,label,view,example=false}){
+  if(!entries.length)return;
+  const fields=["meeting","statement_id","agent","phase","verdict","change","selected","summary"];
+  const rows=entries.map(entry=>({
+   meeting:entry.period,statement_id:entry.id,agent:entry.agent,phase:entry.phase,
+   verdict:entry.verdict,change:entry.type,selected:Boolean(entry.selection.checked),summary:entry.summary,
+  }));
+  const area=example?"복구 예시":"미리보기";
+  const title={page:area+" 현재 페이지 "+(page+1)+"/"+pageCount,matches:area+" 검색 결과 전체",selected:area+" 선택 발언"}[scope];
+  const filterSummary=Object.entries(view.filters).map(([key,value])=>key+"="+value);
   const orderLabels={default:"기존 순서",reverse:"기존 순서의 역순",agent:"에이전트 이름순",phase:"회의 진행 단계순",verdict:"추가 검토 필요 발언 우선",selected:"선택한 발언 우선"};
   const viewSummary=[
    "검색어 "+(view.query||"없음"),
@@ -3884,16 +3904,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const indentMarkdown=text=>text.replace(/\r\n?/g,"\n").split("\n").map(line=>"    "+line).join("\n");
   const header=["회의","발언 번호","에이전트","회의 단계","발언 판정","검토 변경","선택 여부","발언 요약"];
   const content=format==="json"
-   ?JSON.stringify({version:"SPACEBAR_MEETING_RECOVERY_PREVIEW_1",scope,suggestion:label,view,...(scope==="page"?{page:page+1,page_count:pageCount}:{}),rows},null,2)+"\n"
+   ?JSON.stringify({version:example?"SPACEBAR_MEETING_RECOVERY_EXAMPLES_1":"SPACEBAR_MEETING_RECOVERY_PREVIEW_1",scope,suggestion:label,view,...(scope==="page"?{page:page+1,page_count:pageCount}:{}),rows},null,2)+"\n"
    :format==="csv"
     ?"\uFEFF"+[header,...cells].map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n"
     :format==="md"
-     ?["# 회의록 미리보기",indentMarkdown([title+" · "+rows.length+"건",label,viewSummary].join("\n")),
+     ?[example?"# 회의록 복구 예시":"# 회의록 미리보기",indentMarkdown([title+" · "+rows.length+"건",label,viewSummary].join("\n")),
        ...statements.map((statement,index)=>"## 발언 "+(index+1)+"\n\n"+indentMarkdown(statement))].join("\n\n")+"\n"
      :[title+" · "+rows.length+"건",label,viewSummary,...statements].join("\n\n")+"\n";
   return {
    content,
-   filename:"meeting-recovery-preview-"+(scope==="page"?"page-"+(page+1):scope)+"-"+rows.length+"-rows."+format,
+   filename:(example?"meeting-recovery-examples-":"meeting-recovery-preview-")+(scope==="page"?"page-"+(page+1):scope)+"-"+rows.length+"-rows."+format,
    mime:mime[format]+";charset=utf-8",
    count:rows.length,
   };
@@ -4136,6 +4156,44 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   recoveryPreviewSampleEmptyActions.replaceChildren(...buttons);
   recoveryPreviewSampleEmptyActions.hidden=!buttons.length;
  }
+ function recoveryPreviewSampleExportSelection(){
+  const {matches,page}=pendingRecoveryPreview.suggestionSample;
+  if(recoveryPreviewSampleExportScope?.value==="matches")return {scope:"matches",entries:matches};
+  const start=page*recoveryPreviewPageSize;
+  return {scope:"page",entries:matches.slice(start,start+recoveryPreviewPageSize)};
+ }
+ function updateRecoveryPreviewSampleExport(){
+  if(!pendingRecoveryPreview?.suggestionSample)return;
+  const {entries}=recoveryPreviewSampleExportSelection();
+  if(recoveryPreviewSampleExportStatus)recoveryPreviewSampleExportStatus.textContent="저장 대상 "+entries.length+"건";
+  for(const [,button] of recoveryPreviewSampleExportButtons)if(button)button.disabled=!entries.length;
+ }
+ recoveryPreviewSampleExportScope?.addEventListener("change",updateRecoveryPreviewSampleExport);
+ for(const [format,button] of recoveryPreviewSampleExportButtons){
+  button?.addEventListener("click",()=>{
+   const state=pendingRecoveryPreview?.suggestionSample;
+   if(!state||button.disabled)return;
+   const {entries,scope}=recoveryPreviewSampleExportSelection();
+   const {label,page,matches}=state;
+   const view={
+    query:recoveryPreviewSampleSearch?.value??"",
+    search_scope:recoveryPreviewSampleScope?.value||"all",
+    selected_only:Boolean(recoveryPreviewSampleSelected?.checked),
+    filters:Object.fromEntries(recoveryPreviewSampleFacets.filter(({field})=>field.value).map(({key,field})=>[key,field.value])),
+    order:recoveryPreviewSampleOrder?.value||"default",
+   };
+   const pageCount=Math.ceil(matches.length/recoveryPreviewPageSize);
+   const file=formatRecoveryPreviewExport(format,{entries,scope,page,pageCount,label,view,example:true});
+   if(!file)return;
+   const name=format==="md"?"Markdown":format.toUpperCase();
+   try{
+    saveMeetingFile(file.content,file.filename,file.mime);
+    if(recoveryPreviewSampleExportStatus)recoveryPreviewSampleExportStatus.textContent=name+" 저장 요청 · "+file.count+"건";
+   }catch(_){
+    if(recoveryPreviewSampleExportStatus)recoveryPreviewSampleExportStatus.textContent=name+" 저장을 시작하지 못했습니다.";
+   }
+  });
+ }
  function renderRecoveryPreviewSample(retainedKey){
   const state=pendingRecoveryPreview.suggestionSample;
   const {label,results,apply,facetOptions,expanded,summaries}=state;
@@ -4202,6 +4260,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    state.page=Math.floor(state.resultIndex/recoveryPreviewPageSize);
   }
   const {page}=state;
+  updateRecoveryPreviewSampleExport();
   state.actions=new Map();
   if(recoveryPreviewSampleOpenSummary)recoveryPreviewSampleOpenSummary.disabled=!matches.length;
   if(recoveryPreviewSampleExpand)recoveryPreviewSampleExpand.disabled=!matches.length;
@@ -4386,6 +4445,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
   if(recoveryPreviewSampleOrder)recoveryPreviewSampleOrder.value="default";
   if(recoveryPreviewSampleSummaryScope)recoveryPreviewSampleSummaryScope.value="page";
+  if(recoveryPreviewSampleExportScope)recoveryPreviewSampleExportScope.value="page";
   if(recoveryPreviewSampleRecoveryFeedback)recoveryPreviewSampleRecoveryFeedback.textContent="";
   for(const {key,field} of recoveryPreviewSampleFacets){
    facetOptions.set(key,populateRecoveryPreviewFacet(results,key,field));
