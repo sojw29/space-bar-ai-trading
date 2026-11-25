@@ -3676,6 +3676,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleCollapse=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-collapse");
  const recoveryPreviewSampleExpandedCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-expanded-count");
  const recoveryPreviewSampleEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-empty-actions");
+ const recoveryPreviewFacetNames={type:"검토 유형",agent:"에이전트",phase:"회의 단계",verdict:"발언 판정"};
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4044,9 +4045,21 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(scope!=="all")add("전체 발언 정보로 검색",{searchScope:"all"},()=>{recoveryPreviewSampleScope.value="all"});
    if(words.length&&recoveryPreviewSampleSearch)add("예시 검색어만 지우기",{terms:[]},()=>{recoveryPreviewSampleSearch.value=""});
    if(selectedOnly)add("선택하지 않은 예시도 보기",{selected:false},()=>{recoveryPreviewSampleSelected.checked=false});
-   if(facets.length)add("예시 상세 조건 풀기",{activeFacets:[]},()=>{
-    for(const {field} of facets)field.value="";
-   });
+   const beforeFacets=buttons.length;
+   for(const {key,field} of facets){
+    add(recoveryPreviewFacetNames[key]+" 필터만 해제",{activeFacets:facets.filter(facet=>facet.key!==key)},()=>{field.value=""});
+   }
+   if(facets.length>1&&buttons.length===beforeFacets){
+    add("예시 상세 조건 풀기",{activeFacets:[]},()=>{
+     for(const {field} of facets)field.value="";
+    });
+   }
+   const original=recoveryPreviewSampleSearch?.value.trim()??"";
+   const shorter=original.replace(/\s+\S+$/,"");
+   if(shorter&&shorter!==original){
+    const terms=shorter.normalize("NFKC").toLowerCase().trim().split(/\s+/).filter(Boolean);
+    add("예시 마지막 검색 단어 빼기",{terms},()=>{recoveryPreviewSampleSearch.value=shorter});
+   }
   }
   recoveryPreviewSampleEmptyActions.replaceChildren(...buttons);
   recoveryPreviewSampleEmptyActions.hidden=!buttons.length;
@@ -4320,9 +4333,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(searchScope==="phrase")add("요약에서 단어별 검색",{scope:"summary"},()=>{recoveryPreviewScope.value="summary"});
    if(searchScope!=="all")add("전체 발언 정보로 검색",{scope:"all"},()=>{recoveryPreviewScope.value="all"});
    if(selectedOnly)add("선택하지 않은 발언도 검색",{selected:false},()=>{recoveryPreviewSelected.checked=false});
-   const facetNames={type:"검토 유형",agent:"에이전트",phase:"회의 단계",verdict:"발언 판정"};
    for(const {key,field} of activeFacets){
-    add(facetNames[key]+" 필터만 해제",{omittedFacets:[key]},()=>{field.value=""});
+    add(recoveryPreviewFacetNames[key]+" 필터만 해제",{omittedFacets:[key]},()=>{field.value=""});
    }
    const original=recoveryPreviewSearch?.value.trim()??"";
    if(words.length&&recoveryPreviewSearch){
