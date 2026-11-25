@@ -35,7 +35,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   }
   elements['ai-meeting-progress-receipt-preset-preview-jump-status']={};
   elements['ai-meeting-progress-receipt-preset-preview-jump-clear']={addEventListener(type,fn){this[type]=fn}};
-  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo']){
+  for(const name of ['search','state','selected','reset','count','expand','collapse','side','agent','phase','verdict','order','more','more-label','active','recovery','recovery-undo','recovery-redo','recovery-status']){
    elements['ai-meeting-progress-receipt-preset-preview-list-'+name]={
     children:[],replaceChildren(...children){this.children=children},addEventListener(type,fn){this[type]=fn},focus(){this.focused=true},
    };
@@ -907,11 +907,20 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(listFilter('agent').value,'all');
    assert.equal(listFilter('order').value,'later');
    assert.equal(listFilter('recovery-undo').hidden,false);
+   assert.match(listFilter('recovery-status').textContent,/검색 no-preview-match \+ ATLAS 해제 · 현재 1건 표시/);
    listFilter('recovery-undo').click();
    assert.equal(listFilter('agent').value,'ATLAS');
    assert.equal(listFilter('search').value,'no-preview-match');
-   assert.equal(recoveryButtons()[0].focused,true);
+   assert.equal(listFilter('recovery-redo').focused,true);
    assert.equal(listFilter('recovery-undo').hidden,true);
+   assert.match(listFilter('recovery-status').textContent,/ATLAS 복원 · 현재 0건 표시/);
+   listFilter('recovery-redo').click();
+   assert.equal(projectedRows().length,1);
+   assert.equal(listFilter('order').value,'later');
+   listFilter('recovery-undo').click();
+   listFilter('agent').value='all';listFilter('agent').change();
+   assert.equal(listFilter('recovery-redo').hidden,true);
+   assert.equal(listFilter('recovery-status').textContent,'');
    listFilter('agent').value='all';listFilter('agent').change();
    recoveryButtons()[0].click();
    assert.equal(listFilter('search').value,'');

@@ -2242,6 +2242,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <button id="ai-meeting-progress-receipt-preset-preview-list-reset" type="button" style="min-height:44px" disabled>목록 조건 초기화</button>
        <p id="ai-meeting-progress-receipt-preset-preview-list-count" role="status"></p>
        <button id="ai-meeting-progress-receipt-preset-preview-list-recovery-undo" type="button" style="min-height:44px" hidden>목록 조건 해제 되돌리기</button>
+       <button id="ai-meeting-progress-receipt-preset-preview-list-recovery-redo" type="button" style="min-height:44px" hidden>목록 조건 다시 해제</button>
+       <p id="ai-meeting-progress-receipt-preset-preview-list-recovery-status" role="status"></p>
        <div id="ai-meeting-progress-receipt-preset-preview-list-recovery" role="group" aria-label="검색 결과를 다시 표시할 조건" hidden></div>
        <button id="ai-meeting-progress-receipt-preset-preview-list-expand" type="button" style="min-height:44px" disabled>검색 결과 펼치기</button>
        <button id="ai-meeting-progress-receipt-preset-preview-list-collapse" type="button" style="min-height:44px" disabled>검색 결과 접기</button>
@@ -3074,6 +3076,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickListMoreLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-more-label");
  const receiptQuickListActive=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-active");
  const receiptQuickListRecoveryUndo=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-recovery-undo");
+ const receiptQuickListRecoveryRedo=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-recovery-redo");
+ const receiptQuickListRecoveryStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-recovery-status");
  let receiptQuickListRecoveryChange=null;
  const receiptQuickListRecovery=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-recovery");
  const receiptQuickListReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-reset");
@@ -3359,33 +3363,43 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    button.style.overflowWrap="anywhere";
    button.textContent=conditions.map(([label])=>label).join(" + ")+" 해제 · "+count+"건 표시";
    button.addEventListener("click",()=>{
-    receiptQuickListRecoveryChange=conditions.map(([,control,property,defaultValue])=>{
-     const value=control[property];
-     control[property]=defaultValue;
-     return {control,property,value,defaultValue};
-    });
-    refreshReceiptQuickList();
-    const first=receiptQuickPreviewLists.projected.rendered.values().next().value;
-    (first?.heading??receiptQuickListSearch)?.focus();
+    receiptQuickListRecoveryChange={applied:false,conditions:conditions.map(([label,control,property,defaultValue])=>
+     ({label,control,property,value:control[property],defaultValue}))};
+    applyReceiptQuickListRecovery(true);
    });
    return button;
   }));
   return suggestions.length>0;
  }
  function currentReceiptQuickListRecoveryChange(){
-  if(receiptQuickListRecoveryChange?.some(({control,property,defaultValue})=>control[property]!==defaultValue)){
+  const change=receiptQuickListRecoveryChange;
+  if(change?.conditions.some(({control,property,value,defaultValue})=>control[property]!==(
+   change.applied?defaultValue:value))){
    receiptQuickListRecoveryChange=null;
   }
   return receiptQuickListRecoveryChange;
  }
- receiptQuickListRecoveryUndo?.addEventListener("click",()=>{
+ function renderReceiptQuickListRecoveryHistory(total,matching){
   const change=currentReceiptQuickListRecoveryChange();
-  if(!change)return;
-  receiptQuickListRecoveryChange=null;
-  for(const {control,property,value} of change)control[property]=value;
+  if(receiptQuickListRecoveryUndo)receiptQuickListRecoveryUndo.hidden=!total||!change?.applied;
+  if(receiptQuickListRecoveryRedo)receiptQuickListRecoveryRedo.hidden=!total||!change||change.applied;
+  if(!receiptQuickListRecoveryStatus)return;
+  const text=change&&total?change.conditions.map(({label})=>label).join(" + ")+
+   (change.applied?" 해제":" 복원")+" · 현재 "+matching+"건 표시":"";
+  if(receiptQuickListRecoveryStatus.textContent!==text)receiptQuickListRecoveryStatus.textContent=text;
+ }
+ function applyReceiptQuickListRecovery(apply){
+  const change=currentReceiptQuickListRecoveryChange();
+  if(!change||change.applied===apply)return;
+  for(const {control,property,value,defaultValue} of change.conditions)control[property]=apply?defaultValue:value;
+  change.applied=apply;
   refreshReceiptQuickList();
-  (receiptQuickListRecovery?.children[0]??receiptQuickListSearch)?.focus();
- });
+  const first=receiptQuickPreviewLists.projected.rendered.values().next().value;
+  const target=apply?first?.heading:receiptQuickListRecoveryRedo;
+  (target??receiptQuickListSearch)?.focus();
+ }
+ receiptQuickListRecoveryUndo?.addEventListener("click",()=>applyReceiptQuickListRecovery(false));
+ receiptQuickListRecoveryRedo?.addEventListener("click",()=>applyReceiptQuickListRecovery(true));
  function renderProjectedReceiptQuickList(projected){
   const facets=Object.fromEntries(Object.entries(receiptQuickListFacets).map(([name,select])=>[name,select?.value||"all"]));
   const listFilters={...emptyReceiptQuickFilters,...facets,
@@ -3400,7 +3414,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const conditions=renderReceiptQuickListFilters(listFilters,sort);
   const listEmpty=matching.length===0&&count>0;
   const canRecover=renderReceiptQuickListRecovery(projected,listEmpty?conditions:[]);
-  if(receiptQuickListRecoveryUndo)receiptQuickListRecoveryUndo.hidden=!currentReceiptQuickListRecoveryChange()||count===0;
+  renderReceiptQuickListRecoveryHistory(count,matching.length);
   receiptQuickJumpButtons.clear();
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,{total:count,canJump:true});
   for(const [button] of receiptQuickListExpansion)if(button)button.disabled=matching.length===0;
