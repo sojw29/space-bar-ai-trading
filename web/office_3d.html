@@ -2212,6 +2212,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       <details id="ai-meeting-progress-receipt-preset-preview-projected" hidden>
        <summary style="min-height:44px">변경 후 전체 발언</summary>
        <label>미리보기 발언 검색 <input id="ai-meeting-progress-receipt-preset-preview-list-search" type="search" placeholder="번호, 에이전트, 요약" style="min-height:44px;max-width:100%"></label>
+       <label>미리보기 검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-list-scope" style="min-height:44px;max-width:100%">
+        <option value="all">전체</option><option value="id">발언 번호만</option><option value="agent">에이전트 이름만</option><option value="summary">요약 내용만</option>
+       </select></label>
        <label>검토 상태 <select id="ai-meeting-progress-receipt-preset-preview-list-state" style="min-height:44px">
         <option value="all">전체</option>
         <option value="unreviewed">미검토</option>
@@ -3067,6 +3070,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   return [name,{container:document.getElementById(id),rows:document.getElementById(id+"-rows"),rendered:new Map(),expanded:new Set()}];
  }));
  const receiptQuickListSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-search");
+ const receiptQuickListScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-scope");
  const receiptQuickListState=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-state");
  const receiptQuickListSelected=document.getElementById("ai-meeting-progress-receipt-preset-preview-list-selected");
  const receiptQuickListFacets=Object.fromEntries(["side","agent","phase","verdict"].map(name=>
@@ -3146,6 +3150,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function resetReceiptQuickListFilters(){
   receiptQuickListRecoveryChange=null;
   if(receiptQuickListSearch)receiptQuickListSearch.value="";
+  if(receiptQuickListScope)receiptQuickListScope.value="all";
   if(receiptQuickListState)receiptQuickListState.value="all";
   if(receiptQuickListSelected)receiptQuickListSelected.checked=false;
   for(const select of Object.values(receiptQuickListFacets))if(select)select.value="all";
@@ -3312,7 +3317,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   updateReceiptQuickPreview(entries,current);
  }
- function renderReceiptQuickListFilters({search,side,agent,phase,verdict,state,selectedOnly},sort){
+ function renderReceiptQuickListFilters({search,searchScope,side,agent,phase,verdict,state,selectedOnly},sort){
   const advanced=[
    [side!=="all"&&(side==="earlier"?"이전 회의":"이후 회의"),receiptQuickListFacets.side,"value","all","side"],
    [agent!=="all"&&agent,receiptQuickListFacets.agent,"value","all","agent"],
@@ -3325,6 +3330,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    (advancedCount?" ("+advancedCount+"개 적용)":"");
   const conditions=[
    [search&&"검색 "+search,receiptQuickListSearch,"value","","search"],
+   [receiptSearchScopeLabels[searchScope],receiptQuickListScope,"value","all","searchScope"],
    [state!=="all"&&(state==="reviewed"?"검토 완료만":"미검토만"),receiptQuickListState,"value","all","state"],
    [selectedOnly&&"선택한 발언만",receiptQuickListSelected,"checked",false,"selectedOnly"],
    ...advanced,
@@ -3332,28 +3338,39 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickListActive)renderReceiptFilterButtons(receiptQuickListActive,conditions,refreshReceiptQuickList,receiptQuickListSearch);
   return conditions;
  }
- function receiptQuickRecoverySuggestions(projected,conditions){
-  const active=conditions.filter(([label,control,,,key])=>label&&control&&key);
+ function receiptQuickRecoverySuggestions(projected,conditions,filters){
+  const active=conditions.filter(([label,control,,,key])=>label&&control&&key&&key!=="searchScope");
   if(!active.length)return [];
+  const scopeChoice=conditions.find(([label,control,,,key])=>label&&control&&key==="searchScope");
   const matchingByCondition=active.map(([,control,property,,key])=>{
-   const matches=visibleProgressReceiptEntries(projected,{...emptyReceiptQuickFilters,[key]:control[property]});
-   return new Set(matches.map(entry=>entry.key));
+   const conditionFilters={...emptyReceiptQuickFilters,[key]:control[property]};
+   if(key==="search")conditionFilters.searchScope=filters.searchScope;
+   return new Set(visibleProgressReceiptEntries(projected,conditionFilters).map(entry=>entry.key));
   });
+  const broadMatches=new Set(scopeChoice?visibleProgressReceiptEntries(projected,{
+   ...emptyReceiptQuickFilters,search:filters.search,
+  }).map(entry=>entry.key):[]);
   const groups=new Map();
-  for(const entry of projected){
-   const failed=active.filter((_,index)=>!matchingByCondition[index].has(entry.key));
-   if(!failed.length)continue;
+  function addSuggestion(failed){
    const signature=failed.map(condition=>condition[4]).join(",");
    if(!groups.has(signature))groups.set(signature,{conditions:failed,count:0});
    groups.get(signature).count++;
+  }
+  for(const entry of projected){
+   const failed=active.filter((_,index)=>!matchingByCondition[index].has(entry.key));
+   if(!failed.length)continue;
+   addSuggestion(failed);
+   if(broadMatches.has(entry.key)&&failed.some(condition=>condition[4]==="search")){
+    addSuggestion(failed.map(condition=>condition[4]==="search"?scopeChoice:condition));
+   }
   }
   const candidates=[...groups.values()];
   const minimum=Math.min(...candidates.map(group=>group.conditions.length));
   return candidates.filter(group=>group.conditions.length===minimum).sort((a,b)=>b.count-a.count);
  }
- function renderReceiptQuickListRecovery(projected,conditions){
+ function renderReceiptQuickListRecovery(projected,conditions,filters){
   if(!receiptQuickListRecovery)return false;
-  const suggestions=receiptQuickRecoverySuggestions(projected,conditions);
+  const suggestions=receiptQuickRecoverySuggestions(projected,conditions,filters);
   receiptQuickListRecovery.hidden=suggestions.length===0;
   receiptQuickListRecovery.replaceChildren(...suggestions.map(({conditions,count})=>{
    const button=document.createElement("button");
@@ -3404,6 +3421,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const facets=Object.fromEntries(Object.entries(receiptQuickListFacets).map(([name,select])=>[name,select?.value||"all"]));
   const listFilters={...emptyReceiptQuickFilters,...facets,
    search:receiptQuickListSearch?.value??"",
+   searchScope:receiptQuickListScope?.value||"all",
    state:receiptQuickListState?.value||"all",
    selectedOnly:!!receiptQuickListSelected?.checked,
   };
@@ -3413,7 +3431,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(sort)matching.sort(sort.compare);
   const conditions=renderReceiptQuickListFilters(listFilters,sort);
   const listEmpty=matching.length===0&&count>0;
-  const canRecover=renderReceiptQuickListRecovery(projected,listEmpty?conditions:[]);
+  const canRecover=renderReceiptQuickListRecovery(projected,listEmpty?conditions:[],listFilters);
   renderReceiptQuickListRecoveryHistory(count,matching.length);
   receiptQuickJumpButtons.clear();
   renderReceiptQuickPreviewList(receiptQuickPreviewLists.projected,matching,{total:count,canJump:true});
@@ -3421,7 +3439,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickListCount)receiptQuickListCount.textContent=matching.length+" / "+count+"건"+
    (listEmpty?" · 목록 조건에 맞는 발언이 없습니다. "+
     (canRecover?"아래 조건을 해제하면 발언을 다시 볼 수 있습니다.":"조건을 여러 개 해제하거나 목록 조건을 초기화하세요."):"");
-  if(receiptQuickListReset)receiptQuickListReset.disabled=!listFilters.search&&listFilters.state==="all"&&
+  if(receiptQuickListReset)receiptQuickListReset.disabled=!listFilters.search&&listFilters.searchScope==="all"&&listFilters.state==="all"&&
    !listFilters.selectedOnly&&!sort&&Object.values(facets).every(value=>value==="all");
  }
  function refreshReceiptQuickList(){
@@ -3435,6 +3453,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
  }
  receiptQuickListSearch?.addEventListener("input",refreshReceiptQuickList);
+ receiptQuickListScope?.addEventListener("change",refreshReceiptQuickList);
  receiptQuickListState?.addEventListener("change",refreshReceiptQuickList);
  for(const select of [...Object.values(receiptQuickListFacets),receiptQuickListOrder]){
   select?.addEventListener("change",refreshReceiptQuickList);
