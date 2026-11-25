@@ -2267,8 +2267,17 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <div class="receipt-quick-presets">
          <label>미리보기에서 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-search" type="search" style="min-height:44px"></label>
          <label>미리보기 검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option></select></label>
-         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear" type="button" style="min-height:44px" disabled>미리보기 검색 초기화</button>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear" type="button" style="min-height:44px" disabled>미리보기 필터 초기화</button>
         </div>
+        <details>
+         <summary>미리보기 상세 필터</summary>
+         <div class="receipt-quick-presets">
+          <label>검토 변경 유형 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-type" style="min-height:44px"></select></label>
+          <label>에이전트 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-agent" style="min-height:44px"></select></label>
+          <label>회의 단계 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-phase" style="min-height:44px"></select></label>
+          <label>발언 판정 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-verdict" style="min-height:44px"></select></label>
+         </div>
+        </details>
         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-status" role="status"></p>
         <div class="receipt-quick-presets" role="group" aria-label="현재 페이지의 발언 요약">
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expand" type="button" style="min-height:44px" disabled>이 페이지 요약 펼치기</button>
@@ -2281,7 +2290,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-next" type="button" style="min-height:44px" disabled>다음 발언 묶음</button>
         </div>
         <div class="receipt-quick-presets">
-         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-apply" type="button" style="min-height:44px">이 조건 적용</button>
+         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-apply" type="button" style="min-height:44px">복구 조건 적용</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-close" type="button" style="min-height:44px">미리보기 닫기</button>
         </div>
        </section>
@@ -3489,6 +3498,22 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewPage=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-page");
  const recoveryPreviewExpand=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expand");
  const recoveryPreviewCollapse=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-collapse");
+ const recoveryPreviewFacets=["type","agent","phase","verdict"].map(key=>({
+  key,field:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-"+key),
+ })).filter(({field})=>field);
+ function populateRecoveryPreviewFacets(entries){
+  const choiceLabels={type:{completed:"검토 완료",reopened:"검토 해제"},phase:receiptPhaseLabels,verdict:labels};
+  for(const {key,field} of recoveryPreviewFacets){
+   const values=[...new Set(entries.map(entry=>entry[key]))].sort();
+   field.replaceChildren(...["",...values].map(value=>{
+    const option=document.createElement("option");
+    option.value=value;
+    option.textContent=value?(choiceLabels[key]?.[value]??value):"전체";
+    return option;
+   }));
+   field.value="";
+  }
+ }
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3498,6 +3523,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  recoveryPreviewSearch?.addEventListener("input",updateRecoveryPreviewSearch);
  recoveryPreviewScope?.addEventListener("change",updateRecoveryPreviewSearch);
+ for(const {field} of recoveryPreviewFacets)field.addEventListener("change",updateRecoveryPreviewSearch);
  recoveryPreviewSearch?.addEventListener("keydown",event=>{
   const first=pendingRecoveryPreview?.firstAction;
   if(event.key==="Enter"&&!event.isComposing&&first){
@@ -3510,6 +3536,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(!recoveryPreviewSearch)return;
   recoveryPreviewSearch.value="";
   if(recoveryPreviewScope)recoveryPreviewScope.value="all";
+  for(const {field} of recoveryPreviewFacets)field.value="";
   updateRecoveryPreviewSearch();
   recoveryPreviewSearch.focus();
  });
@@ -3550,9 +3577,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const query=(recoveryPreviewSearch?.value??"").normalize("NFKC").toLowerCase().trim();
   const words=query.split(/\s+/).filter(Boolean);
   const summaryOnly=recoveryPreviewScope?.value==="summary";
+  const activeFacets=recoveryPreviewFacets.filter(({field})=>field.value);
+  const filtered=Boolean(words.length||activeFacets.length);
   const matches=entries.filter(entry=>{
    const searchable=summaryOnly?entry.summarySearchText:entry.searchText;
-   return words.every(word=>searchable.includes(word));
+   return activeFacets.every(({key,field})=>entry[key]===field.value)&&
+    words.every(word=>searchable.includes(word));
   });
   const alternatives=[...new Set(words)].sort((a,b)=>b.length-a.length)
    .map(word=>word.replace(/[.*+?^{}$()|[\]\\]/g,"\\$&"));
@@ -3572,14 +3602,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const start=page*recoveryPreviewPageSize;
   const sample=matches.slice(start,start+recoveryPreviewPageSize);
   const range=sample.length?(start+1)+"–"+(start+sample.length)+" / "+matches.length+"건":"일치 발언 0건";
-  const emptyHint=words.length&&!sample.length?" · 검색어를 바꾸거나 검색 조건을 초기화하세요.":"";
+  const emptyHint=filtered&&!sample.length?" · 검색 조건을 초기화하거나 검색어와 필터를 바꾸세요.":"";
   const pageStatus=pageCount>1?" · "+(page+1)+"/"+pageCount+" 페이지":"";
   if(recoveryPreviewExpand)recoveryPreviewExpand.disabled=!sample.length;
   if(recoveryPreviewCollapse)recoveryPreviewCollapse.disabled=!sample.length;
-  recoveryPreviewStatus.textContent=label+" · "+range+pageStatus+(words.length?" · 전체 "+entries.length+"건":"")+emptyHint;
+  recoveryPreviewStatus.textContent=label+" · "+range+pageStatus+(filtered?" · 전체 "+entries.length+"건":"")+emptyHint;
   if(recoveryPreviewPrev)recoveryPreviewPrev.disabled=start===0;
   if(recoveryPreviewNext)recoveryPreviewNext.disabled=start+sample.length>=matches.length;
-  if(recoveryPreviewClear)recoveryPreviewClear.disabled=!recoveryPreviewSearch?.value&&!summaryOnly;
+  if(recoveryPreviewClear)recoveryPreviewClear.disabled=!recoveryPreviewSearch?.value&&!summaryOnly&&!activeFacets.length;
   recoveryPreviewRows.replaceChildren(...sample.map((entry,index)=>{
    const {key,label,summary}=entry;
    const row=document.createElement("li");
@@ -3730,6 +3760,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     preview.addEventListener("click",()=>{
      if(recoveryPreviewSearch)recoveryPreviewSearch.value="";
      if(recoveryPreviewScope)recoveryPreviewScope.value="all";
+     populateRecoveryPreviewFacets(entries);
      pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0,expanded:new Set(),visibleDetails:new Map()};
      renderReceiptQuickSourceRecoveryPreview();
      recoveryPreview.hidden=false;
