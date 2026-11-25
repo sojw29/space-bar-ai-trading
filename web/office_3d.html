@@ -3042,12 +3042,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(restoreFocus)(button?.disabled?receiptQuickPreviewMode:button)?.focus();
  }
  function receiptQuickJumpChoices(visibleKeys,projected){
+  const cursor=projected.findIndex(entry=>entry.key===lastReceiptPreviewKey);
+  const previousUnreviewed=cursor<0?undefined:projected.slice(0,cursor).reverse().find(entry=>!entry.reviewed);
+  const nextUnreviewed=cursor<0?undefined:projected.find((entry,index)=>index>cursor&&!entry.reviewed);
   return [
    ["first","첫 표시 발언",projected[0]],
+   ["last","마지막 표시 발언",projected[projected.length-1]],
    ["unreviewed","첫 미검토 발언",projected.find(entry=>!entry.reviewed)],
+   ["reviewed","첫 검토 완료 발언",projected.find(entry=>entry.reviewed)],
    ["new","첫 새로 보일 발언",projected.find(entry=>!visibleKeys.has(entry.key))],
    ["selected","첫 선택 발언",projected.find(entry=>selectedReceiptKeys.has(entry.key))],
-   ["current","마지막 이동 위치",projected.find(entry=>entry.key===lastReceiptPreviewKey)],
+   ["selected-unreviewed","첫 선택 미검토 발언",projected.find(entry=>!entry.reviewed&&selectedReceiptKeys.has(entry.key))],
+   ["current","마지막 이동 위치",projected[cursor]],
+   ["previous-unreviewed","이전 미검토 발언",previousUnreviewed],
+   ["next-unreviewed","다음 미검토 발언",nextUnreviewed],
   ];
  }
  function receiptQuickRowLabel({period,statement}){
