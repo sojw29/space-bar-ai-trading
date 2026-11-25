@@ -2202,6 +2202,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      <label><input id="ai-meeting-progress-receipt-preset-preview-mode" type="checkbox"> 조합 적용 전 미리보기</label>
      <div id="ai-meeting-progress-receipt-preset-preview" role="region" aria-label="빠른 검토 조합 미리보기" tabindex="-1" hidden>
       <p id="ai-meeting-progress-receipt-preset-preview-summary" role="status" style="white-space:pre-line;overflow-wrap:anywhere"></p>
+      <button id="ai-meeting-progress-receipt-preset-preview-change-mode" type="button" style="min-height:44px">기존 조건에 추가</button>
       <details id="ai-meeting-progress-receipt-preset-preview-diff" hidden>
        <summary id="ai-meeting-progress-receipt-preset-preview-diff-label" style="min-height:44px">바뀌는 조건</summary>
        <ul id="ai-meeting-progress-receipt-preset-preview-diff-rows" style="overflow-wrap:anywhere"></ul>
@@ -2288,6 +2289,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       <button id="ai-meeting-progress-receipt-preset-insufficient" type="button" aria-pressed="false" style="min-height:44px">자료 부족</button>
      </div>
     </fieldset>
+    <button id="ai-meeting-progress-receipt-preset-return-preview" type="button" style="min-height:44px" hidden>조합 미리보기로 돌아가기</button>
     <label>회의 <select id="ai-meeting-progress-receipt-side" style="min-height:44px">
      <option value="all">전체</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option>
     </select></label>
@@ -3091,6 +3093,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickPreviewMode=document.getElementById("ai-meeting-progress-receipt-preset-preview-mode");
  const receiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview");
  const receiptQuickPreviewSummary=document.getElementById("ai-meeting-progress-receipt-preset-preview-summary");
+ const receiptQuickPreviewChangeMode=document.getElementById("ai-meeting-progress-receipt-preset-preview-change-mode");
+ const receiptQuickReturnPreview=document.getElementById("ai-meeting-progress-receipt-preset-return-preview");
+ receiptQuickReturnPreview?.addEventListener("click",()=>{
+  if(pendingQuickPreset)receiptQuickPreview?.focus();
+ });
+ receiptQuickPreviewChangeMode?.addEventListener("click",()=>{
+  if(!pendingQuickPreset||!combineReceiptQuickPreset)return;
+  combineReceiptQuickPreset.checked=!combineReceiptQuickPreset.checked;
+  updateProgressReceipt();
+ });
  const receiptQuickPreviewDiff=document.getElementById("ai-meeting-progress-receipt-preset-preview-diff");
  const receiptQuickPreviewDiffLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-diff-label");
  const receiptQuickPreviewDiffRows=document.getElementById("ai-meeting-progress-receipt-preset-preview-diff-rows");
@@ -3165,6 +3177,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const restoreFocus=returnFocus&&pendingQuickPreset;
   pendingQuickPreset=null;
   if(receiptQuickPreview)receiptQuickPreview.hidden=true;
+  if(receiptQuickReturnPreview)receiptQuickReturnPreview.hidden=true;
   if(receiptQuickPreviewSummary)receiptQuickPreviewSummary.textContent="";
   if(restoreFocus)(button?.disabled?receiptQuickPreviewMode:button)?.focus();
  }
@@ -3343,14 +3356,32 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function renderReceiptQuickPreviewDiff(fields,before,after){
   if(!receiptQuickPreviewDiff||!receiptQuickPreviewDiffRows||!receiptQuickPreviewDiffLabel)return;
   receiptQuickPreviewDiff.hidden=fields.length===0;
-  receiptQuickPreviewDiffLabel.textContent="바뀌는 조건 ("+fields.length+"개)";
-  receiptQuickPreviewDiffRows.replaceChildren(...fields.map(key=>{
+  const counts={추가:0,변경:0,해제:0};
+  const controls={...progressReceiptSelects,search:progressReceiptSearch,selectedOnly:progressReceiptSelectedOnly};
+  const rows=fields.map(key=>{
    const row=document.createElement("li");
    const kind=after[key]===emptyReceiptQuickFilters[key]?"해제":before[key]===emptyReceiptQuickFilters[key]?"추가":"변경";
-   row.textContent=receiptQuickFieldLabels[key]+" "+kind+" · "+
-    receiptQuickFilterValue(key,before[key])+" → "+receiptQuickFilterValue(key,after[key]);
+   counts[kind]++;
+   const label=receiptQuickFieldLabels[key];
+   row.textContent=label+" "+kind+" · "+receiptQuickFilterValue(key,before[key])+" → "+receiptQuickFilterValue(key,after[key]);
+   const control=controls[key];
+   if(control){
+    const edit=document.createElement("button");
+    edit.type="button";
+    edit.style.minHeight="44px";
+    edit.textContent="현재 조건 편집";
+    edit.setAttribute("aria-label",label+" 현재 조건 편집");
+    edit.addEventListener("click",()=>{
+     control.focus();
+     control.scrollIntoView?.({block:"nearest"});
+    });
+    row.append(edit);
+   }
    return row;
-  }));
+  });
+  const breakdown=Object.entries(counts).filter(([,count])=>count).map(([kind,count])=>kind+" "+count+"개");
+  receiptQuickPreviewDiffLabel.textContent=["바뀌는 조건 ("+fields.length+"개)",...breakdown].join(" · ");
+  receiptQuickPreviewDiffRows.replaceChildren(...rows);
  }
  function updateReceiptQuickPreview(entries,current){
   const pending=pendingQuickPreset;
@@ -3376,6 +3407,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const selected=projected.filter(entry=>selectedReceiptKeys.has(entry.key)).length;
   const cursor=entries.find(entry=>entry.key===lastReceiptPreviewKey);
   if(receiptQuickPreview)receiptQuickPreview.hidden=false;
+  if(receiptQuickReturnPreview)receiptQuickReturnPreview.hidden=false;
+  if(receiptQuickPreviewChangeMode){
+   receiptQuickPreviewChangeMode.hidden=!combineReceiptQuickPreset;
+   receiptQuickPreviewChangeMode.textContent=combineReceiptQuickPreset?.checked?"기존 조건 교체로 전환":"기존 조건에 추가로 전환";
+  }
   const blockedReason=!fields.length?"변경할 조건이 없습니다.":(!count&&!active?"표시할 발언이 없습니다. 검색어 또는 현재 조건을 조정하세요.":"");
   if(applyReceiptQuickPreview){
    if(blockedReason&&document.activeElement===applyReceiptQuickPreview)receiptQuickPreview?.focus();
@@ -3384,6 +3420,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   if(receiptQuickPreviewSummary)receiptQuickPreviewSummary.textContent=[
    pending.preset.label+(active?" 해제":" 적용"),
+   combineReceiptQuickPreset?.checked?"방식 · 기존 조건에 추가":"방식 · 기존 조건 교체",
    "현재 조건 "+receiptViewFilterSummary(current),
    "변경 후 "+receiptViewFilterSummary(after),
    "표시 발언 "+visible.length+"건 → "+count+"건",
