@@ -2266,7 +2266,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <section id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview" aria-label="검색 결과 미리보기" hidden>
         <div class="receipt-quick-presets">
          <label>미리보기에서 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-search" type="search" style="min-height:44px"></label>
-         <label>미리보기 검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option></select></label>
+         <label>미리보기 검색 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-scope" style="min-height:44px"><option value="all">전체 발언 정보</option><option value="summary">발언 요약만</option><option value="id">발언 번호만</option><option value="agent">에이전트 이름만</option><option value="phase">회의 단계만</option><option value="verdict">발언 판정만</option><option value="phrase">요약에서 정확한 구절</option></select></label>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear-query" type="button" style="min-height:44px" hidden>검색어만 지우기</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-clear" type="button" style="min-height:44px" disabled>미리보기 필터 초기화</button>
         </div>
@@ -3572,6 +3572,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewExportButtons=["txt","csv","json","md"].map(format=>[
   format,document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-"+format),
  ]);
+ const recoveryPreviewSearchScopeLabels={"all":"전체 발언 정보","summary":"발언 요약만","id":"발언 번호만","agent":"에이전트 이름만","phase":"회의 단계만","verdict":"발언 판정만","phrase":"요약에서 정확한 구절"};
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3709,7 +3710,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const orderLabels={default:"기존 순서",reverse:"기존 순서의 역순",agent:"에이전트 이름순",phase:"회의 진행 단계순",verdict:"추가 검토 필요 발언 우선",selected:"선택한 발언 우선"};
   const viewSummary=[
    "검색어 "+(view.query||"없음"),
-   "검색 범위 "+(view.search_scope==="summary"?"발언 요약만":"전체 발언 정보"),
+   "검색 범위 "+(recoveryPreviewSearchScopeLabels[view.search_scope]??recoveryPreviewSearchScopeLabels.all),
    "필터 "+([...filterSummary,...(view.selected_only?["선택한 발언만"]:[])].join(", ")||"없음"),
    "정렬 "+(orderLabels[view.order]??orderLabels.default),
   ].join("\n");
@@ -3779,14 +3780,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   visibleDetails.clear();
   const query=(recoveryPreviewSearch?.value??"").normalize("NFKC").toLowerCase().trim();
   const words=query.split(/\s+/).filter(Boolean);
-  const summaryOnly=recoveryPreviewScope?.value==="summary";
+  const searchScope=recoveryPreviewScope?.value||"all";
+  const scoped=searchScope!=="all";
+  const searchSummary=["all","summary","phrase"].includes(searchScope);
+  const searchTitle=["all","id","agent"].includes(searchScope);
+  const contextScope=searchScope==="phase"||searchScope==="verdict";
   const activeFacets=recoveryPreviewFacets.filter(({field})=>field.value);
   const selectedOnly=Boolean(recoveryPreviewSelected?.checked);
   const facetCount=activeFacets.length+Number(selectedOnly);
   const filtered=Boolean(words.length||facetCount);
   const searched=entries.filter(entry=>{
-   const searchable=summaryOnly?entry.summarySearchText:entry.searchText;
-   return (!selectedOnly||entry.selection.checked)&&words.every(word=>searchable.includes(word));
+   if(selectedOnly&&!entry.selection.checked)return false;
+   if(!words.length)return true;
+   if(searchScope==="phrase"){
+    return entry.summarySearchText.replace(/\s+/g," ").includes(words.join(" "));
+   }
+   const values={
+    summary:entry.summarySearchText,id:entry.id,agent:entry.agent,
+    phase:entry.phase+" "+receiptPhaseLabels[entry.phase],verdict:entry.verdict+" "+labels[entry.verdict],
+   };
+   const searchable=scoped?String(values[searchScope]??"").normalize("NFKC").toLowerCase():entry.searchText;
+   return words.every(word=>searchable.includes(word));
   });
   const matchesFacets=(entry,except)=>activeFacets.every(({key,field})=>key===except||entry[key]===field.value);
   const matches=searched.filter(entry=>matchesFacets(entry));
@@ -3821,7 +3835,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }
   }
   if(selectedOnly)activeLabels.push(["선택한 발언만",()=>{recoveryPreviewSelected.checked=false}]);
-  if(summaryOnly)activeLabels.push(["발언 요약만",()=>{recoveryPreviewScope.value="all"}]);
+  if(scoped)activeLabels.push([recoveryPreviewSearchScopeLabels[searchScope],()=>{recoveryPreviewScope.value="all"}]);
   if(recoveryPreviewClearFacets)recoveryPreviewClearFacets.disabled=!facetCount;
   if(recoveryPreviewSelectedLabel){
    const selectedCount=entries.filter(({selection})=>selection.checked).length;
@@ -3845,9 +3859,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }));
   }
   if(recoveryPreviewClearQuery)recoveryPreviewClearQuery.hidden=!recoveryPreviewSearch?.value;
-  const alternatives=[...new Set(words)].sort((a,b)=>b.length-a.length)
+  const alternatives=(searchScope==="phrase"?words:[...new Set(words)].sort((a,b)=>b.length-a.length))
    .map(word=>word.replace(/[.*+?^{}$()|[\]\\]/g,"\\$&"));
-  const pattern=alternatives.length?new RegExp(alternatives.join("|"),"gi"):null;
+  const pattern=alternatives.length?new RegExp(alternatives.join(searchScope==="phrase"?"\\s+":"|"),"gi"):null;
   pendingRecoveryPreview.firstAction=null;
   const pageCount=Math.ceil(matches.length/recoveryPreviewPageSize);
   pendingRecoveryPreview.pageCount=pageCount;
@@ -3876,15 +3890,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   recoveryPreviewStatus.textContent=label+" · "+range+pageStatus+(filtered?" · 전체 "+entries.length+"건":"")+emptyHint;
   if(recoveryPreviewPrev)recoveryPreviewPrev.disabled=start===0;
   if(recoveryPreviewNext)recoveryPreviewNext.disabled=start+sample.length>=matches.length;
-  if(recoveryPreviewClear)recoveryPreviewClear.disabled=!recoveryPreviewSearch?.value&&!summaryOnly&&!facetCount;
+  if(recoveryPreviewClear)recoveryPreviewClear.disabled=!recoveryPreviewSearch?.value&&!scoped&&!facetCount;
   recoveryPreviewRows.replaceChildren(...sample.map((entry,index)=>{
    const {key,label,summary}=entry;
    const row=document.createElement("li");
    const title=document.createElement("strong");
    const excerpt=document.createElement("p");
-   if(pattern&&!summaryOnly)title.append(...receiptQuickMarkedText(label,pattern));
+   if(pattern&&searchTitle)title.append(...receiptQuickMarkedText(label,pattern));
    else title.textContent=label;
-   const ranges=receiptQuickSourceSummaryRanges(entry,pattern);
+   const ranges=receiptQuickSourceSummaryRanges(entry,searchSummary?pattern:null);
    const start=ranges.length?Math.max(0,ranges[0][0]-25):0;
    const end=Math.min(summary.length,Math.max(start+100,ranges[0]?.[1]??0));
    excerpt.append(start?"…":"",...receiptQuickSourceSummaryParts(summary,ranges,start,end),end<summary.length?"…":"");
@@ -3910,7 +3924,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(index===0)pendingRecoveryPreview.firstAction=jump;
    const context=document.createElement("p");
    const reviewChange=entry.type==="completed"?"검토 완료":"검토 해제";
-   context.textContent=[reviewChange,receiptPhaseLabels[entry.phase],labels[entry.verdict]].join(" · ");
+   const contextParts=[reviewChange,receiptPhaseLabels[entry.phase],labels[entry.verdict]];
+   if(pattern&&contextScope){
+    const fieldIndex=searchScope==="phase"?1:2;
+    context.append(...contextParts.flatMap((part,index)=>[
+     ...(index?[" · "]:[]),...(index===fieldIndex?receiptQuickMarkedText(part,pattern):[part]),
+    ]));
+   }else context.textContent=contextParts.join(" · ");
    row.append(title,excerpt,full,jump,context);
    return row;
   }));
