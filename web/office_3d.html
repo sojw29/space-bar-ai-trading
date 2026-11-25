@@ -3973,9 +3973,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    closeRecoveryPreviewSample(true);
   }
  });
- function renderRecoveryPreviewSample(){
+ function renderRecoveryPreviewSample(retainedKey){
   const state=pendingRecoveryPreview.suggestionSample;
-  const {label,results,apply,page,facetOptions}=state;
+  const {label,results,apply,facetOptions}=state;
   const query=(recoveryPreviewSampleSearch?.value??"").normalize("NFKC").toLowerCase().trim();
   const words=query.split(/\s+/).filter(Boolean);
   const scope=recoveryPreviewSampleScope?.value||"all";
@@ -4025,7 +4025,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }));
   }
   sortRecoveryPreviewMatches(matches,recoveryPreviewSampleOrder?.value);
-  state.matchCount=matches.length;
+  state.matches=matches;
+  if(retainedKey!==undefined){
+   state.emptyResultKey=matches.length?null:retainedKey;
+   state.resultIndex=Math.max(0,matches.findIndex(entry=>entry.key===retainedKey));
+   state.page=Math.floor(state.resultIndex/recoveryPreviewPageSize);
+  }
+  const {page}=state;
   state.actions=new Map();
   if(recoveryPreviewSamplePicker){
    const options=document.createDocumentFragment();
@@ -4096,7 +4102,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      pendingRecoveryPreview?.suggestionSample!==state||state.actions.get(resultIndex)!==jump||
      !Object.hasOwn(recoveryPreviewResultKeys,event.key))return;
     event.preventDefault();
-    focusRecoveryPreviewSampleResult(recoveryPreviewResultKeys[event.key](resultIndex,state.matchCount));
+    focusRecoveryPreviewSampleResult(recoveryPreviewResultKeys[event.key](resultIndex,state.matches.length));
    });
    const context=document.createElement("p");
    const phase=receiptPhaseLabels[entry.phase];
@@ -4116,7 +4122,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function focusRecoveryPreviewSampleResult(index){
   const state=pendingRecoveryPreview?.suggestionSample;
-  if(!state||!Number.isInteger(index)||index<0||index>=state.matchCount)return;
+  if(!state||!Number.isInteger(index)||index<0||index>=state.matches.length)return;
   const page=Math.floor(index/recoveryPreviewPageSize);
   state.resultIndex=index;
   if(page!==state.page){
@@ -4136,9 +4142,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function updateRecoveryPreviewSampleSearch(){
   const state=pendingRecoveryPreview?.suggestionSample;
   if(!state)return;
-  state.page=0;
-  state.resultIndex=0;
-  renderRecoveryPreviewSample();
+  const key=state.matches[state.resultIndex]?.key??state.emptyResultKey??null;
+  renderRecoveryPreviewSample(key);
  }
  recoveryPreviewSampleSearch?.addEventListener("input",updateRecoveryPreviewSampleSearch);
  recoveryPreviewSampleScope?.addEventListener("change",updateRecoveryPreviewSampleSearch);
@@ -4158,7 +4163,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleSearch)recoveryPreviewSampleSearch.value="";
   if(recoveryPreviewSampleScope)recoveryPreviewSampleScope.value="all";
   clearRecoveryPreviewSampleFacets();
-  updateRecoveryPreviewSampleSearch();
+  if(pendingRecoveryPreview?.suggestionSample)renderRecoveryPreviewSample(null);
   recoveryPreviewSampleSearch?.focus();
  });
  for(const [button,step] of [[recoveryPreviewSamplePrev,-1],[recoveryPreviewSampleNext,1]]){
