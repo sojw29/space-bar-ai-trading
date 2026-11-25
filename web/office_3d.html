@@ -2306,6 +2306,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-next" type="button" style="min-height:44px" disabled>다음 발언 묶음</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-last" type="button" style="min-height:44px" disabled>마지막 페이지</button>
         </div>
+        <details>
+         <summary>미리보기 결과 저장</summary>
+         <div class="receipt-quick-presets">
+          <label>저장 범위 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-scope" style="min-height:44px"><option value="page">현재 페이지</option><option value="matches">검색 결과 전체</option></select></label>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-txt" type="button" style="min-height:44px" disabled>TXT 저장</button>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-csv" type="button" style="min-height:44px" disabled>CSV 저장</button>
+          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-json" type="button" style="min-height:44px" disabled>JSON 저장</button>
+         </div>
+         <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-status" role="status"></p>
+        </details>
         <div class="receipt-quick-presets">
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-apply" type="button" style="min-height:44px">복구 조건 적용</button>
          <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-close" type="button" style="min-height:44px">미리보기 닫기</button>
@@ -3547,6 +3557,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSummaryScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-summary-scope");
  const recoveryPreviewExpandedCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-expanded-count");
  const recoveryPreviewOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-order");
+ const recoveryPreviewExportScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-scope");
+ const recoveryPreviewExportStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-status");
+ const recoveryPreviewExportButtons=["txt","csv","json"].map(format=>[
+  format,document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-export-"+format),
+ ]);
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewSearch(){
@@ -3644,6 +3659,43 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    syncRecoveryPreviewSummaries();
   });
  }
+ function saveRecoveryPreviewResults(format){
+  if(!pendingRecoveryPreview)return;
+  const {matches,page,label}=pendingRecoveryPreview;
+  const all=recoveryPreviewExportScope?.value==="matches";
+  const start=page*recoveryPreviewPageSize;
+  const entries=all?matches:matches.slice(start,start+recoveryPreviewPageSize);
+  if(!entries.length)return;
+  const fields=["meeting","statement_id","agent","phase","verdict","change","selected","summary"];
+  const rows=entries.map(entry=>({
+   meeting:entry.period,statement_id:entry.id,agent:entry.agent,phase:entry.phase,
+   verdict:entry.verdict,change:entry.type,selected:Boolean(entry.selection.checked),summary:entry.summary,
+  }));
+  const title=all?"미리보기 검색 결과 전체":"미리보기 현재 페이지";
+  const scope=all?"matches":"page";
+  const cells=rows.map(row=>fields.map(field=>row[field]));
+  const mime={txt:"text/plain",csv:"text/csv",json:"application/json"};
+  const header=["회의","발언 번호","에이전트","회의 단계","발언 판정","검토 변경","선택 여부","발언 요약"];
+  const content=format==="json"
+   ?JSON.stringify({version:"SPACEBAR_MEETING_RECOVERY_PREVIEW_1",scope,suggestion:label,rows},null,2)+"\n"
+   :format==="csv"
+    ?"\uFEFF"+[header,...cells].map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n"
+    :[title+" · "+rows.length+"건",label,...rows.map((row,index)=>
+     entries[index].label+" · "+receiptPhaseLabels[row.phase]+" · "+labels[row.verdict]+" · "+
+     (row.change==="completed"?"검토 완료":"검토 해제")+(row.selected?" · 선택됨":"")+"\n"+row.summary)].join("\n\n")+"\n";
+  try{
+   saveMeetingFile(content,"meeting-recovery-preview-"+scope+"-"+rows.length+"-rows."+format,mime[format]+";charset=utf-8");
+   if(recoveryPreviewExportStatus)recoveryPreviewExportStatus.textContent=format.toUpperCase()+" 저장 요청 · "+rows.length+"건";
+  }catch(_){
+   if(recoveryPreviewExportStatus)recoveryPreviewExportStatus.textContent=format.toUpperCase()+" 저장을 시작하지 못했습니다.";
+  }
+ }
+ for(const [format,button] of recoveryPreviewExportButtons){
+  button?.addEventListener("click",()=>{if(!button.disabled)saveRecoveryPreviewResults(format)});
+ }
+ recoveryPreviewExportScope?.addEventListener("change",()=>{
+  if(recoveryPreviewExportStatus)recoveryPreviewExportStatus.textContent="";
+ });
  function renderReceiptQuickSourceRecoveryPreview(){
   const {entries,label,page,commit,expanded,visibleDetails}=pendingRecoveryPreview;
   for(const [key,{details}] of visibleDetails){
@@ -3676,6 +3728,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(order==="reverse")matches.reverse();
   else if(Object.hasOwn(sorters,order))matches.sort(sorters[order]);
   pendingRecoveryPreview.matchingKeys=matches.map(({key})=>key);
+  pendingRecoveryPreview.matches=matches;
+  if(recoveryPreviewExportStatus)recoveryPreviewExportStatus.textContent="";
+  for(const [,button] of recoveryPreviewExportButtons)if(button)button.disabled=!matches.length;
   const activeLabels=[];
   for(const {key,field} of recoveryPreviewFacets){
    const options=pendingRecoveryPreview.facetOptions.get(key);
@@ -3908,6 +3963,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      if(recoveryPreviewFilters)recoveryPreviewFilters.open=false;
      if(recoveryPreviewSummaryScope)recoveryPreviewSummaryScope.value="page";
      if(recoveryPreviewOrder)recoveryPreviewOrder.value="default";
+     if(recoveryPreviewExportScope)recoveryPreviewExportScope.value="page";
      pendingRecoveryPreview={commit,trigger:preview,label,entries,page:0,expanded:new Set(),visibleDetails:new Map(),facetOptions:new Map()};
      populateRecoveryPreviewFacets(entries);
      renderReceiptQuickSourceRecoveryPreview();
