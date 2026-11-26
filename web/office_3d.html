@@ -2422,6 +2422,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
            <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-navigation" class="receipt-quick-presets" role="group" aria-label="저장 페이지 이동 기록" hidden>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-back" type="button" style="min-height:44px" hidden>이전 검토 위치</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-forward" type="button" style="min-height:44px" hidden>다음 검토 위치</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-first" type="button" style="min-height:44px" disabled>첫 검토 위치</button>
+            <label>검토 위치 선택 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-picker" style="min-height:44px" disabled></select></label>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-last" type="button" style="min-height:44px" disabled>마지막 검토 위치</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-clear" type="button" style="min-height:44px">이동 기록 지우기</button>
             <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-status" role="status"></span>
            </div>
            <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="예시 파일 내용" hidden></pre>
@@ -3886,6 +3890,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleSavedPageNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-navigation");
  const recoveryPreviewSampleSavedPageBack=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-back");
  const recoveryPreviewSampleSavedPageForward=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-forward");
+ const recoveryPreviewSampleSavedPageFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-first");
+ const recoveryPreviewSampleSavedPageLast=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-last");
+ const recoveryPreviewSampleSavedPagePicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-picker");
+ const recoveryPreviewSampleSavedPageClear=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-clear");
  const recoveryPreviewSampleSavedPageStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-status");
  const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
  const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
@@ -4611,6 +4619,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleSavedPageNavigation)recoveryPreviewSampleSavedPageNavigation.hidden=!history;
   if(recoveryPreviewSampleSavedPageBack)recoveryPreviewSampleSavedPageBack.hidden=!history||history.index<=0;
   if(recoveryPreviewSampleSavedPageForward)recoveryPreviewSampleSavedPageForward.hidden=!history||history.index>=history.positions.length-1;
+  if(recoveryPreviewSampleSavedPageFirst)recoveryPreviewSampleSavedPageFirst.disabled=!history||history.index<=0;
+  if(recoveryPreviewSampleSavedPageLast)recoveryPreviewSampleSavedPageLast.disabled=!history||history.index>=history.positions.length-1;
+  if(recoveryPreviewSampleSavedPagePicker){
+   const options=(history?.positions??[]).map((position,index)=>{
+    const option=document.createElement("option");
+    option.value=String(index);
+    option.textContent=(index+1)+"번째 검토 위치 · "+(position.page+1)+" 페이지";
+    return option;
+   });
+   recoveryPreviewSampleSavedPagePicker.replaceChildren(...options);
+   recoveryPreviewSampleSavedPagePicker.disabled=options.length<2;
+   recoveryPreviewSampleSavedPagePicker.value=history?String(history.index):"";
+  }
   if(recoveryPreviewSampleSavedPageStatus){
    recoveryPreviewSampleSavedPageStatus.textContent=history
     ?"검토 위치 "+(history.index+1)+" / "+history.positions.length+" · "+(preview.index+1)+" 페이지"
@@ -4620,11 +4641,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function currentRecoveryPreviewSampleReadingPosition(preview){
   return {page:preview.index,scroll:recoveryPreviewSampleFileText?.scrollTop??0};
  }
- function restoreRecoveryPreviewSampleReadingPosition(position){
+ function restoreRecoveryPreviewSampleReadingPosition(position,focusContent=true){
   showRecoveryPreviewSampleFilePage(position.page);
   if(recoveryPreviewSampleFileText){
    recoveryPreviewSampleFileText.scrollTop=position.scroll;
-   recoveryPreviewSampleFileText.focus();
+   if(focusContent)recoveryPreviewSampleFileText.focus();
   }
  }
  function openRecoveryPreviewSampleSavedPage(preview,page){
@@ -4640,18 +4661,37 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   preview.savedPageHistory={positions,index:positions.length-1};
   restoreRecoveryPreviewSampleReadingPosition(destination);
  }
- for(const [button,step] of [[recoveryPreviewSampleSavedPageBack,-1],[recoveryPreviewSampleSavedPageForward,1]]){
+ function moveRecoveryPreviewSampleSavedPageHistory(preview,index,focusContent=true){
+  const history=preview?.savedPageHistory;
+  if(!recoveryPreviewSampleFilePreview?.open||!history||!Number.isInteger(index)||
+   index<0||index>=history.positions.length||index===history.index)return;
+  history.positions[history.index]=currentRecoveryPreviewSampleReadingPosition(preview);
+  history.index=index;
+  restoreRecoveryPreviewSampleReadingPosition(history.positions[index],focusContent);
+ }
+ for(const [button,offset] of [[recoveryPreviewSampleSavedPageBack,-1],[recoveryPreviewSampleSavedPageForward,1],
+  [recoveryPreviewSampleSavedPageFirst,"first"],[recoveryPreviewSampleSavedPageLast,"last"]]){
   button?.addEventListener("click",()=>{
    const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
    const history=preview?.savedPageHistory;
-   if(!history||button.hidden||!recoveryPreviewSampleFilePreview?.open)return;
-   const next=history.index+step;
-   if(next<0||next>=history.positions.length)return;
-   history.positions[history.index]=currentRecoveryPreviewSampleReadingPosition(preview);
-   history.index=next;
-   restoreRecoveryPreviewSampleReadingPosition(history.positions[next]);
+   if(!history||button.hidden||button.disabled)return;
+   const index=offset==="first"?0:offset==="last"?history.positions.length-1:history.index+offset;
+   moveRecoveryPreviewSampleSavedPageHistory(preview,index);
   });
  }
+ recoveryPreviewSampleSavedPagePicker?.addEventListener("change",()=>{
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  const value=recoveryPreviewSampleSavedPagePicker.value;
+  if(value!=="")moveRecoveryPreviewSampleSavedPageHistory(preview,Number(value),false);
+  recoveryPreviewSampleSavedPagePicker.value=preview?.savedPageHistory?String(preview.savedPageHistory.index):"";
+ });
+ recoveryPreviewSampleSavedPageClear?.addEventListener("click",()=>{
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(!preview?.savedPageHistory||!recoveryPreviewSampleFilePreview?.open)return;
+  preview.savedPageHistory=null;
+  syncRecoveryPreviewSampleSavedPageNavigation(preview);
+  recoveryPreviewSampleFileText?.focus({preventScroll:true});
+ });
  function showRecoveryPreviewSampleFilePage(index,scrollToMatch=false,focusIndex){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
   if(!preview||!recoveryPreviewSampleFilePreview?.open)return;
