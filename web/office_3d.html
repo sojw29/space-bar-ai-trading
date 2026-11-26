@@ -2379,6 +2379,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-next" type="button" style="min-height:44px" disabled>다음</button>
            </div>
            <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-position" role="status"></p>
+           <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-context" hidden>
+            <div class="receipt-quick-presets">
+             <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-page" role="status"></span>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-return-match" type="button" style="min-height:44px" hidden>현재 일치 페이지로 이동</button>
+            </div>
+            <details id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-list">
+             <summary>이 페이지의 일치 문맥</summary>
+             <ol id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-rows"></ol>
+            </details>
+           </div>
            <div class="receipt-quick-presets">
            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-save" type="button" style="min-height:44px" disabled>이 형식으로 저장</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy" type="button" style="min-height:44px" disabled>전체 파일 내용 복사</button>
@@ -3765,6 +3775,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileWrap=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-wrap");
  const recoveryPreviewSampleFileResetOptions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-reset-options");
  const recoveryPreviewSampleFileOptions=[recoveryPreviewSampleFileCase,recoveryPreviewSampleFileWord,recoveryPreviewSampleFileWrap].filter(Boolean);
+ const recoveryPreviewSampleFileMatchContext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-context");
+ const recoveryPreviewSampleFileMatchPage=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-page");
+ const recoveryPreviewSampleFileReturnMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-return-match");
+ const recoveryPreviewSampleFileMatchList=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-list");
+ const recoveryPreviewSampleFileMatchRows=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-rows");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4264,7 +4279,64 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const pageCount=Math.ceil(matches.length/recoveryPreviewPageSize);
   return formatRecoveryPreviewExport(format,{entries,scope,page,pageCount,label,view,example:true});
  }
- function showRecoveryPreviewSampleFilePage(index,scrollToMatch=false){
+ function renderRecoveryPreviewSampleFileMatchContext(preview,focusIndex){
+  if(!recoveryPreviewSampleFileMatchContext)return;
+  const {pages,starts,index,matches,matchIndex,content}=preview;
+  recoveryPreviewSampleFileMatchContext.hidden=!matches.length;
+  if(!matches.length){
+   recoveryPreviewSampleFileMatchRows?.replaceChildren();
+   return;
+  }
+  const offset=starts[index];
+  const end=offset+pages[index].length;
+  const activePage=starts.findLastIndex(start=>start<=matches[matchIndex]?.[0]);
+  const items=[];
+  for(const [number,[from,to]] of matches.entries()){
+   if(from<offset)continue;
+   if(from>=end)break;
+   items.push({number,from,to});
+  }
+  if(recoveryPreviewSampleFileMatchPage){
+   recoveryPreviewSampleFileMatchPage.textContent="이 페이지에서 시작하는 일치 "+items.length+"건"+
+    (activePage>=0?" · 현재 일치 "+(activePage+1)+" 페이지":"");
+  }
+  if(recoveryPreviewSampleFileReturnMatch)recoveryPreviewSampleFileReturnMatch.hidden=activePage<0||activePage===index;
+  if(!recoveryPreviewSampleFileMatchRows||!recoveryPreviewSampleFileMatchList?.open)return;
+  const limit=10;
+  let focusTarget=null;
+  const rows=items.slice(0,limit).map(({number,from,to})=>{
+   const row=document.createElement("li");
+   const button=document.createElement("button");
+   button.type="button";
+   button.style.minHeight="44px";
+   const start=Math.max(0,from-24),stop=Math.min(content.length,from+72,to+24);
+   const snippet=content.slice(start,stop).replace(/\s+/g," ").trim();
+   button.textContent=(number+1)+". "+(start?"…":"")+snippet+(stop<content.length?"…":"");
+   button.setAttribute("aria-current",String(number===matchIndex));
+   button.addEventListener("click",()=>moveRecoveryPreviewSampleFileMatch(number,true));
+   if(number===focusIndex)focusTarget=button;
+   row.append(button);
+   return row;
+  });
+  if(items.length>limit||!items.length){
+   const note=document.createElement("li");
+   note.textContent=items.length?"앞 10건 표시 · 다른 항목은 일치 번호로 이동할 수 있습니다.":"이 페이지에서 시작하는 일치가 없습니다.";
+   rows.push(note);
+  }
+  recoveryPreviewSampleFileMatchRows.replaceChildren(...rows);
+  focusTarget?.focus({preventScroll:true});
+ }
+ recoveryPreviewSampleFileMatchList?.addEventListener("toggle",()=>{
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(preview)renderRecoveryPreviewSampleFileMatchContext(preview);
+ });
+ recoveryPreviewSampleFileReturnMatch?.addEventListener("click",()=>{
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(!preview)return;
+  moveRecoveryPreviewSampleFileMatch(preview.matchIndex);
+  recoveryPreviewSampleFileText?.focus({preventScroll:true});
+ });
+ function showRecoveryPreviewSampleFilePage(index,scrollToMatch=false,focusIndex){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
   if(!preview||!recoveryPreviewSampleFilePreview?.open)return;
   const {pages,starts,matches,matchIndex}=preview;
@@ -4324,8 +4396,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const query=recoveryPreviewSampleFileSearch?.value.trim();
    recoveryPreviewSampleFileMatchPosition.textContent=!query?"":matches.length?"일치 "+(matchIndex+1)+" / "+matches.length:"일치 항목 0건";
   }
+  renderRecoveryPreviewSampleFileMatchContext(preview,focusIndex);
  }
- function moveRecoveryPreviewSampleFileMatch(index){
+ function moveRecoveryPreviewSampleFileMatch(index,fromList=false){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
   if(recoveryPreviewSampleFileWrap?.checked&&preview?.matches.length>1){
    const total=preview.matches.length;
@@ -4334,7 +4407,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const match=preview?.matches[index];
   if(!match)return;
   preview.matchIndex=index;
-  showRecoveryPreviewSampleFilePage(preview.starts.findLastIndex(start=>start<=match[0]),true);
+  showRecoveryPreviewSampleFilePage(preview.starts.findLastIndex(start=>start<=match[0]),true,fromList?index:undefined);
  }
  function searchRecoveryPreviewSampleFile(){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
@@ -4754,6 +4827,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleExportScope)recoveryPreviewSampleExportScope.value="page";
   if(recoveryPreviewSampleCopyFormat)recoveryPreviewSampleCopyFormat.value="txt";
   if(recoveryPreviewSampleFilePreview)recoveryPreviewSampleFilePreview.open=false;
+  if(recoveryPreviewSampleFileMatchList)recoveryPreviewSampleFileMatchList.open=false;
   if(recoveryPreviewSampleFileSearch)recoveryPreviewSampleFileSearch.value="";
   for(const option of recoveryPreviewSampleFileOptions)option.checked=false;
   if(recoveryPreviewSampleRecoveryFeedback)recoveryPreviewSampleRecoveryFeedback.textContent="";
