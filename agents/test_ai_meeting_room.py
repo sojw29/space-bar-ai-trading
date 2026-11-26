@@ -32,10 +32,10 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
-    replaceChildren(...children){this.children=children},
+    replaceChildren(...children){this.children=children},focus(){this.focused=true},
    };
   }
   for(const suffix of ['', '-label', '-rows']){
@@ -1015,6 +1015,21 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sourceChangeType('period').change();
    assert.equal(sourceChangeRows().length,0);
    assert.equal(sourceChangeType('count').textContent,'표시 0건 / 전체 1건');
+   assert.equal(sourceChangeType('empty-reset').hidden,false);
+   sourceChangeType('clear-search').click();
+   assert.equal(sourceChangeType('search').value,'');
+   assert.equal(sourceChangeType('search').focused,true);
+   assert.equal(sourceChangeType('period').value,'earlier');
+   assert.equal(sourceChangeRows().length,0);
+   sourceChangeType('empty-reset').click();
+   assert.equal(sourceChangeType('period').value,'all');
+   assert.equal(sourceChangeType('empty-reset').hidden,true);
+   assert.equal(sourceChangeRows().length,1);
+   for(const order of ['later','phase','verdict']){
+    sourceChangeType('order').value=order;
+    sourceChangeType('order').change();
+    assert.equal(sourceChangeRows().length,1);
+   }
    sourceChangeType('period').value='later';
    sourceChangeType('period').change();
    sourceChangeType('order').value='meeting';
