@@ -2401,6 +2401,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
              <summary>검색 기록 내보내기 미리보기</summary>
              <label>미리보기 형식 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-format" style="min-height:44px"><option value="txt">복사할 텍스트</option><option value="csv">CSV</option><option value="json">JSON</option></select></label>
              <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-info" role="status"></p>
+             <div class="receipt-quick-presets">
+              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-copy" type="button" style="min-height:44px" disabled>이 형식으로 복사</button>
+              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-save" type="button" style="min-height:44px" disabled>이 형식으로 저장</button>
+              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-select" type="button" style="min-height:44px" disabled>미리보기 내용 전체 선택</button>
+              <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-status" role="status"></span>
+             </div>
              <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="검색 기록 내보내기 내용" hidden></pre>
             </details>
            </details>
@@ -3868,6 +3874,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileRecentExportPreviewInfo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-info");
  const recoveryPreviewSampleFileRecentExportPreviewText=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-text");
  let recoveryPreviewSampleFileRecentExportRevision=0;
+ const recoveryPreviewSampleFileRecentExportPreviewCopy=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-copy");
+ const recoveryPreviewSampleFileRecentExportPreviewSave=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-save");
+ const recoveryPreviewSampleFileRecentExportPreviewSelect=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-select");
+ const recoveryPreviewSampleFileRecentExportPreviewStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-status");
  const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
  const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
  const recoveryPreviewSampleFileCopyContexts=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-contexts");
@@ -4742,6 +4752,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const count=view.visibleQueries.length;
   const content=count?formatRecoveryPreviewSampleRecentQueryExport(view,format):"";
   if(recoveryPreviewSampleFileRecentExportFormat)recoveryPreviewSampleFileRecentExportFormat.value=format;
+  clearRecoveryPreviewSampleRecentExportPreviewStatus();
+  if(recoveryPreviewSampleFileRecentExportPreviewCopy)recoveryPreviewSampleFileRecentExportPreviewCopy.disabled=!count;
+  if(recoveryPreviewSampleFileRecentExportPreviewSave)recoveryPreviewSampleFileRecentExportPreviewSave.disabled=!count;
+  if(recoveryPreviewSampleFileRecentExportPreviewSelect)recoveryPreviewSampleFileRecentExportPreviewSelect.disabled=!count;
   if(recoveryPreviewSampleFileRecentExportPreviewText){
    recoveryPreviewSampleFileRecentExportPreviewText.hidden=!count;
    if(recoveryPreviewSampleFileRecentExportPreviewText.textContent!==content){
@@ -4751,7 +4765,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   if(recoveryPreviewSampleFileRecentExportPreviewInfo){
    recoveryPreviewSampleFileRecentExportPreviewInfo.textContent=count
-    ?count+"건 · "+new Blob([content]).size.toLocaleString("ko-KR")+"바이트"
+    ?count+"건 · "+new Blob([content]).size.toLocaleString("ko-KR")+"바이트 · "+recoveryPreviewSampleRecentExportFilename(view,format)
     :"미리 볼 검색 기록이 없습니다.";
   }
  }
@@ -4759,11 +4773,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const state=pendingRecoveryPreview?.suggestionSample;
   if(state&&recoveryPreviewSampleFileRecentExportPreview.open){
    renderRecoveryPreviewSampleRecentExportPreview(state,getRecoveryPreviewSampleRecentExportView(state));
+  }else{
+   recoveryPreviewSampleFileRecentExportRevision++;
+   clearRecoveryPreviewSampleRecentExportPreviewStatus();
   }
  });
  recoveryPreviewSampleFileRecentExportFormat?.addEventListener("change",()=>{
   const state=pendingRecoveryPreview?.suggestionSample;
   if(!state)return;
+  recoveryPreviewSampleFileRecentExportRevision++;
   state.recentFileQueryPreviewFormat=recoveryPreviewSampleFileRecentExportFormat.value;
   renderRecoveryPreviewSampleRecentExportPreview(state,getRecoveryPreviewSampleRecentExportView(state));
  });
@@ -4794,29 +4812,62 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    return row.query.replace(/\s+/g," ")+" · "+(options.join(" · ")||"기본 검색 옵션")+" · 기록 당시 "+row.recorded_matches+"건 · "+current+delta;
   }).join("\n");
  }
- for(const [button,format] of recoveryPreviewSampleRecentExportButtons){
-  button?.addEventListener("click",async()=>{
-   const state=pendingRecoveryPreview?.suggestionSample;
-   if(!state||button.disabled)return;
-   const view=getRecoveryPreviewSampleRecentExportView(state);
-   if(!view.visibleQueries.length)return;
-   const revision=++recoveryPreviewSampleFileRecentExportRevision;
-   if(recoveryPreviewSampleFileRecentExportStatus)recoveryPreviewSampleFileRecentExportStatus.textContent="";
-   const label=format==="txt"?"검색 기록 복사":format.toUpperCase()+" 저장";
-   let message;
-   try{
-    const content=formatRecoveryPreviewSampleRecentQueryExport(view,format);
-    if(format==="txt")await navigator.clipboard.writeText(content);
-    else saveMeetingFile(content,"meeting-file-search-history-"+view.scope+"."+format,format==="csv"?"text/csv;charset=utf-8":"application/json");
-    message=label+(format==="txt"?" 완료":" 요청")+" · "+view.visibleQueries.length+"건";
-   }catch(_){
-    message=label+" 작업을 완료할 수 없습니다.";
+ function recoveryPreviewSampleRecentExportFilename(view,format){
+  return "meeting-file-search-history-"+view.scope+"."+format;
+ }
+ function clearRecoveryPreviewSampleRecentExportPreviewStatus(){
+  if(recoveryPreviewSampleFileRecentExportPreviewStatus)recoveryPreviewSampleFileRecentExportPreviewStatus.textContent="";
+ }
+ async function deliverRecoveryPreviewSampleRecentExport(format,copy,status){
+  const state=pendingRecoveryPreview?.suggestionSample;
+  if(!state)return;
+  const view=getRecoveryPreviewSampleRecentExportView(state);
+  if(!view.visibleQueries.length)return;
+  const revision=++recoveryPreviewSampleFileRecentExportRevision;
+  if(status)status.textContent="";
+  const label=copy?"검색 기록 복사":format.toUpperCase()+" 저장";
+  let message;
+  try{
+   const content=formatRecoveryPreviewSampleRecentQueryExport(view,format);
+   if(copy)await navigator.clipboard.writeText(content);
+   else{
+    const mime={txt:"text/plain;charset=utf-8",csv:"text/csv;charset=utf-8",json:"application/json"};
+    saveMeetingFile(content,recoveryPreviewSampleRecentExportFilename(view,format),mime[format]);
    }
-   if(recoveryPreviewSampleFileRecentExportStatus&&revision===recoveryPreviewSampleFileRecentExportRevision&&pendingRecoveryPreview?.suggestionSample===state){
-    recoveryPreviewSampleFileRecentExportStatus.textContent=message;
+   message=label+(copy?" 완료":" 요청")+" · "+view.visibleQueries.length+"건";
+  }catch(_){
+   message=copy&&status===recoveryPreviewSampleFileRecentExportPreviewStatus
+    ?"복사할 수 없습니다. 전체 선택으로 내용을 복사할 수 있습니다."
+    :label+" 작업을 완료할 수 없습니다.";
+  }
+  if(status&&revision===recoveryPreviewSampleFileRecentExportRevision&&pendingRecoveryPreview?.suggestionSample===state){
+   status.textContent=message;
+  }
+ }
+ for(const [button,format] of recoveryPreviewSampleRecentExportButtons){
+  button?.addEventListener("click",()=>{
+   if(!button.disabled)return deliverRecoveryPreviewSampleRecentExport(format,format==="txt",recoveryPreviewSampleFileRecentExportStatus);
+  });
+ }
+ for(const [button,copy] of [[recoveryPreviewSampleFileRecentExportPreviewCopy,true],[recoveryPreviewSampleFileRecentExportPreviewSave,false]]){
+  button?.addEventListener("click",()=>{
+   if(!button.disabled&&recoveryPreviewSampleFileRecentExportPreview?.open){
+    const format=pendingRecoveryPreview?.suggestionSample?.recentFileQueryPreviewFormat??"txt";
+    return deliverRecoveryPreviewSampleRecentExport(format,copy,recoveryPreviewSampleFileRecentExportPreviewStatus);
    }
   });
  }
+ recoveryPreviewSampleFileRecentExportPreviewSelect?.addEventListener("click",()=>{
+  const content=recoveryPreviewSampleFileRecentExportPreviewText;
+  if(!content||content.hidden||!recoveryPreviewSampleFileRecentExportPreview?.open)return;
+  content.focus();
+  const selection=document.getSelection?.();
+  if(!selection)return;
+  const range=document.createRange();
+  range.selectNodeContents(content);
+  selection.removeAllRanges();
+  selection.addRange(range);
+ });
  function renderRecoveryPreviewSampleRecentQueries(state,focusRemoveIndex,focusPinEntry){
   const view=getRecoveryPreviewSampleRecentQueryView(state);
   const {queries,filter,preview,currentCounts,visibleQueries,order}=view;
