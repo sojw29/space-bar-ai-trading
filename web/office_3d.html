@@ -2356,10 +2356,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
            <summary>예시 파일 내용 미리보기</summary>
            <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-info" role="status"></p>
            <div class="receipt-quick-presets" role="group" aria-label="미리보기 파일 검색">
-            <label>파일에서 찾기 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-search" type="search" style="min-height:44px" disabled></label>
+            <label>파일에서 찾기 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-search" type="search" aria-keyshortcuts="Enter Shift+Enter" title="Enter 다음 일치 · Shift+Enter 이전 일치" style="min-height:44px" disabled></label>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-prev" type="button" style="min-height:44px" disabled>이전 일치</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-next" type="button" style="min-height:44px" disabled>다음 일치</button>
             <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-position" role="status"></span>
+            <label>일치 번호 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-picker" type="number" min="1" step="1" inputmode="numeric" style="min-height:44px;width:6rem" disabled></label>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-clear-search" type="button" style="min-height:44px" disabled>파일 검색어 지우기</button>
            </div>
            <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="예시 파일 내용" hidden></pre>
            <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-pages" class="receipt-quick-presets" role="group" aria-label="파일 미리보기 페이지" hidden>
@@ -3747,6 +3749,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileMatchPrev=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-prev");
  const recoveryPreviewSampleFileMatchNext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-next");
  const recoveryPreviewSampleFileMatchPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-position");
+ const recoveryPreviewSampleFileMatchPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-picker");
+ const recoveryPreviewSampleFileClearSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-clear-search");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4274,6 +4278,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     mark.textContent=content.slice(start-offset,stop-offset);
     if(position===matchIndex){
      mark.setAttribute("aria-current","true");
+     mark.style.outline="2px solid currentColor";
      activeMark=mark;
     }
     parts.push(content.slice(cursor-offset,start-offset),mark);
@@ -4289,6 +4294,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   if(recoveryPreviewSampleFileMatchPrev)recoveryPreviewSampleFileMatchPrev.disabled=matchIndex<=0;
   if(recoveryPreviewSampleFileMatchNext)recoveryPreviewSampleFileMatchNext.disabled=matchIndex>=matches.length-1;
+  if(recoveryPreviewSampleFileMatchPicker){
+   recoveryPreviewSampleFileMatchPicker.disabled=matches.length<2;
+   recoveryPreviewSampleFileMatchPicker.max=String(matches.length);
+   recoveryPreviewSampleFileMatchPicker.value=matchIndex<0?"":String(matchIndex+1);
+  }
+  if(recoveryPreviewSampleFileClearSearch){
+   recoveryPreviewSampleFileClearSearch.disabled=!recoveryPreviewSampleFileSearch?.value;
+  }
   if(recoveryPreviewSampleFileMatchPosition){
    const query=recoveryPreviewSampleFileSearch?.value.trim();
    recoveryPreviewSampleFileMatchPosition.textContent=!query?"":matches.length?"일치 "+(matchIndex+1)+" / "+matches.length:"일치 항목 0건";
@@ -4312,6 +4325,28 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   else showRecoveryPreviewSampleFilePage(preview.index);
  }
  recoveryPreviewSampleFileSearch?.addEventListener("input",searchRecoveryPreviewSampleFile);
+ recoveryPreviewSampleFileSearch?.addEventListener("keydown",event=>{
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(event.key!=="Enter"||event.isComposing||event.altKey||event.ctrlKey||event.metaKey||!preview?.matches.length)return;
+  event.preventDefault();
+  moveRecoveryPreviewSampleFileMatch(preview.matchIndex+(event.shiftKey?-1:1));
+ });
+ recoveryPreviewSampleFileMatchPicker?.addEventListener("change",()=>{
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(!preview||recoveryPreviewSampleFileMatchPicker.disabled)return;
+  const number=Number(recoveryPreviewSampleFileMatchPicker.value);
+  if(!Number.isInteger(number)||number<1||number>preview.matches.length){
+   recoveryPreviewSampleFileMatchPicker.value=String(preview.matchIndex+1);
+   return;
+  }
+  moveRecoveryPreviewSampleFileMatch(number-1);
+ });
+ recoveryPreviewSampleFileClearSearch?.addEventListener("click",()=>{
+  if(!recoveryPreviewSampleFileSearch||recoveryPreviewSampleFileClearSearch.disabled)return;
+  recoveryPreviewSampleFileSearch.value="";
+  searchRecoveryPreviewSampleFile();
+  recoveryPreviewSampleFileSearch.focus();
+ });
  for(const [button,step] of [[recoveryPreviewSampleFileMatchPrev,-1],[recoveryPreviewSampleFileMatchNext,1]]){
   button?.addEventListener("click",()=>{
    const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
