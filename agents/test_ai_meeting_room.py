@@ -33,6 +33,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
   for(const suffix of ['', '-label', '-rows']){
+   elements['ai-meeting-progress-receipt-preset-preview-source-changes'+suffix]={children:[],replaceChildren(...children){this.children=children}};
+  }
+  for(const suffix of ['', '-label', '-rows']){
    elements['ai-meeting-progress-receipt-preset-preview-diff'+suffix]={children:[],replaceChildren(...children){this.children=children}};
   }
   for(const group of ['shown','hidden','projected']){
@@ -938,11 +941,20 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    reviewButton.click();
    receiptBack.click();
    assert.match(sourceStatus.textContent,/COMMANDER · 검토 완료 · 새로 검토 완료 1건/);
+   const sourceChanges=quickList('source-changes');
+   const sourceChangeRows=()=>quickList('source-changes','-rows').children;
+   assert.equal(sourceChanges.hidden,false);
+   assert.equal(sourceChanges.open,false);
+   assert.match(quickList('source-changes','-label').textContent,/1건/);
+   assert.match(sourceChangeRows()[0].textContent,/검토 완료 · 이후 .*COMMANDER/);
    assert.equal(quickList('source-reveal').hidden,true);
-   quickList('hidden','-rows').children[0].children[0].children[3].click();
+   sourceChangeRows()[0].children[0].click();
+   assert.equal(sourceChanges.hidden,true);
+   assert.equal(receiptBack.textContent,'조합 미리보기로 돌아가기');
    reviewButton.click();
    receiptBack.click();
    assert.match(sourceStatus.textContent,/COMMANDER · 미검토 · 검토 해제 1건/);
+   assert.match(sourceChangeRows()[0].textContent,/검토 해제 · 이후 .*COMMANDER/);
    undoReview.click();
    undoReview.click();
    let [projectedDetails]=quickList('projected','-rows').children[0].children;

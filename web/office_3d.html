@@ -2203,6 +2203,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      <div id="ai-meeting-progress-receipt-preset-preview" role="region" aria-label="빠른 검토 조합 미리보기" tabindex="-1" hidden>
       <p id="ai-meeting-progress-receipt-preset-preview-summary" role="status" style="white-space:pre-line;overflow-wrap:anywhere"></p>
       <p id="ai-meeting-progress-receipt-preset-preview-source-status" role="status"></p>
+      <details id="ai-meeting-progress-receipt-preset-preview-source-changes" hidden>
+       <summary id="ai-meeting-progress-receipt-preset-preview-source-changes-label" style="min-height:44px">원문 검토 변경</summary>
+       <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-rows"></ul>
+      </details>
       <button id="ai-meeting-progress-receipt-preset-preview-source-reveal" type="button" style="min-height:44px" hidden>마지막 원문 발언 표시</button>
       <button id="ai-meeting-progress-receipt-preset-preview-change-mode" type="button" style="min-height:44px">기존 조건에 추가</button>
       <details id="ai-meeting-progress-receipt-preset-preview-diff" hidden>
@@ -3104,6 +3108,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview");
  const receiptQuickPreviewSummary=document.getElementById("ai-meeting-progress-receipt-preset-preview-summary");
  const receiptQuickPreviewSourceStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-status");
+ const receiptQuickPreviewSourceChanges=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes");
+ const receiptQuickPreviewSourceChangesLabel=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-label");
+ const receiptQuickPreviewSourceChangesRows=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-rows");
  const receiptQuickPreviewSourceReveal=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-reveal");
  let receiptQuickPreviewSourceFeedback=null;
  const receiptQuickPreviewChangeMode=document.getElementById("ai-meeting-progress-receipt-preset-preview-change-mode");
@@ -3318,12 +3325,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    source.style.minHeight="44px";
    source.textContent="원문 보기";
    source.setAttribute("aria-label",receiptQuickRowLabel(entry)+" 원문 보기");
-   source.addEventListener("click",()=>{
-    const pending=pendingQuickPreset;
-    const reviewedBefore=new Set(reviewedEvidence);
-    clearReceiptQuickSourceFeedback();
-    openRestoredEvidence(entry.key,key=>resumeReceiptQuickSource(pending,container,entry.key,key,reviewedBefore));
-   });
+   source.addEventListener("click",()=>openReceiptQuickSource(entry.key,container));
    details.append(source);
    row.append(details);
    rendered.set(entry.key,{details,heading,choose,source,label:receiptQuickRowLabel(entry)});
@@ -3340,10 +3342,45 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    (rendered.get(focusedKey)?.[focusedAction]??fallback)?.focus({preventScroll:true});
   }
  }
+ function openReceiptQuickSource(key,originContainer){
+  const pending=pendingQuickPreset;
+  const reviewedBefore=new Set(reviewedEvidence);
+  clearReceiptQuickSourceFeedback();
+  openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore));
+ }
+ function renderReceiptQuickSourceChanges(completed,reopened,evidence){
+  if(!receiptQuickPreviewSourceChanges||!receiptQuickPreviewSourceChangesRows||!receiptQuickPreviewSourceChangesLabel)return;
+  const rows=[];
+  for(const [keys,label] of [[completed,"검토 완료"],[reopened,"검토 해제"]]){
+   for(const key of keys){
+    const entry=evidence.get(key);
+    if(!entry)continue;
+    const row=document.createElement("li");
+    const statement=receiptQuickRowLabel(entry);
+    row.textContent=label+" · "+statement;
+    const source=document.createElement("button");
+    source.type="button";
+    source.style.minHeight="44px";
+    source.textContent="원문 다시 보기";
+    source.setAttribute("aria-label",statement+" 원문 다시 보기");
+    source.addEventListener("click",()=>openReceiptQuickSource(key));
+    row.append(source);
+    rows.push(row);
+   }
+  }
+  receiptQuickPreviewSourceChanges.hidden=rows.length===0;
+  receiptQuickPreviewSourceChangesLabel.textContent="원문 검토 변경 ("+rows.length+"건)";
+  receiptQuickPreviewSourceChangesRows.replaceChildren(...rows);
+ }
  function clearReceiptQuickSourceFeedback(){
   receiptQuickPreviewSourceFeedback=null;
   if(receiptQuickPreviewSourceStatus)receiptQuickPreviewSourceStatus.textContent="";
   if(receiptQuickPreviewSourceReveal)receiptQuickPreviewSourceReveal.hidden=true;
+  if(receiptQuickPreviewSourceChanges){
+   receiptQuickPreviewSourceChanges.hidden=true;
+   receiptQuickPreviewSourceChanges.open=false;
+  }
+  receiptQuickPreviewSourceChangesRows?.replaceChildren();
  }
  function updateReceiptQuickSourceReveal(){
   const feedback=receiptQuickPreviewSourceFeedback;
@@ -3372,14 +3409,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const targetList=currentList??(origin?.rendered.has(originKey)?origin:lists.find(list=>list.rendered.has(originKey)));
   const key=currentList?currentKey:originKey;
   const target=targetList?.rendered.get(key);
-  const lastSource=allReviewEvidence().get(currentKey);
+  const evidence=allReviewEvidence();
+  const lastSource=evidence.get(currentKey);
+  const completed=[...reviewedEvidence].filter(item=>!reviewedBefore.has(item));
+  const reopened=[...reviewedBefore].filter(item=>!reviewedEvidence.has(item));
+  renderReceiptQuickSourceChanges(completed,reopened,evidence);
   if(receiptQuickPreviewSourceStatus){
-   const completed=[...reviewedEvidence].filter(item=>!reviewedBefore.has(item)).length;
-   const reopened=[...reviewedBefore].filter(item=>!reviewedEvidence.has(item)).length;
    const message=[
     lastSource?"마지막 원문 "+receiptQuickRowLabel(lastSource)+" · "+(reviewedEvidence.has(currentKey)?"검토 완료":"미검토"):"",
-    completed?"새로 검토 완료 "+completed+"건":"",
-    reopened?"검토 해제 "+reopened+"건":"",
+    completed.length?"새로 검토 완료 "+completed.length+"건":"",
+    reopened.length?"검토 해제 "+reopened.length+"건":"",
    ].filter(Boolean).join(" · ");
    receiptQuickPreviewSourceFeedback={key:currentKey,message};
   }
