@@ -2356,7 +2356,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
            <summary>예시 파일 내용 미리보기</summary>
            <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-info" role="status"></p>
            <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="예시 파일 내용" hidden></pre>
+           <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-pages" class="receipt-quick-presets" role="group" aria-label="파일 미리보기 페이지" hidden>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-prev" type="button" style="min-height:44px" disabled>이전</button>
+            <label>파일 페이지 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-picker" style="min-height:44px"></select></label>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-next" type="button" style="min-height:44px" disabled>다음</button>
+           </div>
+           <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-position" role="status"></p>
+           <div class="receipt-quick-presets">
            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-save" type="button" style="min-height:44px" disabled>이 형식으로 저장</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy" type="button" style="min-height:44px" disabled>전체 파일 내용 복사</button>
+           </div>
           </details>
           <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-export-status" role="status"></p>
          </details>
@@ -3722,6 +3731,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileInfo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-info");
  const recoveryPreviewSampleFileText=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text");
  const recoveryPreviewSampleFileSave=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-save");
+ const recoveryPreviewSampleFilePages=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-pages");
+ const recoveryPreviewSampleFilePrev=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-prev");
+ const recoveryPreviewSampleFileNext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-next");
+ const recoveryPreviewSampleFilePicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-picker");
+ const recoveryPreviewSampleFilePosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-position");
+ const recoveryPreviewSampleFileCopy=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy");
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4221,45 +4236,84 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const pageCount=Math.ceil(matches.length/recoveryPreviewPageSize);
   return formatRecoveryPreviewExport(format,{entries,scope,page,pageCount,label,view,example:true});
  }
+ function showRecoveryPreviewSampleFilePage(index){
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(!preview||!recoveryPreviewSampleFilePreview?.open)return;
+  const {pages}=preview;
+  if(pages.length&&(!Number.isInteger(index)||index<0||index>=pages.length))return;
+  preview.index=index;
+  if(recoveryPreviewSampleFilePages)recoveryPreviewSampleFilePages.hidden=pages.length<2;
+  if(recoveryPreviewSampleFilePrev)recoveryPreviewSampleFilePrev.disabled=index<=0;
+  if(recoveryPreviewSampleFileNext)recoveryPreviewSampleFileNext.disabled=index+1>=pages.length;
+  if(recoveryPreviewSampleFilePicker)recoveryPreviewSampleFilePicker.value=pages.length?String(index):"";
+  if(recoveryPreviewSampleFilePosition){
+   recoveryPreviewSampleFilePosition.textContent=pages.length>1?"파일 페이지 "+(index+1)+" / "+pages.length:"";
+  }
+  if(recoveryPreviewSampleFileText){
+   recoveryPreviewSampleFileText.textContent=pages[index]??"";
+   recoveryPreviewSampleFileText.hidden=!pages.length;
+   recoveryPreviewSampleFileText.scrollTop=0;
+  }
+ }
  function renderRecoveryPreviewSampleFile(){
   const state=pendingRecoveryPreview?.suggestionSample;
   if(!state||!recoveryPreviewSampleFilePreview?.open)return;
   const format=recoveryPreviewSampleCopyFormat?.value||"txt";
   const file=formatRecoveryPreviewSampleExport(format,state);
   if(recoveryPreviewSampleFileSave)recoveryPreviewSampleFileSave.disabled=!file;
-  if(!file){
-   if(recoveryPreviewSampleFileInfo)recoveryPreviewSampleFileInfo.textContent="미리 볼 예시 발언이 없습니다.";
-   if(recoveryPreviewSampleFileText){
-    recoveryPreviewSampleFileText.hidden=true;
-    recoveryPreviewSampleFileText.textContent="";
+  if(recoveryPreviewSampleFileCopy)recoveryPreviewSampleFileCopy.disabled=!file;
+  const pages=[];
+  if(file){
+   const limit=2400;
+   let start=0,end=0,count=0;
+   for(const character of file.content){
+    end+=character.length;
+    if(++count===limit){
+     pages.push(file.content.slice(start,end));
+     start=end;
+     count=0;
+    }
    }
-   return;
+   if(end>start)pages.push(file.content.slice(start,end));
   }
-  const limit=2400;
-  let text="",count=0,truncated=false;
-  for(const character of file.content){
-   if(count===limit){truncated=true;break}
-   text+=character;
-   count++;
-  }
+  state.filePreview={pages,index:0};
   if(recoveryPreviewSampleFileInfo){
-   recoveryPreviewSampleFileInfo.textContent=file.filename+" · "+new Blob([file.content]).size.toLocaleString("ko-KR")+"바이트"+
-    (truncated?" · 앞부분 "+limit.toLocaleString("ko-KR")+"자 표시":"");
+   recoveryPreviewSampleFileInfo.textContent=file
+    ?file.filename+" · "+new Blob([file.content]).size.toLocaleString("ko-KR")+"바이트"
+    :"미리 볼 예시 발언이 없습니다.";
   }
-  if(recoveryPreviewSampleFileText){
-   recoveryPreviewSampleFileText.textContent=text+(truncated?"\n…":"");
-   recoveryPreviewSampleFileText.hidden=false;
+  if(recoveryPreviewSampleFilePicker){
+   const options=document.createDocumentFragment();
+   for(const [index] of pages.entries()){
+    const option=document.createElement("option");
+    option.value=String(index);
+    option.textContent=(index+1)+" 페이지";
+    options.append(option);
+   }
+   recoveryPreviewSampleFilePicker.replaceChildren(options);
   }
+  showRecoveryPreviewSampleFilePage(0);
  }
  recoveryPreviewSampleFilePreview?.addEventListener("toggle",renderRecoveryPreviewSampleFile);
+ for(const [button,step] of [[recoveryPreviewSampleFilePrev,-1],[recoveryPreviewSampleFileNext,1]]){
+  button?.addEventListener("click",()=>{
+   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+   if(!preview||button.disabled)return;
+   showRecoveryPreviewSampleFilePage(preview.index+step);
+   if(button.disabled)recoveryPreviewSampleFilePicker?.focus();
+  });
+ }
+ recoveryPreviewSampleFilePicker?.addEventListener("change",()=>{
+  if(recoveryPreviewSampleFilePicker.value!=="")showRecoveryPreviewSampleFilePage(Number(recoveryPreviewSampleFilePicker.value));
+ });
  recoveryPreviewSampleFileSave?.addEventListener("click",()=>{
   if(!recoveryPreviewSampleFileSave.disabled)saveRecoveryPreviewSampleExport(recoveryPreviewSampleCopyFormat?.value||"txt");
  });
  recoveryPreviewSampleExportScope?.addEventListener("change",updateRecoveryPreviewSampleExport);
  recoveryPreviewSampleCopyFormat?.addEventListener("change",updateRecoveryPreviewSampleExport);
- recoveryPreviewSampleCopy?.addEventListener("click",async()=>{
+ async function copyRecoveryPreviewSampleExport(){
   const state=pendingRecoveryPreview?.suggestionSample;
-  if(!state||recoveryPreviewSampleCopy.disabled)return;
+  if(!state)return;
   const format=recoveryPreviewSampleCopyFormat?.value||"txt";
   const file=formatRecoveryPreviewSampleExport(format,state);
   if(!file)return;
@@ -4274,7 +4328,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(revision===recoveryPreviewSampleExportRevision&&pendingRecoveryPreview?.suggestionSample===state&&recoveryPreviewSampleExportStatus){
    recoveryPreviewSampleExportStatus.textContent=message;
   }
- });
+ }
+ for(const button of [recoveryPreviewSampleCopy,recoveryPreviewSampleFileCopy]){
+  button?.addEventListener("click",()=>{if(!button.disabled)return copyRecoveryPreviewSampleExport()});
+ }
  function saveRecoveryPreviewSampleExport(format){
   const state=pendingRecoveryPreview?.suggestionSample;
   if(!state)return;
