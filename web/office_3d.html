@@ -4595,9 +4595,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   preview.matchIndex=index;
   showRecoveryPreviewSampleFilePage(preview.starts.findLastIndex(start=>start<=match[0]),true,fromList?index:undefined);
  }
- function searchRecoveryPreviewSampleFile(){
+ function searchRecoveryPreviewSampleFile(keepMatch=false){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
   if(!preview)return;
+  const previousStart=keepMatch?preview.matches[preview.matchIndex]?.[0]:undefined;
   const query=recoveryPreviewSampleFileSearch?.value.trim()??"";
   let pattern=recoveryPreviewHighlightPattern(query?[query]:[],"all");
   if(pattern){
@@ -4613,12 +4614,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   preview.visibleContextCount=0;
   indexRecoveryPreviewSampleMatchedPages(preview);
   preview.matchIndex=-1;
-  if(preview.matches.length)moveRecoveryPreviewSampleFileMatch(0);
-  else showRecoveryPreviewSampleFilePage(preview.index);
+  if(preview.matches.length){
+   const nextIndex=previousStart===undefined?0:preview.matches.findIndex(([start])=>start>=previousStart);
+   moveRecoveryPreviewSampleFileMatch(nextIndex<0?preview.matches.length-1:nextIndex);
+  }else showRecoveryPreviewSampleFilePage(preview.index);
  }
- recoveryPreviewSampleFileSearch?.addEventListener("input",searchRecoveryPreviewSampleFile);
+ recoveryPreviewSampleFileSearch?.addEventListener("input",event=>{
+  if(!event?.isComposing)searchRecoveryPreviewSampleFile();
+ });
  for(const option of [recoveryPreviewSampleFileCase,recoveryPreviewSampleFileWord]){
-  option?.addEventListener("change",searchRecoveryPreviewSampleFile);
+  option?.addEventListener("change",()=>searchRecoveryPreviewSampleFile(true));
  }
  recoveryPreviewSampleFileWrap?.addEventListener("change",()=>{
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
@@ -4628,7 +4633,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  });
  recoveryPreviewSampleFileResetOptions?.addEventListener("click",()=>{
   for(const option of recoveryPreviewSampleFileOptions)option.checked=false;
-  searchRecoveryPreviewSampleFile();
+  searchRecoveryPreviewSampleFile(true);
   recoveryPreviewSampleFileSearch?.focus();
  });
  recoveryPreviewSampleFileSearch?.addEventListener("keydown",event=>{
@@ -4681,8 +4686,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const file=formatRecoveryPreviewSampleExport(format,state);
   if(recoveryPreviewSampleFileSave)recoveryPreviewSampleFileSave.disabled=!file;
   if(recoveryPreviewSampleFileCopy)recoveryPreviewSampleFileCopy.disabled=!file;
-  const pages=[],starts=[];
   if(recoveryPreviewSampleFileSearch)recoveryPreviewSampleFileSearch.disabled=!file;
+  if(recoveryPreviewSampleFileInfo){
+   recoveryPreviewSampleFileInfo.textContent=file
+    ?file.filename+" · "+new Blob([file.content]).size.toLocaleString("ko-KR")+"바이트"
+    :"미리 볼 예시 발언이 없습니다.";
+  }
+  const content=file?.content??"";
+  if(state.filePreview?.content===content)return;
+  const pages=[],starts=[];
   if(file){
    const limit=2400;
    let start=0,end=0,count=0;
@@ -4700,12 +4712,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     pages.push(file.content.slice(start,end));
    }
   }
-  state.filePreview={pages,starts,content:file?.content??"",index:0,matches:[],matchIndex:-1};
-  if(recoveryPreviewSampleFileInfo){
-   recoveryPreviewSampleFileInfo.textContent=file
-    ?file.filename+" · "+new Blob([file.content]).size.toLocaleString("ko-KR")+"바이트"
-    :"미리 볼 예시 발언이 없습니다.";
-  }
+  state.filePreview={pages,starts,content,index:0,matches:[],matchIndex:-1};
   if(recoveryPreviewSampleFilePicker){
    const options=document.createDocumentFragment();
    for(const [index] of pages.entries()){
@@ -4718,7 +4725,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   searchRecoveryPreviewSampleFile();
  }
- recoveryPreviewSampleFilePreview?.addEventListener("toggle",renderRecoveryPreviewSampleFile);
+ recoveryPreviewSampleFilePreview?.addEventListener("toggle",()=>{
+  if(recoveryPreviewSampleFilePreview.open)renderRecoveryPreviewSampleFile();
+  else{
+   recoveryPreviewSampleFileCopyRevision++;
+   if(recoveryPreviewSampleFileCopyStatus)recoveryPreviewSampleFileCopyStatus.textContent="";
+  }
+ });
  for(const [button,step] of [[recoveryPreviewSampleFilePrev,-1],[recoveryPreviewSampleFileNext,1]]){
   button?.addEventListener("click",()=>{
    const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
