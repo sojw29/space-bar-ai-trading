@@ -68,6 +68,7 @@ aside{display:grid;align-content:start;gap:14px}.panel{border:1px solid #314967;
 #ai-meeting-progress-receipt-preset-preview-projected-rows summary[aria-current="true"]{background:#1b5265;border-radius:4px}
 .receipt-quick-presets button[aria-pressed="true"],
 #ai-meeting-progress-receipt-preset-preview-projected-rows button[aria-pressed="true"]{border-color:#87defa;background:#1b5265}
+#ai-meeting-progress-receipt-preset-preview-source-changes-rows summary[aria-current="true"],
 #ai-meeting-progress-receipt-preset-preview-source-changes-rows button[aria-current="true"]{outline:2px solid currentColor;outline-offset:2px}
 </style>
 </head>
@@ -2237,6 +2238,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-previous-match" type="button" style="min-height:44px">이전 일치 요약</button>
         <span id="ai-meeting-progress-receipt-preset-preview-source-changes-match-count" role="status"></span>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-next-match" type="button" style="min-height:44px">다음 일치 요약</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-open-match" type="button" style="min-height:44px" disabled>현재 일치 발언 원문 열기</button>
        </div>
        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-jump-results" type="button" style="min-height:44px" disabled>첫 결과로 이동</button>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-count" role="status"></p>
@@ -3252,6 +3254,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceCollapseMatches=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-collapse-matches");
  const receiptQuickSourceMatchNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-navigation");
  const receiptQuickSourceMatchCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-count");
+ const receiptQuickSourceOpenMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-open-match");
+ receiptQuickSourceOpenMatch?.addEventListener("click",()=>{
+  if(receiptQuickSourceOpenMatch.disabled)return;
+  openReceiptQuickSource(currentReceiptQuickSourceMatch,receiptQuickPreviewSourceChanges);
+ });
  let currentReceiptQuickSourceMatch=null;
  receiptQuickSourceSearchScope?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
  for(const [id,step] of [["previous-match",-1],["next-match",1]]){
@@ -3272,6 +3279,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function updateReceiptQuickSourceMatchNavigation(matches){
   const index=matches.findIndex(({key})=>key===currentReceiptQuickSourceMatch);
   if(index<0)currentReceiptQuickSourceMatch=null;
+  if(receiptQuickSourceOpenMatch)receiptQuickSourceOpenMatch.disabled=index<0;
+  for(const entry of visibleReceiptQuickSourceChanges){
+   entry.summaryHeading.setAttribute("aria-current",String(entry.key===currentReceiptQuickSourceMatch));
+  }
   if(receiptQuickSourceMatchNavigation)receiptQuickSourceMatchNavigation.hidden=!matches.length;
   if(receiptQuickSourceMatchCount){
    receiptQuickSourceMatchCount.textContent=matches.length?
@@ -3783,6 +3794,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    selected:new Set(receiptQuickSourceChangeRows.filter(({selection})=>selection.checked).map(({key})=>key)),
    expanded:new Set(receiptQuickSourceChangeRows.filter(({details})=>details.open).map(({key})=>key)),
    currentKey:currentReceiptQuickSourceSelection?.key,
+   matchKey:currentReceiptQuickSourceMatch,
    selectedOnly:!!receiptQuickSourceSelectedOnly?.checked,
    fields:receiptQuickSourceChangeFields(),
   }:null;
@@ -3855,9 +3867,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const matches=visible.filter(entry=>entry.summaryMatches);
   if(receiptQuickSourceExpandMatches)receiptQuickSourceExpandMatches.hidden=!matches.length;
   if(receiptQuickSourceCollapseMatches)receiptQuickSourceCollapseMatches.hidden=!matches.length;
-  updateReceiptQuickSourceMatchNavigation(matches);
   receiptQuickPreviewSourceChangesRows?.replaceChildren(...visible.map(({row})=>row));
   visibleReceiptQuickSourceChanges=visible;
+  updateReceiptQuickSourceMatchNavigation(matches);
   const last=receiptQuickSourceChangeRows.find(({key})=>key===lastReceiptQuickSourceChangeKey);
   const lastVisible=!!last&&visible.includes(last);
   if(receiptQuickSourceLastStatus){
@@ -3939,6 +3951,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const details=document.createElement("details");
     const heading=document.createElement("summary");
     heading.textContent="발언 요약";
+    heading.addEventListener("keydown",event=>{
+     if(event.key==="Escape"&&key===currentReceiptQuickSourceMatch&&!receiptQuickSourceOpenMatch?.disabled){
+      event.preventDefault();
+      receiptQuickSourceOpenMatch?.focus();
+     }
+    });
     const text=document.createElement("p");
     text.textContent=summary;
     details.append(heading,text);
@@ -3986,6 +4004,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    receiptQuickSourceChangeAgent.value="";
   }
   if(changeView){
+   currentReceiptQuickSourceMatch=changeView.matchKey??null;
    for(const [field,value] of changeView.fields){
     if(field!==receiptQuickSourceChangeAgent||!value||rows.some(({agent})=>agent===value))field.value=value;
    }
@@ -4009,6 +4028,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   receiptQuickSourceChangeRows=[];
   currentReceiptQuickSourceSelection=null;
+  currentReceiptQuickSourceMatch=null;
   lastReceiptQuickSourceChangeKey=null;
   previousReceiptQuickSourceFilters=null;
   if(receiptQuickSourceFilterPanel)receiptQuickSourceFilterPanel.open=false;
@@ -4066,7 +4086,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const changeFocus=changeView&&(visibleReceiptQuickSourceChanges.find(({key})=>key===currentKey)??
    visibleReceiptQuickSourceChanges.find(({key})=>key===originKey))?.source;
-  const focus=changeFocus||target?.source||receiptQuickPreview;
+  const matchFocus=changeView?.matchKey===currentKey&&currentReceiptQuickSourceMatch===currentKey?
+   visibleReceiptQuickSourceChanges.find(({key})=>key===currentKey)?.summaryHeading:null;
+  const focus=matchFocus||changeFocus||target?.source||receiptQuickPreview;
   focus?.focus({preventScroll:true});
   focus?.scrollIntoView?.({block:"nearest"});
   return true;
