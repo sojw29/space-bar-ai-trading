@@ -2420,8 +2420,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             </div>
            </details>
            <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-navigation" class="receipt-quick-presets" role="group" aria-label="저장 페이지 이동 기록" hidden>
-            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-back" type="button" style="min-height:44px" hidden>이전 읽기 위치로 돌아가기</button>
-            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-forward" type="button" style="min-height:44px" hidden>저장 페이지 다시 보기</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-back" type="button" style="min-height:44px" hidden>이전 검토 위치</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-forward" type="button" style="min-height:44px" hidden>다음 검토 위치</button>
             <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-status" role="status"></span>
            </div>
            <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="예시 파일 내용" hidden></pre>
@@ -4605,32 +4605,51 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    recoveryPreviewSampleFileResetOptions.disabled=!recoveryPreviewSampleFileOptions.some(option=>option.checked);
   }
  }
+ const recoveryPreviewSampleSavedPageHistoryLimit=10;
  function syncRecoveryPreviewSampleSavedPageNavigation(preview){
-  const visit=preview.savedPageVisit;
-  if(recoveryPreviewSampleSavedPageNavigation)recoveryPreviewSampleSavedPageNavigation.hidden=!visit;
-  if(recoveryPreviewSampleSavedPageBack)recoveryPreviewSampleSavedPageBack.hidden=!visit?.atSavedPage;
-  if(recoveryPreviewSampleSavedPageForward)recoveryPreviewSampleSavedPageForward.hidden=!visit||visit.atSavedPage;
+  const history=preview.savedPageHistory;
+  if(recoveryPreviewSampleSavedPageNavigation)recoveryPreviewSampleSavedPageNavigation.hidden=!history;
+  if(recoveryPreviewSampleSavedPageBack)recoveryPreviewSampleSavedPageBack.hidden=!history||history.index<=0;
+  if(recoveryPreviewSampleSavedPageForward)recoveryPreviewSampleSavedPageForward.hidden=!history||history.index>=history.positions.length-1;
   if(recoveryPreviewSampleSavedPageStatus){
-   recoveryPreviewSampleSavedPageStatus.textContent=!visit?"":visit.atSavedPage
-    ?"저장 페이지 "+(visit.savedPage+1)+" · 돌아갈 페이지 "+(visit.previousPage+1)
-    :"이전 읽기 위치로 돌아옴 · 다시 볼 페이지 "+(visit.savedPage+1);
+   recoveryPreviewSampleSavedPageStatus.textContent=history
+    ?"검토 위치 "+(history.index+1)+" / "+history.positions.length+" · "+(preview.index+1)+" 페이지"
+    :"";
   }
  }
- function visitRecoveryPreviewSampleSavedPage(preview,atSavedPage){
-  const visit=preview.savedPageVisit;
-  if(!visit)return;
-  visit.atSavedPage=atSavedPage;
-  showRecoveryPreviewSampleFilePage(atSavedPage?visit.savedPage:visit.previousPage);
+ function currentRecoveryPreviewSampleReadingPosition(preview){
+  return {page:preview.index,scroll:recoveryPreviewSampleFileText?.scrollTop??0};
+ }
+ function restoreRecoveryPreviewSampleReadingPosition(position){
+  showRecoveryPreviewSampleFilePage(position.page);
   if(recoveryPreviewSampleFileText){
-   recoveryPreviewSampleFileText.scrollTop=atSavedPage?0:visit.previousScroll;
+   recoveryPreviewSampleFileText.scrollTop=position.scroll;
    recoveryPreviewSampleFileText.focus();
   }
  }
- for(const [button,atSavedPage] of [[recoveryPreviewSampleSavedPageBack,false],[recoveryPreviewSampleSavedPageForward,true]]){
+ function openRecoveryPreviewSampleSavedPage(preview,page){
+  const current=currentRecoveryPreviewSampleReadingPosition(preview);
+  if(page===current.page&&current.scroll===0){
+   recoveryPreviewSampleFileText?.focus();
+   return;
+  }
+  const history=preview.savedPageHistory;
+  const previous=history?history.positions.slice(0,history.index):[];
+  const destination={page,scroll:0};
+  const positions=[...previous,current,destination].slice(-recoveryPreviewSampleSavedPageHistoryLimit);
+  preview.savedPageHistory={positions,index:positions.length-1};
+  restoreRecoveryPreviewSampleReadingPosition(destination);
+ }
+ for(const [button,step] of [[recoveryPreviewSampleSavedPageBack,-1],[recoveryPreviewSampleSavedPageForward,1]]){
   button?.addEventListener("click",()=>{
    const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
-   if(!preview||button.hidden||!recoveryPreviewSampleFilePreview?.open)return;
-   visitRecoveryPreviewSampleSavedPage(preview,atSavedPage);
+   const history=preview?.savedPageHistory;
+   if(!history||button.hidden||!recoveryPreviewSampleFilePreview?.open)return;
+   const next=history.index+step;
+   if(next<0||next>=history.positions.length)return;
+   history.positions[history.index]=currentRecoveryPreviewSampleReadingPosition(preview);
+   history.index=next;
+   restoreRecoveryPreviewSampleReadingPosition(history.positions[next]);
   });
  }
  function showRecoveryPreviewSampleFilePage(index,scrollToMatch=false,focusIndex){
@@ -5020,12 +5039,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      openPage.addEventListener("click",()=>{
       if(pendingRecoveryPreview?.suggestionSample!==state||!recoveryPreviewSampleFilePreview?.open||
        !canOpenRecoveryPreviewSampleSavedPosition(state.filePreview,entry))return;
-      const activePreview=state.filePreview;
-      activePreview.savedPageVisit={
-       savedPage:entry.page,previousPage:activePreview.index,
-       previousScroll:recoveryPreviewSampleFileText?.scrollTop??0,
-      };
-      visitRecoveryPreviewSampleSavedPage(activePreview,true);
+      openRecoveryPreviewSampleSavedPage(state.filePreview,entry.page);
      });
      row.append(openPage);
     }

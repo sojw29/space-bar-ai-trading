@@ -1457,6 +1457,26 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    savedPageForward.click();
    assert.equal(savedPageText.scrollTop,0);
    assert.equal(savedPageBack.hidden,false);
+   savedPageText.scrollTop=57;
+   fileRecentRows.children[0].children[4].click();
+   assert.match(sourceChangeType('recovery-preview-sample-file-saved-page-status').textContent,/검토 위치 3 \/ 3/);
+   savedPageText.scrollTop=86;
+   savedPageBack.click();
+   assert.equal(savedPageText.scrollTop,57);
+   savedPageBack.click();
+   assert.equal(savedPageText.scrollTop,31);
+   savedPageForward.click();
+   assert.equal(savedPageText.scrollTop,57);
+   savedPageForward.click();
+   assert.equal(savedPageText.scrollTop,86);
+   savedPageBack.click();
+   fileRecentRows.children[0].children[4].click();
+   assert.equal(savedPageForward.hidden,true);
+   for(let i=0;i<12;i++){
+    savedPageText.scrollTop=i+1;
+    fileRecentRows.children[0].children[4].click();
+   }
+   assert.match(sourceChangeType('recovery-preview-sample-file-saved-page-status').textContent,/검토 위치 10 \/ 10/);
    sampleFileSearch.value='m07';
    sampleFileSearch.input();
    const recordCaseOption=sourceChangeType('recovery-preview-sample-file-case');
