@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -957,6 +957,22 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const sourceChangeType=type=>quickList('source-changes','-'+type);
    const sourceSummary=sourceChangeRows()[0].children[1].children[1].textContent;
    assert.ok(sourceSummary);
+   const selectSourceRow=sourceChangeRows()[0].children[2].children[0];
+   selectSourceRow.checked=true;
+   selectSourceRow.change();
+   assert.equal(sourceChangeType('selection-count').textContent,'선택 1건 · 현재 표시 1건');
+   sourceChangeType('selected-only').checked=true;
+   sourceChangeType('selected-only').change();
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('unselect-visible').click();
+   assert.equal(sourceChangeRows().length,0);
+   assert.equal(sourceChangeType('selected-only').focused,true);
+   sourceChangeType('selected-only').checked=false;
+   sourceChangeType('selected-only').change();
+   sourceChangeType('select-visible').click();
+   assert.equal(selectSourceRow.checked,true);
+   sourceChangeType('unselect-visible').click();
+   assert.equal(selectSourceRow.checked,false);
    assert.deepEqual(sourceChangeType('agent').children.map(item=>item.value),['','COMMANDER']);
    sourceChangeType('expand').click();
    assert.equal(sourceChangeRows()[0].children[1].open,true);
