@@ -2395,6 +2395,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-last" type="button" style="min-height:44px" disabled>마지막 일치 페이지</button>
              <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-position" role="status"></span>
             </div>
+            <div class="receipt-quick-presets" role="group" aria-label="파일 검색 결과 복사">
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match" type="button" style="min-height:44px" disabled>현재 일치 원문 복사</button>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines" type="button" style="min-height:44px" disabled>현재 일치가 포함된 줄 복사</button>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-contexts" type="button" style="min-height:44px" disabled>이 페이지의 일치 문맥 복사</button>
+             <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-status" role="status"></span>
+            </div>
             <details id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-list">
              <summary>이 페이지의 일치 문맥</summary>
              <ol id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-rows"></ol>
@@ -3796,6 +3802,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleMatchedPageFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-first");
  const recoveryPreviewSampleMatchedPageLast=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-last");
  const recoveryPreviewSampleFileSearchReturn=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-search-return");
+ const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
+ const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
+ const recoveryPreviewSampleFileCopyContexts=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-contexts");
+ const recoveryPreviewSampleFileCopyStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-status");
+ let recoveryPreviewSampleFileCopyRevision=0;
  const recoveryPreviewSampleMatchedPageNav=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-nav");
  const recoveryPreviewSampleMatchedPagePrev=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-prev");
  const recoveryPreviewSampleMatchedPageNext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-next");
@@ -4374,6 +4385,50 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
  }
  recoveryPreviewSampleFileSearchReturn?.addEventListener("click",()=>recoveryPreviewSampleFileSearch?.focus());
+ function formatRecoveryPreviewSampleSnippet(content,[from,to],number){
+  const start=Math.max(0,from-24),stop=Math.min(content.length,Math.max(to,Math.min(from+72,to+24)));
+  const snippet=content.slice(start,stop).replace(/\s+/g," ").trim();
+  return (number+1)+". "+(start?"…":"")+snippet+(stop<content.length?"…":"");
+ }
+ function recoveryPreviewSampleMatchLines(content,[from,to]){
+  const start=from===0?0:content.lastIndexOf("\n",from-1)+1;
+  const end=content.indexOf("\n",to-1);
+  return content.slice(start,end<0?content.length:end).replace(/\r$/,"");
+ }
+ for(const [button,kind] of [
+  [recoveryPreviewSampleFileCopyMatch,"match"],
+  [recoveryPreviewSampleFileCopyLines,"lines"],
+  [recoveryPreviewSampleFileCopyContexts,"contexts"],
+ ]){
+  button?.addEventListener("click",async()=>{
+   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+   if(!preview||button.disabled||!recoveryPreviewSampleFilePreview?.open)return;
+   const {content,matchIndex,matches,index,matchedPages}=preview;
+   const match=matches[matchIndex];
+   let value,label;
+   if(kind==="contexts"){
+    const {first,count}=matchedPages.get(index);
+    value=matches.slice(first,first+count).map((entry,offset)=>formatRecoveryPreviewSampleSnippet(content,entry,first+offset)).join("\n");
+    label=(index+1)+" 페이지 일치 문맥 "+count+"건";
+   }else{
+    value=kind==="match"?content.slice(...match):recoveryPreviewSampleMatchLines(content,match);
+    label=(matchIndex+1)+"번 일치 "+(kind==="match"?"원문":"포함 줄");
+   }
+   const revision=++recoveryPreviewSampleFileCopyRevision;
+   if(recoveryPreviewSampleFileCopyStatus)recoveryPreviewSampleFileCopyStatus.textContent="";
+   let message;
+   try{
+    await navigator.clipboard.writeText(value);
+    message=label+" 복사 완료";
+   }catch(_){
+    message="클립보드에 복사할 수 없습니다. 미리보기에서 텍스트를 선택해 복사하세요.";
+   }
+   if(recoveryPreviewSampleFileCopyStatus&&revision===recoveryPreviewSampleFileCopyRevision&&
+    pendingRecoveryPreview?.suggestionSample?.filePreview===preview&&recoveryPreviewSampleFilePreview.open){
+    recoveryPreviewSampleFileCopyStatus.textContent=message;
+   }
+  });
+ }
  function renderRecoveryPreviewSampleFileMatchContext(preview,focusIndex){
   if(!recoveryPreviewSampleFileMatchContext)return;
   const {starts,index,matches,matchIndex,content,matchedPages}=preview;
@@ -4394,15 +4449,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const activeLimit=activePage===index?Math.ceil((matchIndex-first+1)/batchSize)*batchSize:0;
   const limit=Math.max(batchSize,activeLimit,preview.visibleContextCount);
   let focusTarget=null;
-  const rows=matches.slice(first,first+Math.min(count,limit)).map(([from,to],index)=>{
+  const rows=matches.slice(first,first+Math.min(count,limit)).map((match,index)=>{
    const number=first+index;
    const row=document.createElement("li");
    const button=document.createElement("button");
    button.type="button";
    button.style.minHeight="44px";
-   const start=Math.max(0,from-24),stop=Math.min(content.length,from+72,to+24);
-   const snippet=content.slice(start,stop).replace(/\s+/g," ").trim();
-   button.textContent=(number+1)+". "+(start?"…":"")+snippet+(stop<content.length?"…":"");
+   button.textContent=formatRecoveryPreviewSampleSnippet(content,match,number);
    button.setAttribute("aria-current",String(number===matchIndex));
    button.addEventListener("click",()=>moveRecoveryPreviewSampleFileMatch(number,true));
    button.setAttribute("aria-keyshortcuts","ArrowUp ArrowDown Home End Escape");
@@ -4474,6 +4527,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(pages.length&&(!Number.isInteger(index)||index<0||index>=pages.length))return;
   if(preview.index!==index)preview.visibleContextCount=0;
   preview.index=index;
+  recoveryPreviewSampleFileCopyRevision++;
+  if(recoveryPreviewSampleFileCopyStatus)recoveryPreviewSampleFileCopyStatus.textContent="";
+  if(recoveryPreviewSampleFileCopyMatch)recoveryPreviewSampleFileCopyMatch.disabled=matchIndex<0;
+  if(recoveryPreviewSampleFileCopyLines)recoveryPreviewSampleFileCopyLines.disabled=matchIndex<0;
+  if(recoveryPreviewSampleFileCopyContexts)recoveryPreviewSampleFileCopyContexts.disabled=!preview.matchedPages.has(index);
   if(recoveryPreviewSampleFilePages)recoveryPreviewSampleFilePages.hidden=pages.length<2;
   if(recoveryPreviewSampleFilePrev)recoveryPreviewSampleFilePrev.disabled=index<=0;
   if(recoveryPreviewSampleFileNext)recoveryPreviewSampleFileNext.disabled=index+1>=pages.length;
