@@ -2389,10 +2389,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             </div>
             <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent" role="status"></p>
             <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-rows" class="receipt-quick-presets" role="group" aria-label="최근 파일 검색어 다시 사용"></div>
-            <div class="receipt-quick-presets" role="group" aria-label="표시 중인 검색 기록 내보내기">
-             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-copy" type="button" style="min-height:44px" disabled>표시 기록 복사</button>
-             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-csv" type="button" style="min-height:44px" disabled>표시 기록 CSV 저장</button>
-             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-json" type="button" style="min-height:44px" disabled>표시 기록 JSON 저장</button>
+            <div class="receipt-quick-presets" role="group" aria-label="검색 기록 내보내기">
+             <label>내보낼 기록 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-scope" style="min-height:44px"><option value="visible">화면에 표시된 기록</option><option value="all">전체 기록</option><option value="pinned">고정 기록</option><option value="changed">일치 건수가 바뀐 기록</option></select></label>
+             <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-count" role="status"></span>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-copy" type="button" style="min-height:44px" disabled>검색 기록 복사</button>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-csv" type="button" style="min-height:44px" disabled>CSV 저장</button>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-json" type="button" style="min-height:44px" disabled>JSON 저장</button>
              <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-status" role="status"></span>
             </div>
            </details>
@@ -3853,6 +3855,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileRecentCsv=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-csv");
  const recoveryPreviewSampleFileRecentJson=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-json");
  const recoveryPreviewSampleFileRecentExportStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-status");
+ const recoveryPreviewSampleFileRecentExportScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-scope");
+ const recoveryPreviewSampleFileRecentExportCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-count");
  let recoveryPreviewSampleFileRecentExportRevision=0;
  const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
  const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
@@ -4647,9 +4651,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   preview.matchIndex=index;
   showRecoveryPreviewSampleFilePage(preview.starts.findLastIndex(start=>start<=match[0]),true,fromList?index:undefined);
  }
- function getRecoveryPreviewSampleRecentQueryView(state){
+ function getRecoveryPreviewSampleRecentQueryView(state,filter=state.recentFileQueryFilter??"all"){
   const queries=state.recentFileQueries??[];
-  const filter=state.recentFileQueryFilter??"all";
   const preview=state.filePreview;
   const currentCounts=new Map();
   if(preview?.content){
@@ -4677,6 +4680,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     case "current-new":return entry.matchCount===0&&current>0;
     case "current-lost":return entry.matchCount>0&&current===0;
     case "current-unchanged":return current===entry.matchCount;
+    case "current-changed":return current!==undefined&&current!==entry.matchCount;
     default:return true;
    }
   });
@@ -4703,6 +4707,30 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   [recoveryPreviewSampleFileRecentCsv,"csv"],
   [recoveryPreviewSampleFileRecentJson,"json"],
  ];
+ function getRecoveryPreviewSampleRecentExportView(state,visibleView){
+  const scope=state.recentFileQueryExportScope??"visible";
+  const filter=scope==="changed"?"current-changed":scope;
+  const view=scope==="visible"?(visibleView??getRecoveryPreviewSampleRecentQueryView(state)):getRecoveryPreviewSampleRecentQueryView(state,filter);
+  return {...view,scope};
+ }
+ function syncRecoveryPreviewSampleRecentExport(state,visibleView){
+  const view=getRecoveryPreviewSampleRecentExportView(state,visibleView);
+  recoveryPreviewSampleFileRecentExportRevision++;
+  if(recoveryPreviewSampleFileRecentExportScope)recoveryPreviewSampleFileRecentExportScope.value=view.scope;
+  if(recoveryPreviewSampleFileRecentExportStatus)recoveryPreviewSampleFileRecentExportStatus.textContent="";
+  if(recoveryPreviewSampleFileRecentExportCount){
+   recoveryPreviewSampleFileRecentExportCount.textContent=view.scope==="changed"&&!view.preview?.content
+    ?"비교할 현재 파일이 없습니다."
+    :"내보낼 기록 "+view.visibleQueries.length+"건";
+  }
+  for(const [button] of recoveryPreviewSampleRecentExportButtons)if(button)button.disabled=!view.visibleQueries.length;
+ }
+ recoveryPreviewSampleFileRecentExportScope?.addEventListener("change",()=>{
+  const state=pendingRecoveryPreview?.suggestionSample;
+  if(!state)return;
+  state.recentFileQueryExportScope=recoveryPreviewSampleFileRecentExportScope.value;
+  syncRecoveryPreviewSampleRecentExport(state);
+ });
  function formatRecoveryPreviewSampleRecentQueryExport(view,format){
   const rows=view.visibleQueries.map(entry=>{
    const current=view.currentCounts.get(entry)??null;
@@ -4712,7 +4740,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     current_matches:current,change:current===null?null:current-entry.matchCount,
    };
   });
-  if(format==="json")return JSON.stringify({filter:view.filter,order:view.order,rows},null,2);
+  if(format==="json")return JSON.stringify({scope:view.scope,filter:view.filter,order:view.order,rows},null,2);
   if(format==="csv"){
    const headers=["query","pinned","case_sensitive","whole_word","wrap","recorded_matches","current_matches","change"];
    return "\uFEFF"+[headers.join(","),...rows.map(row=>headers.map(key=>comparisonCsvCell(row[key])).join(","))].join("\r\n");
@@ -4728,7 +4756,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   button?.addEventListener("click",async()=>{
    const state=pendingRecoveryPreview?.suggestionSample;
    if(!state||button.disabled)return;
-   const view=getRecoveryPreviewSampleRecentQueryView(state);
+   const view=getRecoveryPreviewSampleRecentExportView(state);
    if(!view.visibleQueries.length)return;
    const revision=++recoveryPreviewSampleFileRecentExportRevision;
    if(recoveryPreviewSampleFileRecentExportStatus)recoveryPreviewSampleFileRecentExportStatus.textContent="";
@@ -4737,7 +4765,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    try{
     const content=formatRecoveryPreviewSampleRecentQueryExport(view,format);
     if(format==="txt")await navigator.clipboard.writeText(content);
-    else saveMeetingFile(content,"meeting-file-search-history."+format,format==="csv"?"text/csv;charset=utf-8":"application/json");
+    else saveMeetingFile(content,"meeting-file-search-history-"+view.scope+"."+format,format==="csv"?"text/csv;charset=utf-8":"application/json");
     message=label+(format==="txt"?" 완료":" 요청")+" · "+view.visibleQueries.length+"건";
    }catch(_){
     message=label+" 작업을 완료할 수 없습니다.";
@@ -4748,12 +4776,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   });
  }
  function renderRecoveryPreviewSampleRecentQueries(state,focusRemoveIndex,focusPinEntry){
-  const {queries,filter,preview,currentCounts,visibleQueries,order}=getRecoveryPreviewSampleRecentQueryView(state);
+  const view=getRecoveryPreviewSampleRecentQueryView(state);
+  const {queries,filter,preview,currentCounts,visibleQueries,order}=view;
   const pinned=queries.filter(entry=>entry.pinned).length;
   const recent=queries.length-pinned;
-  recoveryPreviewSampleFileRecentExportRevision++;
-  if(recoveryPreviewSampleFileRecentExportStatus)recoveryPreviewSampleFileRecentExportStatus.textContent="";
-  for(const [button] of recoveryPreviewSampleRecentExportButtons)if(button)button.disabled=!visibleQueries.length;
+  syncRecoveryPreviewSampleRecentExport(state,view);
   if(recoveryPreviewSampleFileRecentOrder){
    recoveryPreviewSampleFileRecentOrder.value=order;
    recoveryPreviewSampleFileRecentOrder.disabled=visibleQueries.length<2&&order==="default";
