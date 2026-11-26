@@ -2231,6 +2231,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <label><input id="ai-meeting-progress-receipt-preset-preview-source-changes-selected-only" type="checkbox"> 선택 항목만</label>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-select-visible" type="button" style="min-height:44px" disabled>표시 항목 선택</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-unselect-visible" type="button" style="min-height:44px" disabled>표시 항목 선택 해제</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-reveal-selected" type="button" style="min-height:44px" disabled>숨겨진 선택 항목까지 보기</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-clear-selected" type="button" style="min-height:44px" disabled>전체 선택 해제</button>
        </div>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-count" role="status"></p>
        <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-rows"></ul>
@@ -2238,6 +2240,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-csv" type="button" disabled>표시 목록 CSV</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-json" type="button" disabled>표시 목록 JSON</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-txt" type="button" disabled>표시 목록 TXT</button>
+       </div>
+       <div class="receipt-quick-presets" role="group" aria-label="전체 선택 항목 저장">
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selected-csv" type="button" style="min-height:44px" disabled>선택 전체 CSV</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selected-json" type="button" style="min-height:44px" disabled>선택 전체 JSON</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selected-txt" type="button" style="min-height:44px" disabled>선택 전체 TXT</button>
        </div>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-save-status" role="status"></p>
       </details>
@@ -3173,14 +3180,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let receiptQuickSourceChangeRows=[];
  let receiptQuickSourceChangeFilter="all";
  const receiptQuickSourceChangeSaveStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-save-status");
- const receiptQuickSourceChangeSaveButtons=["CSV","JSON","TXT"].map(format=>({
-  format,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+format.toLowerCase()),
- }));
+ const receiptQuickSourceChangeSaveButtons=["visible","selected"].flatMap(scope=>["CSV","JSON","TXT"].map(format=>({
+  scope,format,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+(scope==="selected"?"selected-":"")+format.toLowerCase()),
+ })));
  let visibleReceiptQuickSourceChanges=[];
  const receiptQuickSourceSelectedOnly=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selected-only");
  const receiptQuickSourceSelectionCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-count");
  const receiptQuickSourceSelectVisible=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-select-visible");
  const receiptQuickSourceUnselectVisible=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-unselect-visible");
+ const receiptQuickSourceRevealSelected=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-reveal-selected");
+ const receiptQuickSourceClearSelected=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-clear-selected");
+ receiptQuickSourceRevealSelected?.addEventListener("click",()=>{
+  resetReceiptQuickSourceChangeControls(true);
+  receiptQuickSourceSelectedOnly?.focus();
+ });
+ receiptQuickSourceClearSelected?.addEventListener("click",()=>{
+  for(const {selection} of receiptQuickSourceChangeRows)selection.checked=false;
+  if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=false;
+  renderReceiptQuickSourceChangeFilter();
+  receiptQuickSourceSelectedOnly?.focus();
+ });
  receiptQuickSourceSelectedOnly?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
  receiptQuickSourceSelectVisible?.addEventListener("click",()=>setVisibleReceiptQuickSourceSelection(true));
  receiptQuickSourceUnselectVisible?.addEventListener("click",()=>setVisibleReceiptQuickSourceSelection(false));
@@ -3205,8 +3224,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    for(const {details} of visibleReceiptQuickSourceChanges)details.open=expanded;
   });
  }
- for(const {format,button} of receiptQuickSourceChangeSaveButtons){
-  button?.addEventListener("click",()=>saveReceiptQuickSourceChanges(format));
+ for(const {scope,format,button} of receiptQuickSourceChangeSaveButtons){
+  button?.addEventListener("click",()=>saveReceiptQuickSourceChanges(scope,format));
  }
  for(const {value,button} of receiptQuickSourceChangeFilters){
   button?.addEventListener("click",()=>{
@@ -3451,9 +3470,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   clearReceiptQuickSourceFeedback();
   openRestoredEvidence(key,currentKey=>resumeReceiptQuickSource(pending,originContainer,key,currentKey,reviewedBefore));
  }
- function resetReceiptQuickSourceChangeControls(){
+ function resetReceiptQuickSourceChangeControls(selectedOnly=false){
   receiptQuickSourceChangeFilter="all";
-  if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=false;
+  if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=selectedOnly;
   if(receiptQuickSourceChangeAgent)receiptQuickSourceChangeAgent.value="";
   if(receiptQuickSourceChangePhase)receiptQuickSourceChangePhase.value="";
   if(receiptQuickSourceChangeVerdict)receiptQuickSourceChangeVerdict.value="";
@@ -3510,17 +3529,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickSourceSelectVisible)receiptQuickSourceSelectVisible.disabled=visibleSelected===visible.length;
   if(receiptQuickSourceUnselectVisible)receiptQuickSourceUnselectVisible.disabled=!visibleSelected;
   for(const [,button] of receiptQuickSourceSummaryButtons)if(button)button.disabled=!visible.length;
-  for(const {button} of receiptQuickSourceChangeSaveButtons)if(button)button.disabled=!visible.length;
+  if(receiptQuickSourceRevealSelected)receiptQuickSourceRevealSelected.disabled=selected===visibleSelected;
+  if(receiptQuickSourceClearSelected)receiptQuickSourceClearSelected.disabled=!selected;
+  for(const {scope,button} of receiptQuickSourceChangeSaveButtons){
+   if(button)button.disabled=scope==="selected"?!selected:!visible.length;
+  }
   if(receiptQuickSourceChangeSaveStatus)receiptQuickSourceChangeSaveStatus.textContent="";
  }
- function saveReceiptQuickSourceChanges(format){
-  if(!comparisonReport||!visibleReceiptQuickSourceChanges.length||(!pairedArchives&&!canUseRecord()))return;
+ function saveReceiptQuickSourceChanges(scope,format){
+  if(!comparisonReport||(!pairedArchives&&!canUseRecord()))return;
+  const entries=scope==="selected"?receiptQuickSourceChangeRows.filter(({selection})=>selection.checked):visibleReceiptQuickSourceChanges;
+  if(!entries.length)return;
   const {earlier,later}=comparisonReport;
-  const rows=visibleReceiptQuickSourceChanges.map(({type,period,id,agent,phase,verdict,summary})=>({
+  const rows=entries.map(({type,period,id,agent,phase,verdict,summary})=>({
    change:type,meeting:period,meeting_utc:(period==="earlier"?earlier:later).generated_at_utc,
    statement_id:id,agent,phase,verdict,summary,
   }));
-  const filename=comparisonFilename("visible-source-review-changes",format,rows.length);
+  const filename=comparisonFilename(scope+"-source-review-changes",format,rows.length);
   const isJson=format==="JSON";
   const isCsv=format==="CSV";
   const mime=isJson?"application/json":isCsv?"text/csv":"text/plain";
