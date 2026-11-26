@@ -29,6 +29,9 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-change-mode','ai-meeting-progress-receipt-preset-return-preview']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
+  for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
+   elements[id]={addEventListener(type,fn){this[type]=fn}};
+  }
   for(const suffix of ['', '-label', '-rows']){
    elements['ai-meeting-progress-receipt-preset-preview-diff'+suffix]={children:[],replaceChildren(...children){this.children=children}};
   }
@@ -928,22 +931,45 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(hiddenDetails.open,true);
    assert.equal(hiddenSource.focused,true);
    assert.equal(hiddenSource.scrolled,true);
-   const [projectedDetails]=quickList('projected','-rows').children[0].children;
+   const sourceStatus=quickList('source-status');
+   assert.match(sourceStatus.textContent,/마지막 원문 이후 .*COMMANDER · 미검토/);
+   hiddenSource.click();
+   assert.equal(sourceStatus.textContent,'');
+   reviewButton.click();
+   receiptBack.click();
+   assert.match(sourceStatus.textContent,/COMMANDER · 검토 완료 · 새로 검토 완료 1건/);
+   assert.equal(quickList('source-reveal').hidden,true);
+   quickList('hidden','-rows').children[0].children[0].children[3].click();
+   reviewButton.click();
+   receiptBack.click();
+   assert.match(sourceStatus.textContent,/COMMANDER · 미검토 · 검토 해제 1건/);
+   undoReview.click();
+   undoReview.click();
+   let [projectedDetails]=quickList('projected','-rows').children[0].children;
    assert.match(projectedDetails.children[1].textContent,/최종 결론 · /);
    assert.ok(projectedDetails.children[2].textContent.length);
    assert.equal(projectedDetails.children[4].textContent,'원문 보기');
    const earlierSourceOption=previewSourcePicker.children.find(option=>option.textContent.includes('이전 [M07]'));
    assert.ok(earlierSourceOption);
-   hiddenSource.click();
+   const previewSourceSide=quickList('list-side');
+   previewSourceSide.value='later';previewSourceSide.change();
+   quickList('hidden','-rows').children[0].children[0].children[3].click();
    previewSourcePicker.value=earlierSourceOption.value;previewSourcePicker.change();
    openPickedResult.click();
    const backFromEarlier=concernSources.children.slice(1).flatMap(issue=>issue.children.slice(1))
     .map(card=>card.children?.at(-1)).find(button=>button?.textContent==='조합 미리보기로 돌아가기'&&!button.hidden);
    assert.equal(backFromEarlier.textContent,'조합 미리보기로 돌아가기');
    backFromEarlier.click();
+   assert.match(sourceStatus.textContent,/현재 미리보기에 표시되지 않습니다/);
+   assert.equal(quickList('source-reveal').hidden,false);
+   quickList('source-reveal').click();
+   assert.equal(previewSourceSide.value,'all');
+   [projectedDetails]=quickList('projected','-rows').children[0].children;
+   assert.equal(quickList('source-reveal').hidden,true);
    assert.equal(quickList('projected').open,true);
    assert.equal(projectedDetails.open,true);
-   assert.equal(projectedDetails.children[4].focused,true);
+   assert.equal(projectedDetails.children[0].focused,true);
+   assert.doesNotMatch(sourceStatus.textContent,/현재 미리보기에 표시되지 않습니다/);
    projectedDetails.children[3].click();
    assert.equal(quickPreviewJump.value,directTargets().children[0].value);
    const quickJumpStatus=quickList('jump-status');
