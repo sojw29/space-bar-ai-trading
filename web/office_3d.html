@@ -2214,6 +2214,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <label>변경 발언 검색 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-search" type="search" style="min-height:44px"></label>
         <label>회의 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-period" style="min-height:44px"><option value="all">전체 회의</option><option value="earlier">이전 회의</option><option value="later">이후 회의</option></select></label>
         <label>에이전트 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-agent" style="min-height:44px"><option value="">전체 에이전트</option></select></label>
+        <label>회의 단계 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-phase" style="min-height:44px"><option value="">전체 단계</option><option value="ANALYSIS">초기 분석</option><option value="PEER_REVIEW">상호 검토</option><option value="CONCLUSION">최종 결론</option></select></label>
+        <label>발언 판정 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-verdict" style="min-height:44px"><option value="">전체 판정</option><option value="OBSERVATION_ONLY">관측 요약</option><option value="REVIEW_NEEDED">추가 검토 필요</option><option value="INSUFFICIENT_DATA">자료 부족</option></select></label>
         <label>정렬 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-order" style="min-height:44px"><option value="type">변경 유형순</option><option value="meeting">회의·발언순</option><option value="agent">에이전트순</option></select></label>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-reset" type="button" style="min-height:44px">조건 초기화</button>
        </div>
@@ -3156,6 +3158,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }));
  let visibleReceiptQuickSourceChanges=[];
  const receiptQuickSourceChangeAgent=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-agent");
+ const receiptQuickSourceChangePhase=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-phase");
+ const receiptQuickSourceChangeVerdict=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-verdict");
+ for(const select of [receiptQuickSourceChangePhase,receiptQuickSourceChangeVerdict]){
+  select?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
+ }
  const receiptQuickSourceSummaryButtons=[
   [true,document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-expand")],
   [false,document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-collapse")],
@@ -3415,6 +3422,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function resetReceiptQuickSourceChangeControls(){
   receiptQuickSourceChangeFilter="all";
   if(receiptQuickSourceChangeAgent)receiptQuickSourceChangeAgent.value="";
+  if(receiptQuickSourceChangePhase)receiptQuickSourceChangePhase.value="";
+  if(receiptQuickSourceChangeVerdict)receiptQuickSourceChangeVerdict.value="";
   if(receiptQuickSourceChangeSearch)receiptQuickSourceChangeSearch.value="";
   if(receiptQuickSourceChangePeriod)receiptQuickSourceChangePeriod.value="all";
   if(receiptQuickSourceChangeOrder)receiptQuickSourceChangeOrder.value="type";
@@ -3426,8 +3435,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const words=query.split(/\s+/).filter(Boolean);
   const period=receiptQuickSourceChangePeriod?.value||"all";
   const agent=receiptQuickSourceChangeAgent?.value||"";
+  const phase=receiptQuickSourceChangePhase?.value||"";
+  const verdict=receiptQuickSourceChangeVerdict?.value||"";
   const matching=receiptQuickSourceChangeRows.filter(entry=>
    (period==="all"||period===entry.period)&&(!agent||agent===entry.agent)&&
+   (!phase||phase===entry.phase)&&(!verdict||verdict===entry.verdict)&&
    words.every(word=>entry.searchText.includes(word)));
   const visible=matching.filter(({type})=>receiptQuickSourceChangeFilter==="all"||receiptQuickSourceChangeFilter===type);
   const order=receiptQuickSourceChangeOrder?.value;
@@ -3452,9 +3464,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function saveReceiptQuickSourceChanges(format){
   if(!comparisonReport||!visibleReceiptQuickSourceChanges.length||(!pairedArchives&&!canUseRecord()))return;
   const {earlier,later}=comparisonReport;
-  const rows=visibleReceiptQuickSourceChanges.map(({type,period,id,agent,summary})=>({
+  const rows=visibleReceiptQuickSourceChanges.map(({type,period,id,agent,phase,verdict,summary})=>({
    change:type,meeting:period,meeting_utc:(period==="earlier"?earlier:later).generated_at_utc,
-   statement_id:id,agent,summary,
+   statement_id:id,agent,phase,verdict,summary,
   }));
   const filename=comparisonFilename("visible-source-review-changes",format,rows.length);
   const isJson=format==="JSON";
@@ -3463,9 +3475,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const cells=rows.map(row=>[
    row.change==="completed"?"검토 완료":"검토 해제",
    row.meeting==="earlier"?"이전 회의":"이후 회의",
-   row.meeting_utc,row.statement_id,row.agent,row.summary,
+   row.meeting_utc,row.statement_id,row.agent,receiptPhaseLabels[row.phase],labels[row.verdict],row.summary,
   ]);
-  const header=["변경","회의","회의 UTC","발언 번호","에이전트","발언 요약"];
+  const header=["변경","회의","회의 UTC","발언 번호","에이전트","회의 단계","발언 판정","발언 요약"];
   const content=isJson
    ?JSON.stringify({version:"SPACEBAR_MEETING_SOURCE_REVIEW_CHANGES_1",rows},null,2)+"\n"
    :isCsv?"\uFEFF"+[header,...cells].map(row=>row.map(comparisonCsvCell).join(",")).join("\r\n")+"\r\n"
@@ -3486,7 +3498,9 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     if(!entry)continue;
     const row=document.createElement("li");
     const statement=receiptQuickRowLabel(entry);
-    row.textContent=label+" · "+statement;
+    const {id,agent,phase,verdict,summary}=entry.statement;
+    const context=receiptPhaseLabels[phase]+" · "+labels[verdict];
+    row.textContent=label+" · "+statement+" · "+context;
     const source=document.createElement("button");
     source.type="button";
     source.style.minHeight="44px";
@@ -3494,7 +3508,6 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     source.setAttribute("aria-label",statement+" 원문 다시 보기");
     source.addEventListener("click",()=>openReceiptQuickSource(key));
     row.append(source);
-    const {id,agent,summary}=entry.statement;
     const details=document.createElement("details");
     const heading=document.createElement("summary");
     heading.textContent="발언 요약";
@@ -3502,8 +3515,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     text.textContent=summary;
     details.append(heading,text);
     row.append(details);
-    const searchText=(statement+" "+summary).normalize("NFKC").toLowerCase();
-    rows.push({row,details,type,period:entry.period,id,agent,summary,searchText});
+    const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
+    rows.push({row,details,type,period:entry.period,id,agent,phase,verdict,summary,searchText});
    }
   }
   if(receiptQuickSourceChangeAgent){

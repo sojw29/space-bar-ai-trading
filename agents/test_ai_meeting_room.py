@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},
@@ -988,8 +988,22 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceRows[0].change,'completed');
    assert.equal(sourceRows[0].meeting,'later');
    assert.equal(sourceRows[0].summary,sourceSummary);
+   assert.equal(sourceRows[0].phase,'CONCLUSION');
+   assert.ok(sourceRows[0].verdict);
+   sourceChangeType('phase').value='ANALYSIS';
+   sourceChangeType('phase').change();
+   assert.equal(sourceChangeRows().length,0);
+   sourceChangeType('phase').value='CONCLUSION';
+   sourceChangeType('phase').change();
+   assert.equal(sourceChangeRows().length,1);
+   sourceChangeType('verdict').value=sourceRows[0].verdict==='REVIEW_NEEDED'?'INSUFFICIENT_DATA':'REVIEW_NEEDED';
+   sourceChangeType('verdict').change();
+   assert.equal(sourceChangeRows().length,0);
+   sourceChangeType('verdict').value=sourceRows[0].verdict;
+   sourceChangeType('verdict').change();
+   assert.equal(sourceChangeRows().length,1);
    sourceChangeType('csv').click();
-   assert.match(await savedBlob.text(),/"검토 완료","이후 회의",[^\r\n]+"COMMANDER"/);
+   assert.match(await savedBlob.text(),/"검토 완료","이후 회의",[^\r\n]+"COMMANDER","최종 결론"/);
    sourceChangeType('txt').click();
    assert.match(await savedBlob.text(),/검토 완료 · 이후 회의 · .*COMMANDER/);
    assert.match(sourceChangeType('save-status').textContent,/저장 요청: .*txt · 1건/);
@@ -1014,6 +1028,8 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(sourceChangeType('period').value,'all');
    assert.equal(sourceChangeType('order').value,'type');
    assert.equal(sourceChangeType('agent').value,'');
+   assert.equal(sourceChangeType('phase').value,'');
+   assert.equal(sourceChangeType('verdict').value,'');
    assert.equal(sourceChangeType('all').attrs['aria-pressed'],'true');
    assert.equal(sourceChangeRows().length,1);
    assert.equal(quickList('source-reveal').hidden,true);
