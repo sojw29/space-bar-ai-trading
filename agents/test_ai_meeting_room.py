@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -1096,8 +1096,24 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    }
    sourceChangeType('period').value='later';
    sourceChangeType('period').change();
+   assert.match(sourceChangeType('filter-heading').textContent,/1개 적용/);
+   assert.equal(sourceChangeType('active-filters').hidden,false);
+   const activePeriodChip=sourceChangeType('active-filters').children[0];
+   assert.match(activePeriodChip.textContent,/회의: later 해제/);
+   activePeriodChip.click();
+   assert.equal(sourceChangeType('period').value,'all');
+   assert.equal(sourceChangeType('active-filters').hidden,true);
+   assert.equal(sourceChangeType('filter-heading').focused,true);
+   sourceChangeType('period').value='later';
+   sourceChangeType('period').change();
+   sourceChangeType('jump-results').click();
+   assert.equal(sourceChangeRows()[0].scrolled,true);
+   assert.equal(sourceChangeRows()[0].children[0].focused,true);
+   sourceChangeType('order').selectedOptions=[{textContent:'회의·발언순'}];
    sourceChangeType('order').value='meeting';
    sourceChangeType('order').change();
+   assert.equal(sourceChangeType('sort-status').textContent,'정렬: 회의·발언순');
+   assert.equal(sourceChangeType('sort-status').hidden,false);
    assert.equal(sourceChangeRows().length,1);
    sourceChangeType('search').value='no matching statement';
    sourceChangeType('search').input();
