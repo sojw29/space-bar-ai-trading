@@ -3314,20 +3314,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    source.setAttribute("aria-label",receiptQuickRowLabel(entry)+" 원문 보기");
    source.addEventListener("click",()=>{
     const pending=pendingQuickPreset;
-    openRestoredEvidence(entry.key,()=>{
-     if(!pending||pending!==pendingQuickPreset||!progressReceipt||progressReceipt.hidden)return false;
-     progressReceipt.open=true;
-     if(progressReceiptFilterTools)progressReceiptFilterTools.open=true;
-     const target=rendered.get(entry.key);
-     if(target){
-      container.open=true;
-      target.details.open=true;
-     }
-     const focus=target?.source??receiptQuickPreview;
-     focus?.focus({preventScroll:true});
-     focus?.scrollIntoView?.({block:"nearest"});
-     return true;
-    });
+    openRestoredEvidence(entry.key,key=>resumeReceiptQuickSource(pending,container,entry.key,key));
    });
    details.append(source);
    row.append(details);
@@ -3344,6 +3331,30 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    const fallback=canJump&&total?receiptQuickListSearch:receiptQuickPreview;
    (rendered.get(focusedKey)?.[focusedAction]??fallback)?.focus({preventScroll:true});
   }
+ }
+ function resumeReceiptQuickSource(pending,originContainer,originKey,currentKey){
+  if(!pending||pending!==pendingQuickPreset||!progressReceipt||progressReceipt.hidden)return false;
+  progressReceipt.open=true;
+  if(progressReceiptFilterTools)progressReceiptFilterTools.open=true;
+  const {projected,shown,hidden}=receiptQuickPreviewLists;
+  const lists=[projected,shown,hidden];
+  const origin=lists.find(list=>list.container===originContainer);
+  const currentList=origin?.rendered.has(currentKey)?origin:lists.find(list=>list.rendered.has(currentKey));
+  const targetList=currentList??(origin?.rendered.has(originKey)?origin:lists.find(list=>list.rendered.has(originKey)));
+  const key=currentList?currentKey:originKey;
+  const target=targetList?.rendered.get(key);
+  if(target){
+   targetList.container.open=true;
+   target.details.open=true;
+   if(targetList===projected&&receiptQuickListNavigation&&!receiptQuickListNavigation.hidden){
+    receiptQuickListCurrentKey=key;
+    renderReceiptQuickListNavigation(true);
+   }
+  }
+  const focus=target?.source??receiptQuickPreview;
+  focus?.focus({preventScroll:true});
+  focus?.scrollIntoView?.({block:"nearest"});
+  return true;
  }
  function showReceiptQuickJumpStatus(label,lost=false){
   const value=receiptQuickPreviewJump?.value;
@@ -5622,7 +5633,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        back.textContent="근거 발언 이동 버튼으로 돌아가기";
        back.hidden=true;
        back.addEventListener("click",()=>{
-        if(activeEvidenceCard?.returnToPreview?.())return;
+        if(activeEvidenceCard?.returnToPreview?.(activeEvidenceCard.reviewKey))return;
         if(activeEvidenceCard?.fromReceipt&&progressReceipt&&!progressReceipt.hidden){
          progressReceipt.open=true;
          const target=progressReceiptCards.get(activeEvidenceCard.reviewKey)?.button||progressReceiptHeading;
@@ -5662,7 +5673,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         const index=next?remaining.findIndex(({card})=>card===next):-1;
         if(index>=0){
          continueEvidenceResult(remaining,index,returnToPreview??null);
-        }else if(remaining.some(({card})=>card.node===node)||!returnToPreview?.()){
+        }else if(remaining.some(({card})=>card.node===node)||!returnToPreview?.(reviewKey)){
          concern.children[0].focus?.({preventScroll:true});
         }
        });

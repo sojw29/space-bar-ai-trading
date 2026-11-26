@@ -932,6 +932,18 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(projectedDetails.children[1].textContent,/최종 결론 · /);
    assert.ok(projectedDetails.children[2].textContent.length);
    assert.equal(projectedDetails.children[4].textContent,'원문 보기');
+   const earlierSourceOption=previewSourcePicker.children.find(option=>option.textContent.includes('이전 [M07]'));
+   assert.ok(earlierSourceOption);
+   hiddenSource.click();
+   previewSourcePicker.value=earlierSourceOption.value;previewSourcePicker.change();
+   openPickedResult.click();
+   const backFromEarlier=concernSources.children.slice(1).flatMap(issue=>issue.children.slice(1))
+    .map(card=>card.children?.at(-1)).find(button=>button?.textContent==='조합 미리보기로 돌아가기'&&!button.hidden);
+   assert.equal(backFromEarlier.textContent,'조합 미리보기로 돌아가기');
+   backFromEarlier.click();
+   assert.equal(quickList('projected').open,true);
+   assert.equal(projectedDetails.open,true);
+   assert.equal(projectedDetails.children[4].focused,true);
    projectedDetails.children[3].click();
    assert.equal(quickPreviewJump.value,directTargets().children[0].value);
    const quickJumpStatus=quickList('jump-status');
