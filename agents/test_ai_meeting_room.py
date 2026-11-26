@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches','collapse-matches','search-scope','match-navigation','match-count','previous-match','next-match','open-match','match-picker']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -974,6 +974,16 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.equal(matchedSummary.children[0].focused,true);
    assert.equal(matchedSummary.children[0].attrs['aria-current'],'true');
    assert.equal(sourceChangeType('open-match').disabled,false);
+   const matchPicker=sourceChangeType('match-picker');
+   assert.equal(matchPicker.value,'later:M07');
+   assert.match(matchPicker.children[1].textContent,/COMMANDER/);
+   matchPicker.change();
+   for(const key of ['Home','End','ArrowUp','ArrowDown']){
+    let matchMoveHandled=false;
+    matchedSummary.children[0].keydown({key,preventDefault(){matchMoveHandled=true}});
+    assert.equal(matchMoveHandled,true,key);
+    assert.equal(matchPicker.value,'later:M07',key);
+   }
    let matchEscapeHandled=false;
    matchedSummary.children[0].keydown({key:'Escape',preventDefault(){matchEscapeHandled=true}});
    assert.equal(matchEscapeHandled,true);
@@ -1196,7 +1206,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sourceChangeType('search').value=summarySearchTerm;
    sourceChangeType('search').input();
    sourceChangeType('next-match').click();
-   sourceChangeType('open-match').click();
+   sourceChangeRows()[0].children[1].children[0].keydown({key:'Enter',ctrlKey:true,preventDefault(){}});
    assert.equal(sourceChanges.hidden,true);
    assert.equal(receiptBack.textContent,'조합 미리보기로 돌아가기');
    reviewButton.click();

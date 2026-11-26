@@ -2237,6 +2237,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-match-navigation" class="receipt-quick-presets" role="group" aria-label="검색어가 있는 요약 이동" hidden>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-previous-match" type="button" style="min-height:44px">이전 일치 요약</button>
         <span id="ai-meeting-progress-receipt-preset-preview-source-changes-match-count" role="status"></span>
+        <label>일치 요약 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-match-picker" style="min-height:44px"></select></label>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-next-match" type="button" style="min-height:44px">다음 일치 요약</button>
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-open-match" type="button" style="min-height:44px" disabled>현재 일치 발언 원문 열기</button>
        </div>
@@ -3255,6 +3256,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceMatchNavigation=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-navigation");
  const receiptQuickSourceMatchCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-count");
  const receiptQuickSourceOpenMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-open-match");
+ const receiptQuickSourceMatchPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-match-picker");
+ receiptQuickSourceMatchPicker?.addEventListener("change",()=>{
+  const key=receiptQuickSourceMatchPicker.value;
+  if(key)moveReceiptQuickSourceMatch(matches=>matches.findIndex(entry=>entry.key===key));
+ });
  receiptQuickSourceOpenMatch?.addEventListener("click",()=>{
   if(receiptQuickSourceOpenMatch.disabled)return;
   openReceiptQuickSource(currentReceiptQuickSourceMatch,receiptQuickPreviewSourceChanges);
@@ -3262,14 +3268,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let currentReceiptQuickSourceMatch=null;
  receiptQuickSourceSearchScope?.addEventListener("change",renderReceiptQuickSourceChangeFilter);
  for(const [id,step] of [["previous-match",-1],["next-match",1]]){
-  document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+id)?.addEventListener("click",()=>moveReceiptQuickSourceMatch(step));
+  document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-"+id)?.addEventListener("click",()=>moveReceiptQuickSourceMatch((matches,index)=>
+   index<0?(step>0?0:matches.length-1):(index+step+matches.length)%matches.length));
  }
- function moveReceiptQuickSourceMatch(step){
+ function moveReceiptQuickSourceMatch(getIndex){
   const matches=visibleReceiptQuickSourceChanges.filter(entry=>entry.summaryMatches);
   if(!matches.length)return;
   const index=matches.findIndex(({key})=>key===currentReceiptQuickSourceMatch);
-  const next=index<0?(step>0?0:matches.length-1):(index+step+matches.length)%matches.length;
-  const entry=matches[next];
+  const entry=matches[getIndex(matches,index)];
+  if(!entry)return;
   currentReceiptQuickSourceMatch=entry.key;
   entry.details.open=true;
   entry.summaryHeading.focus({preventScroll:true});
@@ -3284,6 +3291,19 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    entry.summaryHeading.setAttribute("aria-current",String(entry.key===currentReceiptQuickSourceMatch));
   }
   if(receiptQuickSourceMatchNavigation)receiptQuickSourceMatchNavigation.hidden=!matches.length;
+  if(receiptQuickSourceMatchPicker){
+   const placeholder=document.createElement("option");
+   placeholder.value="";
+   placeholder.textContent="일치 요약으로 이동";
+   placeholder.disabled=true;
+   receiptQuickSourceMatchPicker.replaceChildren(placeholder,...matches.map(({key,label})=>{
+    const option=document.createElement("option");
+    option.value=key;
+    option.textContent=label;
+    return option;
+   }));
+   receiptQuickSourceMatchPicker.value=currentReceiptQuickSourceMatch??"";
+  }
   if(receiptQuickSourceMatchCount){
    receiptQuickSourceMatchCount.textContent=matches.length?
     (index<0?"일치 요약 "+matches.length+"건":(index+1)+" / "+matches.length+" · "+matches[index].label):"";
@@ -3951,10 +3971,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const details=document.createElement("details");
     const heading=document.createElement("summary");
     heading.textContent="발언 요약";
+    heading.setAttribute("aria-keyshortcuts","Home End ArrowUp ArrowDown Control+Enter Meta+Enter Escape");
     heading.addEventListener("keydown",event=>{
+     if(event.isComposing||!change.summaryMatches||event.altKey||event.shiftKey)return;
+     if((event.ctrlKey||event.metaKey)&&event.key==="Enter"){
+      event.preventDefault();
+      openReceiptQuickSource(key,receiptQuickPreviewSourceChanges);
+      return;
+     }
+     if(event.ctrlKey||event.metaKey)return;
      if(event.key==="Escape"&&key===currentReceiptQuickSourceMatch&&!receiptQuickSourceOpenMatch?.disabled){
       event.preventDefault();
       receiptQuickSourceOpenMatch?.focus();
+      return;
+     }
+     const direction={
+      Home:()=>0,
+      End:matches=>matches.length-1,
+      ArrowUp:matches=>(matches.findIndex(entry=>entry.key===key)+matches.length-1)%matches.length,
+      ArrowDown:matches=>(matches.findIndex(entry=>entry.key===key)+1)%matches.length,
+     };
+     if(Object.hasOwn(direction,event.key)){
+      event.preventDefault();
+      moveReceiptQuickSourceMatch(direction[event.key]);
      }
     });
     const text=document.createElement("p");
