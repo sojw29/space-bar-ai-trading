@@ -1438,7 +1438,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    fileRecentRows.children[1].children[0].click();
    assert.equal(sampleFileSearch.value,'m07');
    assert.equal(fileRecentRows.children[0].children[0].textContent,'m07');
-   assert.match(fileRecentRows.children[0].children[1].textContent,/기록 당시 1건/);
+   assert.match(fileRecentRows.children[0].children[1].textContent,/기록 당시 1건 · 현재 1건/);
    const recordCaseOption=sourceChangeType('recovery-preview-sample-file-case');
    recordCaseOption.checked=true;
    recordCaseOption.change();
@@ -1454,7 +1454,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    fileRecentRows.children[0].children[3].click();
    assert.equal(fileRecentRows.children[0].children[3].textContent,'고정 해제');
    const fileRecentFilter=sourceChangeType('recovery-preview-sample-file-recent-filter');
-   for(const [filter,query] of [['pinned','m07'],['recent','missing-file-query'],['matched','m07'],['unmatched','missing-file-query']]){
+   for(const [filter,query] of [['pinned','m07'],['recent','missing-file-query'],['matched','m07'],['unmatched','missing-file-query'],['current-matched','m07'],['current-unmatched','missing-file-query']]){
     fileRecentFilter.value=filter;
     fileRecentFilter.change();
     assert.equal(fileRecentRows.children.length,1);

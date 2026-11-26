@@ -2383,7 +2383,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-clear" type="button" style="min-height:44px" hidden>최근 검색어 지우기</button>
             </div>
             <div class="receipt-quick-presets">
-             <label>기록 필터 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-filter" style="min-height:44px"><option value="all">전체</option><option value="pinned">고정만</option><option value="recent">고정하지 않은 기록</option><option value="matched">기록 당시 결과 있음</option><option value="unmatched">기록 당시 결과 없음</option></select></label>
+             <label>기록 필터 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-filter" style="min-height:44px"><option value="all">전체</option><option value="pinned">고정만</option><option value="recent">고정하지 않은 기록</option><option value="matched">기록 당시 결과 있음</option><option value="unmatched">기록 당시 결과 없음</option><option value="current-matched">현재 파일에 결과 있음</option><option value="current-unmatched">현재 파일에 결과 없음</option></select></label>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-filter-reset" type="button" style="min-height:44px" hidden>전체 기록 보기</button>
             </div>
             <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent" role="status"></p>
@@ -4639,12 +4639,27 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const pinned=queries.filter(entry=>entry.pinned).length;
   const recent=queries.length-pinned;
   const filter=state.recentFileQueryFilter??"all";
+  const preview=state.filePreview;
+  const currentCounts=new Map();
+  if(preview?.content){
+   for(const entry of queries){
+    let count=entry.matchCount;
+    if(entry.revision!==preview.revision){
+     count=0;
+     const pattern=recoveryPreviewSampleFilePattern(entry.query,entry.caseSensitive,entry.wholeWord);
+     if(pattern)for(const match of preview.content.matchAll(pattern))count++;
+    }
+    currentCounts.set(entry,count);
+   }
+  }
   const visibleQueries=queries.filter(entry=>{
    switch(filter){
     case "pinned":return entry.pinned;
     case "recent":return !entry.pinned;
     case "matched":return entry.matchCount>0;
     case "unmatched":return entry.matchCount===0;
+    case "current-matched":return currentCounts.get(entry)>0;
+    case "current-unmatched":return currentCounts.get(entry)===0;
     default:return true;
    }
   });
@@ -4654,7 +4669,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   if(recoveryPreviewSampleFileRecentFilterReset)recoveryPreviewSampleFileRecentFilterReset.hidden=filter==="all";
   if(recoveryPreviewSampleFileRecent)recoveryPreviewSampleFileRecent.textContent=filter!=="all"
-   ?"표시 중 "+visibleQueries.length+" / "+queries.length+"개"
+   ?"표시 중 "+visibleQueries.length+" / "+queries.length+"개"+
+    (filter.startsWith("current-")&&!preview?.content?" · 미리 볼 파일이 없습니다.":"")
    :queries.length?"고정 검색어 "+pinned+" / "+recoveryPreviewSamplePinnedQueryLimit+"개 · 최근 검색어 "+recent+"개"
     :"기록된 검색어가 없습니다.";
   if(recoveryPreviewSampleFileRecentClear)recoveryPreviewSampleFileRecentClear.hidden=!recent;
@@ -4664,7 +4680,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const {query,caseSensitive,wholeWord,wrap}=entry;
     const options=[caseSensitive?"대소문자 구분":"",wholeWord?"단어 전체 일치":"",wrap?"순환":""].filter(Boolean);
     const optionLabel=options.join(" · ")||"기본 검색 옵션";
-    const summary=optionLabel+" · 기록 당시 "+entry.matchCount+"건";
+    const currentCount=currentCounts.get(entry);
+    const difference=currentCount===undefined?0:currentCount-entry.matchCount;
+    const currentLabel=currentCount===undefined?" · 현재 파일 없음":" · 현재 "+currentCount+"건"+
+     (difference?" ("+(difference>0?"+":"")+difference+")":"");
+    const summary=optionLabel+" · 기록 당시 "+entry.matchCount+"건"+currentLabel;
     const row=document.createElement("div");
     row.className="receipt-quick-presets";
     const button=document.createElement("button");
@@ -4938,14 +4958,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleFileSave)recoveryPreviewSampleFileSave.disabled=!file;
   if(recoveryPreviewSampleFileCopy)recoveryPreviewSampleFileCopy.disabled=!file;
   if(recoveryPreviewSampleFileSearch)recoveryPreviewSampleFileSearch.disabled=!file;
-  renderRecoveryPreviewSampleRecentQueries(state);
   if(recoveryPreviewSampleFileInfo){
    recoveryPreviewSampleFileInfo.textContent=file
     ?file.filename+" · "+new Blob([file.content]).size.toLocaleString("ko-KR")+"바이트"
     :"미리 볼 예시 발언이 없습니다.";
   }
   const content=file?.content??"";
-  if(state.filePreview?.content===content)return;
+  if(state.filePreview?.content===content){
+   renderRecoveryPreviewSampleRecentQueries(state);
+   return;
+  }
   const pages=[],starts=[];
   if(file){
    const limit=2400;
@@ -4977,6 +4999,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    recoveryPreviewSampleFilePicker.replaceChildren(options);
   }
   searchRecoveryPreviewSampleFile();
+  renderRecoveryPreviewSampleRecentQueries(state);
  }
  recoveryPreviewSampleFilePreview?.addEventListener("toggle",()=>{
   if(recoveryPreviewSampleFilePreview.open)renderRecoveryPreviewSampleFile();
