@@ -1465,6 +1465,32 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sampleFileWrap.change();
    assert.equal(sampleFileMatchPicker.value,'11');
    assert.equal(sourceChangeType('recovery-preview-sample-matched-page-next').disabled,true);
+   let snippetEscapeStopped=false;
+   const pressSnippetKey=(index,key,modifiers={})=>{
+    sampleMatchRows.children[index].children[0].keydown({
+     key,preventDefault(){},stopPropagation(){snippetEscapeStopped=true},...modifiers,
+    });
+   };
+   assert.equal(sampleMatchRows.children[10].children[0].attrs['aria-keyshortcuts'],'ArrowUp ArrowDown Home End Escape');
+   pressSnippetKey(10,'ArrowUp');
+   assert.equal(sampleFileMatchPicker.value,'10');
+   assert.equal(sampleMatchRows.children[9].children[0].focused,true);
+   pressSnippetKey(9,'ArrowDown');
+   assert.equal(sampleFileMatchPicker.value,'11');
+   pressSnippetKey(10,'Home');
+   assert.equal(sampleFileMatchPicker.value,'1');
+   pressSnippetKey(0,'ArrowUp');
+   assert.equal(sampleFileMatchPicker.value,'1');
+   pressSnippetKey(0,'End',{isComposing:true});
+   assert.equal(sampleFileMatchPicker.value,'1');
+   pressSnippetKey(0,'End');
+   assert.equal(sampleFileMatchPicker.value,sampleFileMatchPicker.max);
+   assert.equal(sampleMatchRows.children.at(-1).children[0].focused,true);
+   sampleFileSearch.focused=false;
+   pressSnippetKey(sampleMatchRows.children.length-1,'Escape');
+   assert.equal(sampleFileSearch.focused,true);
+   assert.equal(snippetEscapeStopped,true);
+   assert.equal(sampleFileSearch.value,':');
    sampleFileSearch.value='zz-unmatched-file';
    sampleFileSearch.input();
    assert.equal(sourceChangeType('recovery-preview-sample-file-match-position').textContent,'일치 항목 0건');
