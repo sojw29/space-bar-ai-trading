@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters','filter-panel','filter-heading','active-filters','sort-status','jump-results','basic-conditions','clear-filters','expand-matches']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -957,6 +957,21 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    const sourceChangeType=type=>quickList('source-changes','-'+type);
    const sourceSummary=sourceChangeRows()[0].children[1].children[1].textContent;
    assert.ok(sourceSummary);
+   const summarySearchTerm=sourceSummary.split(/\s+/)[0];
+   const summarySearchInput=sourceChangeType('search');
+   summarySearchInput.value=summarySearchTerm;
+   summarySearchInput.input();
+   const matchedSummary=sourceChangeRows()[0].children[1];
+   assert.match(matchedSummary.children[0].textContent,/검색어 포함/);
+   assert.ok(matchedSummary.children[1].children.some(mark=>mark.textContent===summarySearchTerm));
+   sourceChangeType('expand-matches').click();
+   assert.equal(matchedSummary.open,true);
+   summarySearchInput.keydown({key:'Enter',preventDefault(){}});
+   assert.equal(sourceChangeRows()[0].children[0].focused,true);
+   summarySearchInput.keydown({key:'Escape',preventDefault(){}});
+   assert.equal(summarySearchInput.value,'');
+   assert.equal(sourceChangeType('expand-matches').hidden,true);
+   matchedSummary.open=false;
    const selectSourceRow=sourceChangeRows()[0].children[2].children[0];
    selectSourceRow.checked=true;
    selectSourceRow.change();
