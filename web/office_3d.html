@@ -2235,6 +2235,13 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-clear-selected" type="button" style="min-height:44px" disabled>전체 선택 해제</button>
        </div>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-count" role="status"></p>
+       <div id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-nav" class="receipt-quick-presets" role="group" aria-label="선택 발언으로 이동" hidden>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-first" type="button" style="min-height:44px">첫 선택</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-prev" type="button" style="min-height:44px">이전 선택</button>
+        <span id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-position" role="status"></span>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-next" type="button" style="min-height:44px">다음 선택</button>
+        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-selection-last" type="button" style="min-height:44px">마지막 선택</button>
+       </div>
        <ul id="ai-meeting-progress-receipt-preset-preview-source-changes-rows"></ul>
        <div class="receipt-quick-presets" role="group" aria-label="표시된 검토 변경 저장">
         <button id="ai-meeting-progress-receipt-preset-preview-source-changes-csv" type="button" disabled>표시 목록 CSV</button>
@@ -3186,6 +3193,37 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  let visibleReceiptQuickSourceChanges=[];
  const receiptQuickSourceSelectedOnly=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selected-only");
  const receiptQuickSourceSelectionCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-count");
+ const receiptQuickSourceSelectionNav=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-nav");
+ const receiptQuickSourceSelectionPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-position");
+ const receiptQuickSourceSelectionTargets=[
+  ["first",()=>0],["prev",index=>index<0?0:index-1],
+  ["next",index=>index+1],["last",(_,length)=>length-1],
+ ].map(([name,target])=>({target,button:document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-selection-"+name)}));
+ let currentReceiptQuickSourceSelection=null;
+ function updateReceiptQuickSourceSelectionNav(focusTarget){
+  const entries=visibleReceiptQuickSourceChanges.filter(({selection})=>selection.checked);
+  let index=entries.indexOf(currentReceiptQuickSourceSelection);
+  if(focusTarget){
+   const entry=entries[focusTarget(index,entries.length)];
+   if(!entry)return;
+   currentReceiptQuickSourceSelection=entry;
+   index=entries.indexOf(entry);
+   entry.source.focus({preventScroll:true});
+   entry.row.scrollIntoView({block:"nearest"});
+  }
+  if(receiptQuickSourceSelectionNav)receiptQuickSourceSelectionNav.hidden=!entries.length;
+  if(receiptQuickSourceSelectionPosition){
+   receiptQuickSourceSelectionPosition.textContent=!entries.length?"":index<0?"표시된 선택 "+entries.length+"건":
+    (index+1)+" / "+entries.length+" · "+entries[index].label;
+  }
+  for(const {target,button} of receiptQuickSourceSelectionTargets){
+   const next=target(index,entries.length);
+   if(button)button.disabled=next<0||next>=entries.length||next===index;
+  }
+ }
+ for(const {target,button} of receiptQuickSourceSelectionTargets){
+  button?.addEventListener("click",()=>updateReceiptQuickSourceSelectionNav(target));
+ }
  const receiptQuickSourceSelectVisible=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-select-visible");
  const receiptQuickSourceUnselectVisible=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-unselect-visible");
  const receiptQuickSourceRevealSelected=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-reveal-selected");
@@ -3521,6 +3559,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickSourceChangeClearSearch)receiptQuickSourceChangeClearSearch.disabled=!receiptQuickSourceChangeSearch?.value;
   receiptQuickPreviewSourceChangesRows?.replaceChildren(...visible.map(({row})=>row));
   visibleReceiptQuickSourceChanges=visible;
+  updateReceiptQuickSourceSelectionNav();
   const selected=receiptQuickSourceChangeRows.filter(({selection})=>selection.checked).length;
   const visibleSelected=visible.filter(({selection})=>selection.checked).length;
   if(receiptQuickSourceSelectionCount){
@@ -3604,7 +3643,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     selectionLabel.append(selection," 선택");
     row.append(selectionLabel);
     const searchText=(statement+" "+context+" "+summary).normalize("NFKC").toLowerCase();
-    rows.push({row,details,selection,type,period:entry.period,id,agent,phase,verdict,summary,searchText});
+    rows.push({row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,summary,searchText});
    }
   }
   if(receiptQuickSourceChangeAgent){
@@ -3631,6 +3670,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    receiptQuickPreviewSourceChanges.open=false;
   }
   receiptQuickSourceChangeRows=[];
+  currentReceiptQuickSourceSelection=null;
   resetReceiptQuickSourceChangeControls();
  }
  function updateReceiptQuickSourceReveal(){
