@@ -4798,19 +4798,31 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     query:entry.query,pinned:Boolean(entry.pinned),case_sensitive:entry.caseSensitive,
     whole_word:entry.wholeWord,wrap:entry.wrap,recorded_matches:entry.matchCount,
     current_matches:current,change:current===null?null:current-entry.matchCount,
+    recorded_source_file:entry.sourceFilename??null,
+    recorded_page:entry.sourceFilename?entry.page+1:null,
+    recorded_match_number:entry.matchNumber??null,
+    saved_position_available:current!==null&&entry.revision===view.preview?.revision&&Boolean(entry.sourceFilename),
    };
   });
-  if(format==="json")return JSON.stringify({scope:view.scope,filter:view.filter,order:view.order,rows},null,2);
+  const sourceFile=view.preview?.filename??null;
+  if(format==="json")return JSON.stringify({scope:view.scope,filter:view.filter,order:view.order,current_source_file:sourceFile,rows},null,2);
   if(format==="csv"){
-   const headers=["query","pinned","case_sensitive","whole_word","wrap","recorded_matches","current_matches","change"];
-   return "\uFEFF"+[headers.join(","),...rows.map(row=>headers.map(key=>comparisonCsvCell(row[key])).join(","))].join("\r\n");
+   const headers=["query","pinned","case_sensitive","whole_word","wrap","recorded_matches","current_matches","change",
+    "recorded_source_file","recorded_page","recorded_match_number","saved_position_available","current_source_file"];
+   return "\uFEFF"+[headers.join(","),...rows.map(row=>headers.map(key=>comparisonCsvCell(key==="current_source_file"?sourceFile:row[key])).join(","))].join("\r\n");
   }
-  return rows.map(row=>{
+  const lines=rows.map(row=>{
    const options=[row.pinned?"고정":"",row.case_sensitive?"대소문자 구분":"",row.whole_word?"단어 전체 일치":"",row.wrap?"순환":""].filter(Boolean);
    const current=row.current_matches===null?"현재 파일 없음":"현재 "+row.current_matches+"건";
    const delta=row.change?" ("+(row.change>0?"+":"")+row.change+")":"";
-   return row.query.replace(/\s+/g," ")+" · "+(options.join(" · ")||"기본 검색 옵션")+" · 기록 당시 "+row.recorded_matches+"건 · "+current+delta;
-  }).join("\n");
+   const position=row.recorded_source_file
+    ?" · 기록 파일 "+row.recorded_source_file+" · "+row.recorded_page+" 페이지"+
+     (row.recorded_match_number===null?"":" · "+row.recorded_match_number+"번 일치")+
+     (row.saved_position_available?" · 저장 위치 사용 가능":" · 저장 위치 사용 불가")
+    :"";
+   return row.query.replace(/\s+/g," ")+" · "+(options.join(" · ")||"기본 검색 옵션")+" · 기록 당시 "+row.recorded_matches+"건 · "+current+delta+position;
+  });
+  return ["현재 파일: "+(sourceFile??"없음"),...lines].join("\n");
  }
  function recoveryPreviewSampleRecentExportFilename(view,format){
   return "meeting-file-search-history-"+view.scope+"."+format;
@@ -4982,6 +4994,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    revision:preview?.revision,
    page:preview?.index??0,
    matchStart:preview?.matches[preview.matchIndex]?.[0],
+   matchNumber:preview&&preview.matchIndex>=0?preview.matchIndex+1:null,
+   sourceFilename:preview?.filename??null,
    matchCount:preview?.matches.length??0,
   };
   const existing=state.recentFileQueries?.find(previous=>previous.query===query&&previous.caseSensitive===entry.caseSensitive&&
@@ -5186,6 +5200,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const content=file?.content??"";
   if(state.filePreview?.content===content){
+   state.filePreview.filename=file?.filename??null;
    renderRecoveryPreviewSampleRecentQueries(state);
    return;
   }
@@ -5208,7 +5223,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    }
   }
   const revision=(state.filePreview?.revision??0)+1;
-  state.filePreview={pages,starts,content,revision,index:0,matches:[],matchIndex:-1};
+  state.filePreview={pages,starts,content,filename:file?.filename??null,revision,index:0,matches:[],matchIndex:-1};
   if(recoveryPreviewSampleFilePicker){
    const options=document.createDocumentFragment();
    for(const [index] of pages.entries()){
