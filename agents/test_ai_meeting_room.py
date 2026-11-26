@@ -1460,6 +1460,14 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
     assert.equal(fileRecentRows.children.length,1);
     assert.equal(fileRecentRows.children[0].children[0].textContent,query);
    }
+   for(const filter of ['current-increased','current-decreased','current-new','current-lost']){
+    fileRecentFilter.value=filter;
+    fileRecentFilter.change();
+    assert.equal(fileRecentRows.children.length,0);
+   }
+   fileRecentFilter.value='current-unchanged';
+   fileRecentFilter.change();
+   assert.equal(fileRecentRows.children.length,2);
    sourceChangeType('recovery-preview-sample-file-recent-filter-reset').click();
    assert.equal(fileRecentFilter.value,'all');
    assert.equal(fileRecentFilter.focused,true);
