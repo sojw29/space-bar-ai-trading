@@ -32,7 +32,7 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
   for(const id of ['ai-meeting-progress-receipt-preset-preview-source-status','ai-meeting-progress-receipt-preset-preview-source-reveal']){
    elements[id]={addEventListener(type,fn){this[type]=fn}};
   }
-  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary']){
+  for(const suffix of ['all','completed','reopened','empty','search','period','order','count','reset','csv','json','txt','save-status','agent','expand','collapse','phase','verdict','clear-search','empty-reset','selected-only','select-visible','unselect-visible','selection-count','reveal-selected','clear-selected','selected-csv','selected-json','selected-txt','selection-nav','selection-first','selection-prev','selection-next','selection-last','selection-position','selection-picker','selection-open','selection-summary','last-status','jump-last','reveal-last','restore-filters']){
    elements['ai-meeting-progress-receipt-preset-preview-source-changes-'+suffix]={
     attrs:{},setAttribute(name,value){this.attrs[name]=value},addEventListener(type,fn){this[type]=fn},
     replaceChildren(...children){this.children=children},focus(){this.focused=true},
@@ -1127,6 +1127,22 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    assert.match(sourceStatus.textContent,/COMMANDER · 미검토 · 검토 해제 1건/);
    assert.match(sourceChangeRows()[0].textContent,/검토 해제 · 이후 .*COMMANDER/);
    assert.equal(sourceChanges.open,true);
+   assert.match(sourceChangeRows()[0].textContent,/마지막으로 읽음/);
+   assert.equal(sourceChangeType('jump-last').hidden,false);
+   sourceChangeType('jump-last').click();
+   assert.equal(sourceChangeRows()[0].scrolled,true);
+   sourceChangeType('search').value='hide this statement';
+   sourceChangeType('search').input();
+   assert.match(sourceChangeType('last-status').textContent,/현재 조건에서 숨겨짐/);
+   assert.equal(sourceChangeType('reveal-last').hidden,false);
+   sourceChangeType('reveal-last').click();
+   assert.equal(sourceChangeRows().length,1);
+   assert.equal(sourceChangeType('restore-filters').hidden,false);
+   sourceChangeType('restore-filters').click();
+   assert.equal(sourceChangeRows().length,0);
+   assert.equal(sourceChangeType('search').value,'hide this statement');
+   sourceChangeType('search').value='commander';
+   sourceChangeType('search').input();
    assert.equal(sourceChangeType('search').value,'commander');
    assert.equal(sourceChangeType('order').value,'agent');
    assert.equal(sourceChangeRows()[0].children[0].focused,true);
