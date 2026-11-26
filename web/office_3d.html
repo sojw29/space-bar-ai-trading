@@ -2371,6 +2371,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-both" type="button" style="min-height:44px" hidden>두 조건 모두 끄기</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-edit-query" type="button" style="min-height:44px">검색어 수정</button>
            </div>
+           <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-history" class="receipt-quick-presets" role="group" aria-label="파일 검색 조건 변경" hidden>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-undo" type="button" style="min-height:44px" hidden>조건 변경 취소</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-redo" type="button" style="min-height:44px" hidden>조건 변경 다시 적용</button>
+            <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-status" role="status"></span>
+           </div>
            <details>
             <summary>파일 검색 옵션</summary>
             <div class="receipt-quick-presets">
@@ -3813,6 +3818,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileRelaxWord=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-word");
  const recoveryPreviewSampleFileRelaxBoth=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-both");
  const recoveryPreviewSampleFileEditQuery=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-edit-query");
+ const recoveryPreviewSampleFileRelaxHistory=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-history");
+ const recoveryPreviewSampleFileRelaxUndo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-undo");
+ const recoveryPreviewSampleFileRelaxRedo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-redo");
+ const recoveryPreviewSampleFileRelaxStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-status");
  const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
  const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
  const recoveryPreviewSampleFileCopyContexts=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-contexts");
@@ -4632,20 +4641,52 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    button.textContent=count?label+" ("+count+"건)":label;
   }
  }
- for(const [button,relaxCase,relaxWord] of recoveryPreviewSampleFileRelaxations){
+ function syncRecoveryPreviewSampleFileRelaxHistory(preview){
+  const history=preview.relaxHistory;
+  if(recoveryPreviewSampleFileRelaxHistory)recoveryPreviewSampleFileRelaxHistory.hidden=!history;
+  if(recoveryPreviewSampleFileRelaxUndo)recoveryPreviewSampleFileRelaxUndo.hidden=!history?.applied;
+  if(recoveryPreviewSampleFileRelaxRedo)recoveryPreviewSampleFileRelaxRedo.hidden=!history||history.applied;
+  if(recoveryPreviewSampleFileRelaxStatus){
+   recoveryPreviewSampleFileRelaxStatus.textContent=history
+    ?history.label+(history.applied?" 적용 · 일치 "+preview.matches.length+"건":" 취소")
+    :"";
+  }
+ }
+ function applyRecoveryPreviewSampleFileRelaxHistory(applied){
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  const history=preview?.relaxHistory;
+  if(!history)return;
+  history.applied=applied;
+  if(recoveryPreviewSampleFileCase)recoveryPreviewSampleFileCase.checked=history.caseSensitive&&(!applied||!history.relaxCase);
+  if(recoveryPreviewSampleFileWord)recoveryPreviewSampleFileWord.checked=history.wholeWord&&(!applied||!history.relaxWord);
+  searchRecoveryPreviewSampleFile(false,true);
+  if(!applied)showRecoveryPreviewSampleFilePage(history.page);
+ }
+ for(const [button,relaxCase,relaxWord,label] of recoveryPreviewSampleFileRelaxations){
+  button?.addEventListener("click",()=>{
+   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+   if(!preview||button.hidden)return;
+   preview.relaxHistory={
+    label,relaxCase,relaxWord,page:preview.index,
+    caseSensitive:Boolean(recoveryPreviewSampleFileCase?.checked),
+    wholeWord:Boolean(recoveryPreviewSampleFileWord?.checked),
+   };
+   applyRecoveryPreviewSampleFileRelaxHistory(true);
+   (recoveryPreviewSampleFileRelaxUndo??recoveryPreviewSampleFileSearch)?.focus();
+  });
+ }
+ for(const [button,applied] of [[recoveryPreviewSampleFileRelaxUndo,false],[recoveryPreviewSampleFileRelaxRedo,true]]){
   button?.addEventListener("click",()=>{
    if(button.hidden)return;
-   if(relaxCase&&recoveryPreviewSampleFileCase)recoveryPreviewSampleFileCase.checked=false;
-   if(relaxWord&&recoveryPreviewSampleFileWord)recoveryPreviewSampleFileWord.checked=false;
-   searchRecoveryPreviewSampleFile();
-   recoveryPreviewSampleFileSearch?.focus();
+   applyRecoveryPreviewSampleFileRelaxHistory(applied);
+   (applied?recoveryPreviewSampleFileRelaxUndo:recoveryPreviewSampleFileRelaxRedo)?.focus();
   });
  }
  recoveryPreviewSampleFileEditQuery?.addEventListener("click",()=>{
   recoveryPreviewSampleFileSearch?.focus();
   recoveryPreviewSampleFileSearch?.select?.();
  });
- function searchRecoveryPreviewSampleFile(keepMatch=false){
+ function searchRecoveryPreviewSampleFile(keepMatch=false,keepRelaxHistory=false){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
   if(!preview)return;
   const previousStart=keepMatch?preview.matches[preview.matchIndex]?.[0]:undefined;
@@ -4655,6 +4696,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const pattern=recoveryPreviewSampleFilePattern(query,caseSensitive,wholeWord);
   preview.matches=pattern?[...preview.content.matchAll(pattern)].map(match=>[match.index,match.index+match[0].length]):[];
   syncRecoveryPreviewSampleFileEmptyActions(preview,query,caseSensitive,wholeWord);
+  if(!keepRelaxHistory)preview.relaxHistory=null;
+  syncRecoveryPreviewSampleFileRelaxHistory(preview);
   preview.visibleContextCount=0;
   indexRecoveryPreviewSampleMatchedPages(preview);
   preview.matchIndex=-1;
