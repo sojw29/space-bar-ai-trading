@@ -4383,6 +4383,23 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    button.textContent=(number+1)+". "+(start?"…":"")+snippet+(stop<content.length?"…":"");
    button.setAttribute("aria-current",String(number===matchIndex));
    button.addEventListener("click",()=>moveRecoveryPreviewSampleFileMatch(number,true));
+   button.setAttribute("aria-keyshortcuts","ArrowUp ArrowDown Home End Escape");
+   button.title="↑ ↓ 이전·다음 일치 · Home 첫 일치 · End 마지막 일치 · Esc 검색창";
+   button.addEventListener("keydown",event=>{
+    if(event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
+    if(event.key==="Escape"){
+     event.preventDefault();
+     event.stopPropagation();
+     recoveryPreviewSampleFileSearch?.focus();
+     return;
+    }
+    if(!Object.hasOwn(recoveryPreviewResultKeys,event.key))return;
+    event.preventDefault();
+    const offset=recoveryPreviewResultKeys[event.key](number-first,count);
+    if(offset<0||offset>=count||first+offset===number)return;
+    moveRecoveryPreviewSampleFileMatch(first+offset,true);
+    document.activeElement?.scrollIntoView({block:"nearest"});
+   });
    if(number===focusIndex)focusTarget=button;
    row.append(button);
    return row;
