@@ -5002,7 +5002,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    direction==="picked"?(evidencePicker?.value?Number(evidencePicker.value):-1):position<0?-1:position+direction;
   const entry=cards[index];
   if(!entry)return;
-  openEvidenceResult(cards,index);
+  continueEvidenceResult(cards,index);
+ }
+ function continueEvidenceResult(cards,index,returnToPreview=activeEvidenceCard?.returnToPreview){
+  openEvidenceResult(cards,index,Boolean(returnToPreview),returnToPreview);
  }
  function openEvidenceResult(cards,index,fromReceipt=false,returnToPreview){
   const entry=cards[index];
@@ -5028,7 +5031,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  nextUnreviewedEvidence?.addEventListener("click",()=>{
   const cards=displayedEvidenceCards();
   const start=cards.findIndex(({card})=>card===activeEvidenceCard);
-  openEvidenceResult(cards,nextUnreviewedIndex(cards,start));
+  continueEvidenceResult(cards,nextUnreviewedIndex(cards,start));
  });
  firstEvidence?.addEventListener("click",()=>navigateEvidence("first"));
  lastEvidence?.addEventListener("click",()=>navigateEvidence("last"));
@@ -5651,13 +5654,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         const cards=displayedEvidenceCards();
         const position=cards.findIndex(({card})=>card.node===node);
         if(position<0)return;
+        const returnToPreview=activeEvidenceCard?.node===node?activeEvidenceCard.returnToPreview:undefined;
         applyReviewChange([reviewKey],true,"근거 검토 완료");
         const next=cards[nextUnreviewedIndex(cards,position)]?.card;
         updateConcernView();
-        if(next){
-         const remaining=displayedEvidenceCards();
-         openEvidenceResult(remaining,remaining.findIndex(({card})=>card===next));
-        }else{
+        const remaining=displayedEvidenceCards();
+        const index=next?remaining.findIndex(({card})=>card===next):-1;
+        if(index>=0){
+         continueEvidenceResult(remaining,index,returnToPreview??null);
+        }else if(remaining.some(({card})=>card.node===node)||!returnToPreview?.()){
          concern.children[0].focus?.({preventScroll:true});
         }
        });
