@@ -2397,6 +2397,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-json" type="button" style="min-height:44px" disabled>JSON 저장</button>
              <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-status" role="status"></span>
             </div>
+            <details id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview">
+             <summary>검색 기록 내보내기 미리보기</summary>
+             <label>미리보기 형식 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-format" style="min-height:44px"><option value="txt">복사할 텍스트</option><option value="csv">CSV</option><option value="json">JSON</option></select></label>
+             <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-info" role="status"></p>
+             <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="검색 기록 내보내기 내용" hidden></pre>
+            </details>
            </details>
            <details>
             <summary>파일 검색 옵션</summary>
@@ -3857,6 +3863,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileRecentExportStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-status");
  const recoveryPreviewSampleFileRecentExportScope=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-scope");
  const recoveryPreviewSampleFileRecentExportCount=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-count");
+ const recoveryPreviewSampleFileRecentExportPreview=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview");
+ const recoveryPreviewSampleFileRecentExportFormat=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-format");
+ const recoveryPreviewSampleFileRecentExportPreviewInfo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-info");
+ const recoveryPreviewSampleFileRecentExportPreviewText=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-export-preview-text");
  let recoveryPreviewSampleFileRecentExportRevision=0;
  const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
  const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
@@ -4724,7 +4734,39 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     :"내보낼 기록 "+view.visibleQueries.length+"건";
   }
   for(const [button] of recoveryPreviewSampleRecentExportButtons)if(button)button.disabled=!view.visibleQueries.length;
+  renderRecoveryPreviewSampleRecentExportPreview(state,view);
  }
+ function renderRecoveryPreviewSampleRecentExportPreview(state,view){
+  if(!recoveryPreviewSampleFileRecentExportPreview?.open)return;
+  const format=state.recentFileQueryPreviewFormat??"txt";
+  const count=view.visibleQueries.length;
+  const content=count?formatRecoveryPreviewSampleRecentQueryExport(view,format):"";
+  if(recoveryPreviewSampleFileRecentExportFormat)recoveryPreviewSampleFileRecentExportFormat.value=format;
+  if(recoveryPreviewSampleFileRecentExportPreviewText){
+   recoveryPreviewSampleFileRecentExportPreviewText.hidden=!count;
+   if(recoveryPreviewSampleFileRecentExportPreviewText.textContent!==content){
+    recoveryPreviewSampleFileRecentExportPreviewText.textContent=content;
+    recoveryPreviewSampleFileRecentExportPreviewText.scrollTop=0;
+   }
+  }
+  if(recoveryPreviewSampleFileRecentExportPreviewInfo){
+   recoveryPreviewSampleFileRecentExportPreviewInfo.textContent=count
+    ?count+"건 · "+new Blob([content]).size.toLocaleString("ko-KR")+"바이트"
+    :"미리 볼 검색 기록이 없습니다.";
+  }
+ }
+ recoveryPreviewSampleFileRecentExportPreview?.addEventListener("toggle",()=>{
+  const state=pendingRecoveryPreview?.suggestionSample;
+  if(state&&recoveryPreviewSampleFileRecentExportPreview.open){
+   renderRecoveryPreviewSampleRecentExportPreview(state,getRecoveryPreviewSampleRecentExportView(state));
+  }
+ });
+ recoveryPreviewSampleFileRecentExportFormat?.addEventListener("change",()=>{
+  const state=pendingRecoveryPreview?.suggestionSample;
+  if(!state)return;
+  state.recentFileQueryPreviewFormat=recoveryPreviewSampleFileRecentExportFormat.value;
+  renderRecoveryPreviewSampleRecentExportPreview(state,getRecoveryPreviewSampleRecentExportView(state));
+ });
  recoveryPreviewSampleFileRecentExportScope?.addEventListener("change",()=>{
   const state=pendingRecoveryPreview?.suggestionSample;
   if(!state)return;
