@@ -541,7 +541,7 @@ async function smoke(){
   assert.equal(await identityPage.locator("#ai-meeting-rows p").count(),7);
   assert.equal(await identityPage.locator("#ai-meeting-refresh").isEnabled(),true);
   assert.equal(await identityPage.locator("#meeting-progress-refresh").isEnabled(),true);
-  assert.equal(await identityPage.locator("#meeting-progress-open-record").isEnabled(),true);
+  await identityPage.locator("#meeting-progress-open-record:enabled").waitFor();
   workflowStatus.updated_at_utc=new Date().toISOString();workflowStatus.status="READY_NO_MODEL_CALLS";workflowStatus.workflow_stage="SETUP";
   await writeFile(workflowStatusPath,JSON.stringify(workflowStatus),"utf8");
   await identityPage.close();
