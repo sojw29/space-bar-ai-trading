@@ -2365,6 +2365,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             <label>일치 번호 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-picker" type="number" min="1" step="1" inputmode="numeric" style="min-height:44px;width:6rem" disabled></label>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-clear-search" type="button" style="min-height:44px" disabled>파일 검색어 지우기</button>
            </div>
+           <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-empty-actions" class="receipt-quick-presets" role="group" aria-label="파일 검색 결과 없음" hidden>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-case" type="button" style="min-height:44px" hidden>대소문자 구분 끄기</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-word" type="button" style="min-height:44px" hidden>단어 전체 일치 끄기</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-both" type="button" style="min-height:44px" hidden>두 조건 모두 끄기</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-edit-query" type="button" style="min-height:44px">검색어 수정</button>
+           </div>
            <details>
             <summary>파일 검색 옵션</summary>
             <div class="receipt-quick-presets">
@@ -3802,6 +3808,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleMatchedPageFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-first");
  const recoveryPreviewSampleMatchedPageLast=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-last");
  const recoveryPreviewSampleFileSearchReturn=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-search-return");
+ const recoveryPreviewSampleFileEmptyActions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-empty-actions");
+ const recoveryPreviewSampleFileRelaxCase=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-case");
+ const recoveryPreviewSampleFileRelaxWord=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-word");
+ const recoveryPreviewSampleFileRelaxBoth=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-relax-both");
+ const recoveryPreviewSampleFileEditQuery=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-edit-query");
  const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
  const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
  const recoveryPreviewSampleFileCopyContexts=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-contexts");
@@ -4595,22 +4606,55 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   preview.matchIndex=index;
   showRecoveryPreviewSampleFilePage(preview.starts.findLastIndex(start=>start<=match[0]),true,fromList?index:undefined);
  }
+ function recoveryPreviewSampleFilePattern(query,caseSensitive,wholeWord){
+  const pattern=recoveryPreviewHighlightPattern(query?[query]:[],"all");
+  if(!pattern||(!wholeWord&&!caseSensitive))return pattern;
+  const word=String.raw`[\p{L}\p{M}\p{N}_]`;
+  const expression=wholeWord?"(?<!"+word+")"+pattern.source+"(?!"+word+")":pattern.source;
+  return new RegExp(expression,"g"+(wholeWord?"u":"")+(caseSensitive?"":"i"));
+ }
+ const recoveryPreviewSampleFileRelaxations=[
+  [recoveryPreviewSampleFileRelaxCase,true,false,"대소문자 구분 끄기"],
+  [recoveryPreviewSampleFileRelaxWord,false,true,"단어 전체 일치 끄기"],
+  [recoveryPreviewSampleFileRelaxBoth,true,true,"두 조건 모두 끄기"],
+ ];
+ function syncRecoveryPreviewSampleFileEmptyActions(preview,query,caseSensitive,wholeWord){
+  const visible=Boolean(query&&preview.content&&!preview.matches.length);
+  if(recoveryPreviewSampleFileEmptyActions)recoveryPreviewSampleFileEmptyActions.hidden=!visible;
+  for(const [button,relaxCase,relaxWord,label] of recoveryPreviewSampleFileRelaxations){
+   if(!button)continue;
+   let count=0;
+   if(visible&&(!relaxCase||caseSensitive)&&(!relaxWord||wholeWord)){
+    const pattern=recoveryPreviewSampleFilePattern(query,caseSensitive&&!relaxCase,wholeWord&&!relaxWord);
+    if(pattern)for(const match of preview.content.matchAll(pattern))count++;
+   }
+   button.hidden=!count;
+   button.textContent=count?label+" ("+count+"건)":label;
+  }
+ }
+ for(const [button,relaxCase,relaxWord] of recoveryPreviewSampleFileRelaxations){
+  button?.addEventListener("click",()=>{
+   if(button.hidden)return;
+   if(relaxCase&&recoveryPreviewSampleFileCase)recoveryPreviewSampleFileCase.checked=false;
+   if(relaxWord&&recoveryPreviewSampleFileWord)recoveryPreviewSampleFileWord.checked=false;
+   searchRecoveryPreviewSampleFile();
+   recoveryPreviewSampleFileSearch?.focus();
+  });
+ }
+ recoveryPreviewSampleFileEditQuery?.addEventListener("click",()=>{
+  recoveryPreviewSampleFileSearch?.focus();
+  recoveryPreviewSampleFileSearch?.select?.();
+ });
  function searchRecoveryPreviewSampleFile(keepMatch=false){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
   if(!preview)return;
   const previousStart=keepMatch?preview.matches[preview.matchIndex]?.[0]:undefined;
   const query=recoveryPreviewSampleFileSearch?.value.trim()??"";
-  let pattern=recoveryPreviewHighlightPattern(query?[query]:[],"all");
-  if(pattern){
-   const wholeWord=Boolean(recoveryPreviewSampleFileWord?.checked);
-   const caseSensitive=Boolean(recoveryPreviewSampleFileCase?.checked);
-   if(wholeWord||caseSensitive){
-    const word=String.raw`[\p{L}\p{M}\p{N}_]`;
-    const expression=wholeWord?"(?<!"+word+")"+pattern.source+"(?!"+word+")":pattern.source;
-    pattern=new RegExp(expression,"g"+(wholeWord?"u":"")+(caseSensitive?"":"i"));
-   }
-  }
+  const caseSensitive=Boolean(recoveryPreviewSampleFileCase?.checked);
+  const wholeWord=Boolean(recoveryPreviewSampleFileWord?.checked);
+  const pattern=recoveryPreviewSampleFilePattern(query,caseSensitive,wholeWord);
   preview.matches=pattern?[...preview.content.matchAll(pattern)].map(match=>[match.index,match.index+match[0].length]):[];
+  syncRecoveryPreviewSampleFileEmptyActions(preview,query,caseSensitive,wholeWord);
   preview.visibleContextCount=0;
   indexRecoveryPreviewSampleMatchedPages(preview);
   preview.matchIndex=-1;
