@@ -2227,6 +2227,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
         </div>
        </details>
        <div id="ai-meeting-progress-receipt-preset-preview-source-changes-active-filters" class="receipt-quick-presets" role="group" aria-label="적용 중인 상세 필터" hidden></div>
+       <div id="ai-meeting-progress-receipt-preset-preview-source-changes-basic-conditions" class="receipt-quick-presets" role="group" aria-label="검색 및 선택 조건" hidden></div>
+       <button id="ai-meeting-progress-receipt-preset-preview-source-changes-clear-filters" type="button" style="min-height:44px" hidden>필터만 해제</button>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-sort-status" hidden></p>
        <button id="ai-meeting-progress-receipt-preset-preview-source-changes-jump-results" type="button" style="min-height:44px" disabled>첫 결과로 이동</button>
        <p id="ai-meeting-progress-receipt-preset-preview-source-changes-count" role="status"></p>
@@ -3189,6 +3191,53 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const receiptQuickSourceFilterHeading=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-filter-heading");
  const receiptQuickSourceActiveFilters=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-active-filters");
  const receiptQuickSourceSortStatus=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-sort-status");
+ const receiptQuickSourceBasicConditions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-basic-conditions");
+ const receiptQuickSourceClearFilters=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-clear-filters");
+ receiptQuickSourceClearFilters?.addEventListener("click",()=>{
+  for(const [field,,all] of receiptQuickSourceChangeFacets())if(field)field.value=all;
+  if(receiptQuickSourceChangeSearch)receiptQuickSourceChangeSearch.value="";
+  if(receiptQuickSourceSelectedOnly)receiptQuickSourceSelectedOnly.checked=false;
+  receiptQuickSourceChangeFilter="all";
+  previousReceiptQuickSourceFilters=null;
+  renderReceiptQuickSourceChangeFilter();
+  receiptQuickSourceChangeSearch?.focus();
+ });
+ function renderReceiptQuickSourceBasicConditions(words,facetCount){
+  const conditions=[];
+  if(words.length&&receiptQuickSourceChangeSearch){
+   conditions.push(["검색어: "+receiptQuickSourceChangeSearch.value.trim(),()=>{
+    receiptQuickSourceChangeSearch.value="";
+   },receiptQuickSourceChangeSearch]);
+  }
+  if(receiptQuickSourceChangeFilter!=="all"){
+   const activeFilter=receiptQuickSourceChangeFilters.find(({value})=>value===receiptQuickSourceChangeFilter);
+   const allFilter=receiptQuickSourceChangeFilters[0];
+   conditions.push([activeFilter.label,()=>{receiptQuickSourceChangeFilter="all"},allFilter.button]);
+  }
+  if(receiptQuickSourceSelectedOnly?.checked){
+   conditions.push(["선택 항목만",()=>{receiptQuickSourceSelectedOnly.checked=false},receiptQuickSourceSelectedOnly]);
+  }
+  if(receiptQuickSourceBasicConditions){
+   receiptQuickSourceBasicConditions.hidden=!conditions.length;
+   receiptQuickSourceBasicConditions.replaceChildren(...conditions.map(([label,clear,focus])=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.style.minHeight="44px";
+    button.textContent=label+" 해제";
+    button.addEventListener("click",()=>{
+     clear();
+     renderReceiptQuickSourceChangeFilter();
+     focus?.focus();
+    });
+    return button;
+   }));
+  }
+  if(receiptQuickSourceClearFilters){
+   const count=conditions.length+facetCount;
+   receiptQuickSourceClearFilters.hidden=!count;
+   receiptQuickSourceClearFilters.textContent="필터만 해제 ("+count+"개)";
+  }
+ }
  const receiptQuickSourceJumpResults=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-jump-results");
  receiptQuickSourceJumpResults?.addEventListener("click",()=>{
   const first=visibleReceiptQuickSourceChanges[0];
@@ -3705,6 +3754,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    (!receiptQuickSourceSelectedOnly?.checked||selection.checked));
   const order=receiptQuickSourceChangeOrder?.value;
   renderReceiptQuickSourceFilterSummary(activeFacets,order);
+  renderReceiptQuickSourceBasicConditions(words,activeFacets.length);
   if(receiptQuickSourceJumpResults)receiptQuickSourceJumpResults.disabled=!visible.length;
   const priority={
    meeting:()=>0,
