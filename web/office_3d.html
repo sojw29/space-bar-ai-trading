@@ -2446,6 +2446,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             <div class="receipt-quick-presets">
              <label>시작 페이지 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-start" type="number" min="1" step="1" inputmode="numeric" style="min-height:44px;width:6rem"></label>
              <label>끝 페이지 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-end" type="number" min="1" step="1" inputmode="numeric" style="min-height:44px;width:6rem"></label>
+             <label><input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-matched" type="checkbox"> 검색어가 있는 페이지만</label>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-current" type="button" style="min-height:44px">현재 페이지로 범위 설정</button>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-copy" type="button" style="min-height:44px" disabled>범위 복사</button>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-save" type="button" style="min-height:44px" disabled>범위 TXT 저장</button>
@@ -3921,6 +3922,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileRange=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range");
  const recoveryPreviewSampleFileRangeStart=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-start");
  const recoveryPreviewSampleFileRangeEnd=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-end");
+ const recoveryPreviewSampleFileRangeMatched=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-matched");
  const recoveryPreviewSampleFileRangeCurrent=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-current");
  const recoveryPreviewSampleFileRangeInfo=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-info");
  const recoveryPreviewSampleFileRangeCopy=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-range-copy");
@@ -5047,7 +5049,20 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const first=Number(recoveryPreviewSampleFileRangeStart?.value);
   const last=Number(recoveryPreviewSampleFileRangeEnd?.value);
   if(!Number.isInteger(first)||!Number.isInteger(last)||first<1||last>preview.pages.length||first>last)return null;
-  return {first,last,content:preview.content.slice(preview.starts[first-1],preview.starts[last]??preview.content.length)};
+  const matchedOnly=Boolean(recoveryPreviewSampleFileRangeMatched?.checked);
+  if(!matchedOnly){
+   return {first,last,matchedOnly,count:last-first+1,content:preview.content.slice(preview.starts[first-1],preview.starts[last]??preview.content.length)};
+  }
+  const excerpts=[];
+  let index=0;
+  for(let page=first-1;page<last;page++){
+   const start=preview.starts[page];
+   const end=preview.starts[page+1]??preview.content.length;
+   while(index<preview.matches.length&&preview.matches[index][1]<=start)index++;
+   if(index===preview.matches.length)break;
+   if(preview.matches[index][0]<end)excerpts.push("=== "+(page+1)+" 페이지 ===\n"+preview.pages[page]);
+  }
+  return {first,last,matchedOnly,count:excerpts.length,content:excerpts.join("\n\n")};
  }
  function syncRecoveryPreviewSampleFileRange(preview,reset=false){
   const count=preview?.pages.length??0;
@@ -5064,17 +5079,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   for(const input of [recoveryPreviewSampleFileRangeStart,recoveryPreviewSampleFileRangeEnd]){
    input?.setAttribute("aria-invalid",String(available&&!range));
   }
-  if(recoveryPreviewSampleFileRangeCopy)recoveryPreviewSampleFileRangeCopy.disabled=!range;
-  if(recoveryPreviewSampleFileRangeSave)recoveryPreviewSampleFileRangeSave.disabled=!range;
+  if(recoveryPreviewSampleFileRangeCopy)recoveryPreviewSampleFileRangeCopy.disabled=!range?.count;
+  if(recoveryPreviewSampleFileRangeSave)recoveryPreviewSampleFileRangeSave.disabled=!range?.count;
   if(recoveryPreviewSampleFileRangeInfo){
-   recoveryPreviewSampleFileRangeInfo.textContent=range
-    ?(range.last-range.first+1)+" 페이지 · "+new Blob([range.content]).size.toLocaleString("ko-KR")+"바이트"
-    :available?"1~"+count+" 사이에서 시작 페이지와 끝 페이지를 순서대로 입력하세요.":"";
+   if(range?.count){
+    const omitted=range.last-range.first+1-range.count;
+    recoveryPreviewSampleFileRangeInfo.textContent=range.count+" 페이지"+
+     (range.matchedOnly?" · "+omitted+" 페이지 제외":"")+" · "+new Blob([range.content]).size.toLocaleString("ko-KR")+"바이트";
+   }else{
+    recoveryPreviewSampleFileRangeInfo.textContent=range
+     ?"범위에 검색어가 있는 페이지가 없습니다."
+     :available?"1~"+count+" 사이에서 시작 페이지와 끝 페이지를 순서대로 입력하세요.":"";
+   }
   }
  }
  for(const input of [recoveryPreviewSampleFileRangeStart,recoveryPreviewSampleFileRangeEnd]){
   input?.addEventListener("input",()=>syncRecoveryPreviewSampleFileRange(pendingRecoveryPreview?.suggestionSample?.filePreview));
  }
+ recoveryPreviewSampleFileRangeMatched?.addEventListener("change",()=>{
+  syncRecoveryPreviewSampleFileRange(pendingRecoveryPreview?.suggestionSample?.filePreview);
+ });
  recoveryPreviewSampleFileRangeCurrent?.addEventListener("click",()=>{
   syncRecoveryPreviewSampleFileRange(pendingRecoveryPreview?.suggestionSample?.filePreview,true);
   recoveryPreviewSampleFileRangeEnd?.focus();
@@ -5088,18 +5112,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(!preview?.pages.length||!recoveryPreviewSampleFilePreview?.open||button.disabled)return;
    const {index,pages,filename}=preview;
    const range=rangeMode?getRecoveryPreviewSampleFileRange(preview):{first:index+1,last:index+1,content:pages[index]};
-   if(!range)return;
+   if(!range||(rangeMode&&!range.count))return;
    const revision=rangeMode?++recoveryPreviewSampleFileRangeRevision:++recoveryPreviewSampleFilePageRevision;
    const status=rangeMode?recoveryPreviewSampleFileRangeStatus:recoveryPreviewSampleFilePageStatus;
    if(status)status.textContent="";
    const span=range.first===range.last?String(range.first):range.first+"~"+range.last;
-   const label=span+" 페이지 ";
+   const label=range.matchedOnly?span+" 범위의 일치 페이지 "+range.count+"개 ":span+" 페이지 ";
    let message;
    try{
     if(copy)await navigator.clipboard.writeText(range.content);
     else{
      const name=(filename??"meeting-example").replace(/\.[^.]+$/,"");
-     saveMeetingFile(range.content,name+"-page-"+span.replace("~","-")+".txt","text/plain;charset=utf-8");
+     saveMeetingFile(range.content,name+"-page-"+span.replace("~","-")+(range.matchedOnly?"-matches":"")+".txt","text/plain;charset=utf-8");
     }
     message=label+(copy?"복사 완료":"TXT 저장 요청");
    }catch(_){
@@ -5371,6 +5395,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   syncRecoveryPreviewSampleFileRelaxHistory(preview);
   preview.visibleContextCount=0;
   indexRecoveryPreviewSampleMatchedPages(preview);
+  if(recoveryPreviewSampleFileRangeMatched?.checked)syncRecoveryPreviewSampleFileRange(preview);
   preview.matchIndex=-1;
   if(preview.matches.length){
    const nextIndex=previousStart===undefined?0:preview.matches.findIndex(([start])=>start>=previousStart);
@@ -5477,6 +5502,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   }
   const revision=(state.filePreview?.revision??0)+1;
   state.filePreview={pages,starts,content,filename:file?.filename??null,revision,index:0,matches:[],matchIndex:-1};
+  if(recoveryPreviewSampleFileRangeMatched)recoveryPreviewSampleFileRangeMatched.checked=false;
   syncRecoveryPreviewSampleFileRange(state.filePreview,true);
   if(recoveryPreviewSampleFilePicker){
    const options=document.createDocumentFragment();
