@@ -2419,7 +2419,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-reset-options" type="button" style="min-height:44px" disabled>파일 검색 옵션 초기화</button>
             </div>
            </details>
-           <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-navigation" class="receipt-quick-presets" role="group" aria-label="저장 페이지 이동 기록" hidden>
+           <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-navigation" class="receipt-quick-presets" role="group" aria-label="저장 페이지 이동 기록" tabindex="0" aria-keyshortcuts="ArrowLeft ArrowRight Home End Escape" title="← → 이전·다음 검토 위치 · Home 첫 위치 · End 마지막 위치 · Esc 파일 본문" hidden>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-back" type="button" style="min-height:44px" hidden>이전 검토 위치</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-forward" type="button" style="min-height:44px" hidden>다음 검토 위치</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-saved-page-first" type="button" style="min-height:44px" disabled>첫 검토 위치</button>
@@ -4684,6 +4684,24 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const value=recoveryPreviewSampleSavedPagePicker.value;
   if(value!=="")moveRecoveryPreviewSampleSavedPageHistory(preview,Number(value),false);
   recoveryPreviewSampleSavedPagePicker.value=preview?.savedPageHistory?String(preview.savedPageHistory.index):"";
+ });
+ recoveryPreviewSampleSavedPageNavigation?.addEventListener("keydown",event=>{
+  const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  const history=preview?.savedPageHistory;
+  if(!history||!recoveryPreviewSampleFilePreview?.open||event.defaultPrevented||event.isComposing||
+   event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.target===recoveryPreviewSampleSavedPagePicker)return;
+  if(event.key==="Escape"){
+   event.preventDefault();
+   event.stopPropagation();
+   recoveryPreviewSampleFileText?.focus({preventScroll:true});
+   return;
+  }
+  const key=event.key==="ArrowLeft"?"ArrowUp":event.key==="ArrowRight"?"ArrowDown":event.key;
+  if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
+  event.preventDefault();
+  const index=recoveryPreviewResultKeys[key](history.index,history.positions.length);
+  moveRecoveryPreviewSampleSavedPageHistory(preview,index,false);
+  recoveryPreviewSampleSavedPageNavigation.focus({preventScroll:true});
  });
  recoveryPreviewSampleSavedPageClear?.addEventListener("click",()=>{
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;

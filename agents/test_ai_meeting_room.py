@@ -1494,7 +1494,35 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    lastSavedPage.click();
    assert.equal(savedPagePicker.value,'9');
    assert.equal(lastSavedPage.disabled,true);
+   const savedPageNavigation=sourceChangeType('recovery-preview-sample-file-saved-page-navigation');
+   let historyKeyHandled=false,historyEscapeStopped=false;
+   const pressHistoryKey=(key,options={})=>{
+    historyKeyHandled=false;
+    savedPageNavigation.keydown({key,target:savedPageNavigation,preventDefault(){historyKeyHandled=true},
+     stopPropagation(){historyEscapeStopped=true},...options});
+   };
+   pressHistoryKey('ArrowLeft');
+   assert.equal(savedPagePicker.value,'8');
+   assert.equal(savedPageNavigation.focused,true);
+   assert.equal(historyKeyHandled,true);
+   pressHistoryKey('ArrowRight');
+   assert.equal(savedPagePicker.value,'9');
+   pressHistoryKey('Home');
+   assert.equal(savedPagePicker.value,'0');
+   pressHistoryKey('ArrowRight',{target:savedPagePicker});
+   assert.equal(historyKeyHandled,false);
+   assert.equal(savedPagePicker.value,'0');
+   pressHistoryKey('End',{isComposing:true});
+   assert.equal(historyKeyHandled,false);
+   pressHistoryKey('End');
+   assert.equal(savedPagePicker.value,'9');
+   savedPageText.focused=false;
    savedPageText.scrollTop=21;
+   pressHistoryKey('Escape');
+   assert.equal(historyEscapeStopped,true);
+   assert.equal(savedPageText.focused,true);
+   assert.equal(savedPageText.scrollTop,21);
+
    sourceChangeType('recovery-preview-sample-file-saved-page-clear').click();
    assert.equal(sourceChangeType('recovery-preview-sample-file-saved-page-navigation').hidden,true);
    assert.equal(savedPageText.scrollTop,21);
