@@ -2357,8 +2357,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
            <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-info" role="status"></p>
            <div class="receipt-quick-presets" role="group" aria-label="미리보기 파일 검색">
             <label>파일에서 찾기 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-search" type="search" aria-keyshortcuts="Enter Shift+Enter" title="Enter 다음 일치 · Shift+Enter 이전 일치" style="min-height:44px" disabled></label>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-first" type="button" style="min-height:44px" disabled>파일 첫 일치</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-prev" type="button" style="min-height:44px" disabled>이전 일치</button>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-next" type="button" style="min-height:44px" disabled>다음 일치</button>
+            <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-last" type="button" style="min-height:44px" disabled>파일 마지막 일치</button>
             <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-position" role="status"></span>
             <label>일치 번호 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-picker" type="number" min="1" step="1" inputmode="numeric" style="min-height:44px;width:6rem" disabled></label>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-clear-search" type="button" style="min-height:44px" disabled>파일 검색어 지우기</button>
@@ -2382,12 +2384,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
            <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-context" hidden>
             <div class="receipt-quick-presets">
              <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-page" role="status"></span>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-search-return" type="button" style="min-height:44px">파일 검색창으로 이동</button>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-return-match" type="button" style="min-height:44px" hidden>현재 일치 페이지로 이동</button>
             </div>
             <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-nav" class="receipt-quick-presets" role="group" aria-label="일치 페이지 이동" hidden>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-first" type="button" style="min-height:44px" disabled>첫 일치 페이지</button>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-prev" type="button" style="min-height:44px" disabled>이전 일치 페이지</button>
              <label>일치 페이지 선택 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-picker" style="min-height:44px" disabled></select></label>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-next" type="button" style="min-height:44px" disabled>다음 일치 페이지</button>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-last" type="button" style="min-height:44px" disabled>마지막 일치 페이지</button>
              <span id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-position" role="status"></span>
             </div>
             <details id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-list">
@@ -3786,6 +3791,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileReturnMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-return-match");
  const recoveryPreviewSampleFileMatchList=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-list");
  const recoveryPreviewSampleFileMatchRows=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-rows");
+ const recoveryPreviewSampleFileMatchFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-first");
+ const recoveryPreviewSampleFileMatchLast=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-last");
+ const recoveryPreviewSampleMatchedPageFirst=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-first");
+ const recoveryPreviewSampleMatchedPageLast=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-last");
+ const recoveryPreviewSampleFileSearchReturn=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-search-return");
  const recoveryPreviewSampleMatchedPageNav=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-nav");
  const recoveryPreviewSampleMatchedPagePrev=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-prev");
  const recoveryPreviewSampleMatchedPageNext=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-matched-page-next");
@@ -4323,6 +4333,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const previous=pages.findLast(page=>page<preview.index)??(wrap?pages.at(-1):undefined);
   const next=pages.find(page=>page>preview.index)??(wrap?pages[0]:undefined);
   if(recoveryPreviewSampleMatchedPageNav)recoveryPreviewSampleMatchedPageNav.hidden=!pages.length;
+  if(recoveryPreviewSampleMatchedPageFirst)recoveryPreviewSampleMatchedPageFirst.disabled=!pages.length||position===0;
+  if(recoveryPreviewSampleMatchedPageLast)recoveryPreviewSampleMatchedPageLast.disabled=!pages.length||position===pages.length-1;
   if(recoveryPreviewSampleMatchedPagePrev)recoveryPreviewSampleMatchedPagePrev.disabled=previous===undefined;
   if(recoveryPreviewSampleMatchedPageNext)recoveryPreviewSampleMatchedPageNext.disabled=next===undefined;
   if(recoveryPreviewSampleMatchedPagePicker)recoveryPreviewSampleMatchedPagePicker.value=position<0?"":String(preview.index);
@@ -4352,6 +4364,16 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(button.disabled)recoveryPreviewSampleMatchedPagePicker?.focus();
   });
  }
+ for(const [button,last] of [[recoveryPreviewSampleMatchedPageFirst,false],[recoveryPreviewSampleMatchedPageLast,true]]){
+  button?.addEventListener("click",()=>{
+   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+   if(!preview||button.disabled)return;
+   const pages=[...preview.matchedPages.keys()];
+   jumpToRecoveryPreviewSampleMatchedPage(last?pages.at(-1):pages[0]);
+   recoveryPreviewSampleMatchedPagePicker?.focus();
+  });
+ }
+ recoveryPreviewSampleFileSearchReturn?.addEventListener("click",()=>recoveryPreviewSampleFileSearch?.focus());
  function renderRecoveryPreviewSampleFileMatchContext(preview,focusIndex){
   if(!recoveryPreviewSampleFileMatchContext)return;
   const {starts,index,matches,matchIndex,content,matchedPages}=preview;
@@ -4437,6 +4459,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  function syncRecoveryPreviewSampleFileMatchOptions(preview){
   const {matches,matchIndex}=preview;
   const wrap=Boolean(recoveryPreviewSampleFileWrap?.checked)&&matches.length>1;
+  if(recoveryPreviewSampleFileMatchFirst)recoveryPreviewSampleFileMatchFirst.disabled=matchIndex<=0;
+  if(recoveryPreviewSampleFileMatchLast)recoveryPreviewSampleFileMatchLast.disabled=matchIndex>=matches.length-1;
   if(recoveryPreviewSampleFileMatchPrev)recoveryPreviewSampleFileMatchPrev.disabled=!wrap&&matchIndex<=0;
   if(recoveryPreviewSampleFileMatchNext)recoveryPreviewSampleFileMatchNext.disabled=!wrap&&matchIndex>=matches.length-1;
   if(recoveryPreviewSampleFileResetOptions){
@@ -4578,6 +4602,14 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   searchRecoveryPreviewSampleFile();
   recoveryPreviewSampleFileSearch.focus();
  });
+ for(const [button,last] of [[recoveryPreviewSampleFileMatchFirst,false],[recoveryPreviewSampleFileMatchLast,true]]){
+  button?.addEventListener("click",()=>{
+   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+   if(!preview||button.disabled)return;
+   moveRecoveryPreviewSampleFileMatch(last?preview.matches.length-1:0);
+   recoveryPreviewSampleFileMatchPicker?.focus();
+  });
+ }
  for(const [button,step] of [[recoveryPreviewSampleFileMatchPrev,-1],[recoveryPreviewSampleFileMatchNext,1]]){
   button?.addEventListener("click",()=>{
    const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
