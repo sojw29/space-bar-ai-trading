@@ -2363,6 +2363,15 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             <label>일치 번호 <input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-picker" type="number" min="1" step="1" inputmode="numeric" style="min-height:44px;width:6rem" disabled></label>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-clear-search" type="button" style="min-height:44px" disabled>파일 검색어 지우기</button>
            </div>
+           <details>
+            <summary>파일 검색 옵션</summary>
+            <div class="receipt-quick-presets">
+             <label><input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-case" type="checkbox"> 대소문자 구분</label>
+             <label><input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-word" type="checkbox"> 단어 전체 일치</label>
+             <label><input id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-wrap" type="checkbox"> 처음·끝에서 순환</label>
+             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-reset-options" type="button" style="min-height:44px" disabled>파일 검색 옵션 초기화</button>
+            </div>
+           </details>
            <pre id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-text" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto" tabindex="0" aria-label="예시 파일 내용" hidden></pre>
            <div id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-pages" class="receipt-quick-presets" role="group" aria-label="파일 미리보기 페이지" hidden>
             <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-prev" type="button" style="min-height:44px" disabled>이전</button>
@@ -3751,6 +3760,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileMatchPosition=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-position");
  const recoveryPreviewSampleFileMatchPicker=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-match-picker");
  const recoveryPreviewSampleFileClearSearch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-clear-search");
+ const recoveryPreviewSampleFileCase=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-case");
+ const recoveryPreviewSampleFileWord=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-word");
+ const recoveryPreviewSampleFileWrap=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-wrap");
+ const recoveryPreviewSampleFileResetOptions=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-reset-options");
+ const recoveryPreviewSampleFileOptions=[recoveryPreviewSampleFileCase,recoveryPreviewSampleFileWord,recoveryPreviewSampleFileWrap].filter(Boolean);
  const recoveryPreviewPageSize=3;
  let pendingRecoveryPreview=null;
  function updateRecoveryPreviewKeepingResult(){
@@ -4292,8 +4306,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    recoveryPreviewSampleFileText.scrollTop=0;
    if(scrollToMatch)activeMark?.scrollIntoView({block:"nearest"});
   }
-  if(recoveryPreviewSampleFileMatchPrev)recoveryPreviewSampleFileMatchPrev.disabled=matchIndex<=0;
-  if(recoveryPreviewSampleFileMatchNext)recoveryPreviewSampleFileMatchNext.disabled=matchIndex>=matches.length-1;
+  const wrap=Boolean(recoveryPreviewSampleFileWrap?.checked)&&matches.length>1;
+  if(recoveryPreviewSampleFileMatchPrev)recoveryPreviewSampleFileMatchPrev.disabled=!wrap&&matchIndex<=0;
+  if(recoveryPreviewSampleFileMatchNext)recoveryPreviewSampleFileMatchNext.disabled=!wrap&&matchIndex>=matches.length-1;
+  if(recoveryPreviewSampleFileResetOptions){
+   recoveryPreviewSampleFileResetOptions.disabled=!recoveryPreviewSampleFileOptions.some(option=>option.checked);
+  }
   if(recoveryPreviewSampleFileMatchPicker){
    recoveryPreviewSampleFileMatchPicker.disabled=matches.length<2;
    recoveryPreviewSampleFileMatchPicker.max=String(matches.length);
@@ -4309,6 +4327,10 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  }
  function moveRecoveryPreviewSampleFileMatch(index){
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(recoveryPreviewSampleFileWrap?.checked&&preview?.matches.length>1){
+   const total=preview.matches.length;
+   index=(index+total)%total;
+  }
   const match=preview?.matches[index];
   if(!match)return;
   preview.matchIndex=index;
@@ -4318,15 +4340,37 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
   if(!preview)return;
   const query=recoveryPreviewSampleFileSearch?.value.trim()??"";
-  const pattern=recoveryPreviewHighlightPattern(query?[query]:[],"all");
+  let pattern=recoveryPreviewHighlightPattern(query?[query]:[],"all");
+  if(pattern){
+   const wholeWord=Boolean(recoveryPreviewSampleFileWord?.checked);
+   const caseSensitive=Boolean(recoveryPreviewSampleFileCase?.checked);
+   if(wholeWord||caseSensitive){
+    const word=String.raw`[\p{L}\p{M}\p{N}_]`;
+    const expression=wholeWord?"(?<!"+word+")"+pattern.source+"(?!"+word+")":pattern.source;
+    pattern=new RegExp(expression,"g"+(wholeWord?"u":"")+(caseSensitive?"":"i"));
+   }
+  }
   preview.matches=pattern?[...preview.content.matchAll(pattern)].map(match=>[match.index,match.index+match[0].length]):[];
   preview.matchIndex=-1;
   if(preview.matches.length)moveRecoveryPreviewSampleFileMatch(0);
   else showRecoveryPreviewSampleFilePage(preview.index);
  }
  recoveryPreviewSampleFileSearch?.addEventListener("input",searchRecoveryPreviewSampleFile);
+ for(const option of recoveryPreviewSampleFileOptions)option.addEventListener("change",searchRecoveryPreviewSampleFile);
+ recoveryPreviewSampleFileResetOptions?.addEventListener("click",()=>{
+  for(const option of recoveryPreviewSampleFileOptions)option.checked=false;
+  searchRecoveryPreviewSampleFile();
+  recoveryPreviewSampleFileSearch?.focus();
+ });
  recoveryPreviewSampleFileSearch?.addEventListener("keydown",event=>{
   const preview=pendingRecoveryPreview?.suggestionSample?.filePreview;
+  if(event.key==="Escape"&&!event.isComposing&&recoveryPreviewSampleFileSearch.value){
+   event.preventDefault();
+   event.stopPropagation();
+   recoveryPreviewSampleFileSearch.value="";
+   searchRecoveryPreviewSampleFile();
+   return;
+  }
   if(event.key!=="Enter"||event.isComposing||event.altKey||event.ctrlKey||event.metaKey||!preview?.matches.length)return;
   event.preventDefault();
   moveRecoveryPreviewSampleFileMatch(preview.matchIndex+(event.shiftKey?-1:1));
@@ -4711,6 +4755,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(recoveryPreviewSampleCopyFormat)recoveryPreviewSampleCopyFormat.value="txt";
   if(recoveryPreviewSampleFilePreview)recoveryPreviewSampleFilePreview.open=false;
   if(recoveryPreviewSampleFileSearch)recoveryPreviewSampleFileSearch.value="";
+  for(const option of recoveryPreviewSampleFileOptions)option.checked=false;
   if(recoveryPreviewSampleRecoveryFeedback)recoveryPreviewSampleRecoveryFeedback.textContent="";
   for(const {key,field} of recoveryPreviewSampleFacets){
    facetOptions.set(key,populateRecoveryPreviewFacet(results,key,field));
