@@ -1507,6 +1507,15 @@ const input=JSON.parse(require('node:fs').readFileSync(0,'utf8'));
    sampleFileWrap.checked=true;
    sampleFileWrap.change();
    assert.equal(sampleFileMatchPicker.value,'11');
+   saveFileQuery.click();
+   sampleFileWrap.checked=false;
+   sampleFileWrap.change();
+   sampleFileSearch.value='m07';
+   sampleFileSearch.input();
+   fileRecentRows.children[0].click();
+   assert.equal(sampleFileSearch.value,':');
+   assert.equal(sampleFileWrap.checked,true);
+   assert.equal(sampleFileMatchPicker.value,'11');
    assert.equal(sourceChangeType('recovery-preview-sample-matched-page-next').disabled,true);
    let snippetEscapeStopped=false;
    const pressSnippetKey=(index,key,modifiers={})=>{
