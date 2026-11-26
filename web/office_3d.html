@@ -2384,6 +2384,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
             </div>
             <div class="receipt-quick-presets">
              <label>기록 필터 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-filter" style="min-height:44px"><option value="all">전체</option><option value="pinned">고정만</option><option value="recent">고정하지 않은 기록</option><option value="matched">기록 당시 결과 있음</option><option value="unmatched">기록 당시 결과 없음</option><option value="current-matched">현재 파일에 결과 있음</option><option value="current-unmatched">현재 파일에 결과 없음</option></select></label>
+             <label>기록 정렬 <select id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-order" style="min-height:44px"><option value="default">고정·최근순</option><option value="increase">증가 폭 큰 순</option><option value="decrease">감소 폭 큰 순</option><option value="change">변화 폭 큰 순</option><option value="current">현재 일치 많은 순</option><option value="recorded">기록 당시 일치 많은 순</option></select></label>
              <button id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-filter-reset" type="button" style="min-height:44px" hidden>전체 기록 보기</button>
             </div>
             <p id="ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent" role="status"></p>
@@ -3841,6 +3842,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
  const recoveryPreviewSampleFileRecentSave=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-save");
  const recoveryPreviewSampleFileRecentFilter=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-filter");
  const recoveryPreviewSampleFileRecentFilterReset=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-filter-reset");
+ const recoveryPreviewSampleFileRecentOrder=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-recent-order");
  const recoveryPreviewSampleFileCopyMatch=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-match");
  const recoveryPreviewSampleFileCopyLines=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-lines");
  const recoveryPreviewSampleFileCopyContexts=document.getElementById("ai-meeting-progress-receipt-preset-preview-source-changes-recovery-preview-sample-file-copy-contexts");
@@ -4663,6 +4665,26 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     default:return true;
    }
   });
+  const order=state.recentFileQueryOrder??"default";
+  if(recoveryPreviewSampleFileRecentOrder){
+   recoveryPreviewSampleFileRecentOrder.value=order;
+   recoveryPreviewSampleFileRecentOrder.disabled=visibleQueries.length<2&&order==="default";
+  }
+  if(order!=="default"){
+   const score=entry=>{
+    const current=currentCounts.get(entry);
+    const change=current===undefined?0:current-entry.matchCount;
+    switch(order){
+     case "increase":return change;
+     case "decrease":return -change;
+     case "change":return Math.abs(change);
+     case "current":return current??0;
+     case "recorded":return entry.matchCount;
+     default:return 0;
+    }
+   };
+   visibleQueries.sort((left,right)=>score(right)-score(left));
+  }
   if(recoveryPreviewSampleFileRecentFilter){
    recoveryPreviewSampleFileRecentFilter.value=filter;
    recoveryPreviewSampleFileRecentFilter.disabled=!queries.length&&filter==="all";
@@ -4779,6 +4801,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const state=pendingRecoveryPreview?.suggestionSample;
   if(!state)return;
   state.recentFileQueryFilter=recoveryPreviewSampleFileRecentFilter.value;
+  renderRecoveryPreviewSampleRecentQueries(state);
+ });
+ recoveryPreviewSampleFileRecentOrder?.addEventListener("change",()=>{
+  const state=pendingRecoveryPreview?.suggestionSample;
+  if(!state)return;
+  state.recentFileQueryOrder=recoveryPreviewSampleFileRecentOrder.value;
   renderRecoveryPreviewSampleRecentQueries(state);
  });
  recoveryPreviewSampleFileRecentFilterReset?.addEventListener("click",()=>{
