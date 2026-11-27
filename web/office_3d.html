@@ -3911,6 +3911,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   mark.focus({preventScroll:true});
   mark.scrollIntoView({block:"nearest"});
  }
+ function moveReceiptQuickSourceHit(entry,index){
+  const mark=entry.summaryMarks[index];
+  if(!mark)return;
+  updateReceiptQuickSourceHitNavigation(entry,index);
+  focusReceiptQuickSourceHit(mark);
+ }
  function renderReceiptQuickSourceChangeFilter(){
   const total=receiptQuickSourceChangeRows.length;
   const words=receiptQuickSourceSearchWords();
@@ -3973,18 +3979,29 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(ranges.length){
     const parts=receiptQuickSourceSummaryParts(entry.summary,ranges);
     entry.summaryMarks=parts.filter((_,index)=>index%2===1);
-    for(const mark of entry.summaryMarks){
+    entry.summaryMarks.forEach((mark,index)=>{
+     mark.setAttribute("aria-keyshortcuts","ArrowLeft ArrowRight Home End Enter Escape");
+     mark.addEventListener("click",()=>{
+      if(document.getSelection?.()?.isCollapsed===false)return;
+      moveReceiptQuickSourceHit(entry,index);
+     });
      mark.addEventListener("keydown",event=>{
-      if(event.isComposing)return;
+      if(event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
       if(event.key==="Escape"){
        event.preventDefault();
        entry.summaryHeading.focus();
       }else if(event.key==="Enter"){
        event.preventDefault();
        openReceiptQuickSource(entry.key,receiptQuickPreviewSourceChanges);
+      }else{
+       const targets={ArrowLeft:index-1,ArrowRight:index+1,Home:0,End:entry.summaryMarks.length-1};
+       if(Object.hasOwn(targets,event.key)){
+        event.preventDefault();
+        moveReceiptQuickSourceHit(entry,targets[event.key]);
+       }
       }
      });
-    }
+    });
     entry.summaryText.replaceChildren(...parts);
     const start=Math.max(0,ranges[0][0]-24);
     const end=Math.min(entry.summary.length,ranges[0][1]+40);
@@ -4149,10 +4166,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
      button.hidden=true;
      button.addEventListener("click",()=>{
       const index=target(change.summaryHitIndex,change.summaryMarks.length);
-      const mark=change.summaryMarks[index];
-      if(button.disabled||!mark)return;
-      updateReceiptQuickSourceHitNavigation(change,index);
-      focusReceiptQuickSourceHit(mark);
+      if(!button.disabled)moveReceiptQuickSourceHit(change,index);
      });
      return {button,target};
     });
