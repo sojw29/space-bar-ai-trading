@@ -3836,6 +3836,8 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    expanded:new Set(receiptQuickSourceChangeRows.filter(({details})=>details.open).map(({key})=>key)),
    currentKey:currentReceiptQuickSourceSelection?.key,
    matchKey:currentReceiptQuickSourceMatch,
+   hits:new Map(receiptQuickSourceChangeRows.filter(entry=>entry.summaryHitIndex>=0)
+    .map(({key,summaryHitQuery,summaryHitIndex})=>[key,{summaryHitQuery,summaryHitIndex}])),
    selectedOnly:!!receiptQuickSourceSelectedOnly?.checked,
    fields:receiptQuickSourceChangeFields(),
   }:null;
@@ -3904,6 +3906,11 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   summaryHitPosition.textContent=total?(index<0?total+"곳":(index+1)+" / "+total+"곳"):"";
   summaryMarks.forEach((mark,position)=>mark.setAttribute("aria-current",String(position===index)));
  }
+ function focusReceiptQuickSourceHit(mark){
+  mark.tabIndex=-1;
+  mark.focus({preventScroll:true});
+  mark.scrollIntoView({block:"nearest"});
+ }
  function renderReceiptQuickSourceChangeFilter(){
   const total=receiptQuickSourceChangeRows.length;
   const words=receiptQuickSourceSearchWords();
@@ -3942,8 +3949,18 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   const alternatives=[...new Set(words)].sort((a,b)=>b.length-a.length)
    .map(word=>word.replace(/[.*+?^\${}()|[\]\\]/g,"\\$&"));
   const pattern=alternatives.length?new RegExp(alternatives.join("|"),"gi"):null;
+  const hitQuery=pattern?.source??"";
+  const focusedMark=document.activeElement;
+  let retainedFocus=null;
   let occurrences=0;
   for(const entry of visible){
+   if(entry.summaryMarks&&entry.summaryHitQuery===hitQuery){
+    occurrences+=entry.summaryMarks.length;
+    if(entry.summaryMarks.includes(focusedMark))retainedFocus=focusedMark;
+    continue;
+   }
+   const previousIndex=entry.summaryHitQuery===hitQuery?entry.summaryHitIndex:-1;
+   entry.summaryHitQuery=hitQuery;
    const ranges=receiptQuickSourceSummaryRanges(entry,pattern);
    entry.summaryMatches=ranges.length>0;
    occurrences+=ranges.length;
@@ -3956,13 +3973,25 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    if(ranges.length){
     const parts=receiptQuickSourceSummaryParts(entry.summary,ranges);
     entry.summaryMarks=parts.filter((_,index)=>index%2===1);
+    for(const mark of entry.summaryMarks){
+     mark.addEventListener("keydown",event=>{
+      if(event.isComposing)return;
+      if(event.key==="Escape"){
+       event.preventDefault();
+       entry.summaryHeading.focus();
+      }else if(event.key==="Enter"){
+       event.preventDefault();
+       openReceiptQuickSource(entry.key,receiptQuickPreviewSourceChanges);
+      }
+     });
+    }
     entry.summaryText.replaceChildren(...parts);
     const start=Math.max(0,ranges[0][0]-24);
     const end=Math.min(entry.summary.length,ranges[0][1]+40);
     entry.summaryExcerpt.replaceChildren(start?"…":"",...receiptQuickSourceSummaryParts(entry.summary,ranges,start,end),
      end<entry.summary.length?"…":"");
    }
-   updateReceiptQuickSourceHitNavigation(entry,-1);
+   updateReceiptQuickSourceHitNavigation(entry,previousIndex<ranges.length?previousIndex:-1);
   }
   const matches=visible.filter(entry=>entry.summaryMatches);
   if(receiptQuickSourceOccurrenceCount){
@@ -3971,6 +4000,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
   if(receiptQuickSourceExpandMatches)receiptQuickSourceExpandMatches.hidden=!matches.length;
   if(receiptQuickSourceCollapseMatches)receiptQuickSourceCollapseMatches.hidden=!matches.length;
   receiptQuickPreviewSourceChangesRows?.replaceChildren(...visible.map(({row})=>row));
+  retainedFocus?.focus({preventScroll:true});
   visibleReceiptQuickSourceChanges=visible;
   updateReceiptQuickSourceMatchNavigation(matches);
   const last=receiptQuickSourceChangeRows.find(({key})=>key===lastReceiptQuickSourceChangeKey);
@@ -4122,9 +4152,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
       const mark=change.summaryMarks[index];
       if(button.disabled||!mark)return;
       updateReceiptQuickSourceHitNavigation(change,index);
-      mark.tabIndex=-1;
-      mark.focus({preventScroll:true});
-      mark.scrollIntoView({block:"nearest"});
+      focusReceiptQuickSourceHit(mark);
      });
      return {button,target};
     });
@@ -4135,6 +4163,7 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
     const summarySearchText=summary.normalize("NFKC").toLowerCase();
     const change={key,row,source,details,selection,label:statement,type,period:entry.period,id,agent,phase,verdict,
      summary,summaryHeading:heading,summaryText:text,summaryExcerpt:excerpt,summaryHitButtons,summaryHitPosition,summarySearchText,searchText};
+    Object.assign(change,changeView?.hits.get(key));
     if(changeView?.currentKey===key)currentReceiptQuickSourceSelection=change;
     details.addEventListener("toggle",()=>{
      if(currentReceiptQuickSourceSelection===change&&visibleReceiptQuickSourceChanges.includes(change)){
@@ -4245,6 +4274,12 @@ update();setInterval(()=>{if(!document.hidden)update()},30000);
    visibleReceiptQuickSourceChanges.find(({key})=>key===originKey))?.source;
   const matchFocus=changeView?.matchKey===currentKey&&currentReceiptQuickSourceMatch===currentKey?
    visibleReceiptQuickSourceChanges.find(({key})=>key===currentKey)?.summaryHeading:null;
+  const returnRow=changeView&&visibleReceiptQuickSourceChanges.find(({key})=>key===currentKey);
+  const returnMark=returnRow?.details.open?returnRow.summaryMarks?.[returnRow.summaryHitIndex]:null;
+  if(returnMark){
+   focusReceiptQuickSourceHit(returnMark);
+   return true;
+  }
   const focus=matchFocus||changeFocus||target?.source||receiptQuickPreview;
   focus?.focus({preventScroll:true});
   focus?.scrollIntoView?.({block:"nearest"});
